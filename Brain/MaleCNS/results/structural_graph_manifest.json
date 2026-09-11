@@ -1,0 +1,15 @@
+{
+  "capturedAtUtc": "2026-09-10T23:51:05.526440+00:00",
+  "datasetId": "male-cns:v1.0",
+  "representation": "pair-aggregated structural graph; unsigned synapse counts",
+  "neuronCount": 211577,
+  "selectedRowCountBeforePairAggregation": 26028386,
+  "duplicatePairRowCount": 0,
+  "edgeCountAfterPairAggregation": 26028386,
+  "indexDtype": "int32",
+  "bodyIdDtype": "int64",
+  "synapseCountDtype": "int64",
+  "signedDynamicsReady": false,
+  "signedDynamicsBlocker": "nt_policy.json intentionally leaves transmitter signs unresolved",
+  "peakProcessRssBytes": 1626128384
+}

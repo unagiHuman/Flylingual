@@ -1,0 +1,55 @@
+{
+  "source": "artifacts\\windows\\m1\\live\\unity-six-20260911-161958\\live-wire.jsonl",
+  "sourceSha256": "e5cf98522ec4235ccfb452f1182acf7c122fb63ce8192dcf4b92c8b75304462b",
+  "selection": "last received frame per requestedAction; exact frame retained; held constant by diagnostic replay source",
+  "frames": {
+    "STOP": {
+      "sequence": 6692,
+      "motor": {
+        "forward": 0.0,
+        "turn": 0.0
+      },
+      "sha256": "d6f587011537cf5aec5d04dddd2fe22425524f0ce691fa003c2d41acdccee46a"
+    },
+    "FORWARD": {
+      "sequence": 6517,
+      "motor": {
+        "forward": 0.8991118617639062,
+        "turn": 0.0
+      },
+      "sha256": "2f0de536723fccd03c5609261457179b75b969993237631d7ea2822587a04c5c"
+    },
+    "TURN_L": {
+      "sequence": 6601,
+      "motor": {
+        "forward": 0.0011369404443789962,
+        "turn": -1.0
+      },
+      "sha256": "3f035c2037eca46dc7fe55609385e59c58b999e48f163b615a0d8e3feeadb988"
+    },
+    "TURN_R": {
+      "sequence": 6553,
+      "motor": {
+        "forward": 0.0,
+        "turn": 0.6928331033725752
+      },
+      "sha256": "92d9f5465a8bb63bcac4762e63c180f829c59fbde68c084cb81c54e56701c455"
+    },
+    "FORWARD_R": {
+      "sequence": 6634,
+      "motor": {
+        "forward": 1.0,
+        "turn": 1.0
+      },
+      "sha256": "db18d4f54da0ef92a16f30fb935f73d7e0843676fa14caed2b94f6e4b012b0be"
+    },
+    "FORWARD_L": {
+      "sequence": 6678,
+      "motor": {
+        "forward": 1.0,
+        "turn": -0.7351777540577994
+      },
+      "sha256": "acb49fc4c082dd0ba9db78d6d59d0f2501559a8f812a50469bfd3deac34c89c8"
+    }
+  }
+}

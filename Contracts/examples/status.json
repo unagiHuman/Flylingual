@@ -1,0 +1,9 @@
+{
+  "type": "status",
+  "state": "READY",
+  "backend": "cython",
+  "windowMs": 50.0,
+  "dtMs": null,
+  "networkRebuildCount": 1,
+  "stateResetCount": 0
+}

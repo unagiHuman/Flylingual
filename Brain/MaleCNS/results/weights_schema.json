@@ -1,0 +1,48 @@
+{
+  "files": [
+    {
+      "path": "/Users/isaoohta/UnityGame/FlyBrain/Data/malecns/v1.0/connectome-weights-male-cns-v1.0-minconf-0.5.feather",
+      "fileBytes": 1051241946,
+      "format": "arrow-ipc-file/feather-v2",
+      "schema": [
+        {
+          "name": "body_pre",
+          "type": "int64",
+          "nullable": true
+        },
+        {
+          "name": "body_post",
+          "type": "int64",
+          "nullable": true
+        },
+        {
+          "name": "weight",
+          "type": "int64",
+          "nullable": true
+        }
+      ],
+      "schemaMetadata": {
+        "pandas": "{\"index_columns\": [{\"kind\": \"range\", \"name\": null, \"start\": 0, \"stop\": 151856684, \"step\": 1}], \"column_indexes\": [{\"name\": null, \"field_name\": null, \"pandas_type\": \"unicode\", \"numpy_type\": \"object\", \"metadata\": {\"encoding\": \"UTF-8\"}}], \"columns\": [{\"name\": \"body_pre\", \"field_name\": \"body_pre\", \"pandas_type\": \"int64\", \"numpy_type\": \"int64\", \"metadata\": null}, {\"name\": \"body_post\", \"field_name\": \"body_post\", \"pandas_type\": \"int64\", \"numpy_type\": \"int64\", \"metadata\": null}, {\"name\": \"weight\", \"field_name\": \"weight\", \"pandas_type\": \"int64\", \"numpy_type\": \"int64\", \"metadata\": null}], \"creator\": {\"library\": \"pyarrow\", \"version\": \"19.0.1\"}, \"pandas_version\": \"2.2.2\"}"
+      },
+      "recordBatchCount": 2318,
+      "rowCount": null,
+      "sample": [
+        {
+          "body_pre": 10352,
+          "body_post": 10351,
+          "weight": 2591
+        },
+        {
+          "body_pre": 13612,
+          "body_post": 16076,
+          "weight": 2443
+        },
+        {
+          "body_pre": 10663,
+          "body_post": 10051,
+          "weight": 2248
+        }
+      ]
+    }
+  ]
+}

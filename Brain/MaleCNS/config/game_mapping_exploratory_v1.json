@@ -1,0 +1,25 @@
+{
+  "datasetId": "male-cns:v1.0",
+  "mappingId": "exploratory-direct-inputs-v1",
+  "stimulusRateHz": 100.0,
+  "groups": {
+    "F": [
+      "14033", "11656", "13672", "13968", "521212", "544664", "520401", "14726", "12980", "11592",
+      "12964", "13648", "31440", "11108", "13336", "18905", "12018", "20768", "14789", "526146"
+    ],
+    "R": ["13137", "529641", "14784", "10975", "11371", "11625", "14123", "16327", "14766", "519926"],
+    "L": ["13538", "15957", "519228", "11306", "14191", "519624", "519461", "57832", "10971", "47107"]
+  },
+  "readouts": {
+    "DNa02_R": "10360",
+    "DNa02_L": "523769",
+    "DNp09_L": "10783",
+    "DNp09_R": "11177"
+  },
+  "evidence": {
+    "R": "The top 10 positive direct inputs to DNa02_R are combined; AN03A008_R body 13137 has a +717 edge and passed the three-seed edge-block PoC",
+    "L": "The top 10 positive direct inputs to DNa02_L are combined; functional validation pending",
+    "F": "The top 10 positive direct inputs for each DNp09 side are combined as an exploratory upstream group; functional validation pending"
+  },
+  "limitations": "Exploratory game mapping only. Action semantics and motor calibration are not yet certified."
+}

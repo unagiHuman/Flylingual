@@ -1,0 +1,360 @@
+{
+  "inputs": {
+    "F": [
+      10045,
+      10056
+    ],
+    "R": [
+      "13137",
+      "529641",
+      "14784",
+      "10975",
+      "11371",
+      "11625",
+      "14123",
+      "16327",
+      "14766",
+      "519926"
+    ],
+    "L": [
+      "13538",
+      "15957",
+      "519228",
+      "11306",
+      "14191",
+      "519624",
+      "519461",
+      "57832",
+      "10971",
+      "47107"
+    ]
+  },
+  "populations": {
+    "forward": {
+      "R": {
+        "Pleural remotor/abductor MN": [
+          800290,
+          800553,
+          800776,
+          803314,
+          803499,
+          805313,
+          902719
+        ],
+        "Sternotrochanter MN": [
+          801079,
+          801090,
+          801148,
+          801375,
+          802864,
+          803698,
+          856359
+        ],
+        "Ta depressor MN": [
+          825721,
+          1050248133,
+          1050380236
+        ],
+        "Tergopleural/Pleural promotor MN": [
+          801824,
+          802072,
+          805745,
+          810535
+        ],
+        "Ti extensor MN": [
+          800158,
+          804257,
+          809935,
+          815678,
+          830514,
+          928579
+        ]
+      },
+      "L": {
+        "Pleural remotor/abductor MN": [
+          800175,
+          800541,
+          802509,
+          803803,
+          902310,
+          902492,
+          905421
+        ],
+        "Sternotrochanter MN": [
+          800504,
+          800851,
+          801685,
+          802361,
+          802407,
+          828978,
+          904657
+        ],
+        "Ta depressor MN": [
+          817655,
+          819278,
+          1050403926,
+          1050660827,
+          1051062549
+        ],
+        "Tergopleural/Pleural promotor MN": [
+          800061,
+          801173,
+          807281,
+          934091
+        ],
+        "Ti extensor MN": [
+          800621,
+          800636,
+          800911,
+          801234,
+          812953,
+          815344
+        ]
+      }
+    },
+    "turn": {
+      "R": {
+        "Fe reductor MN": [
+          801693,
+          803830,
+          806898,
+          811652,
+          813566,
+          821769,
+          835074,
+          902962,
+          905145
+        ],
+        "MNad34": [
+          802252
+        ],
+        "MNad42": [
+          801899
+        ],
+        "MNad63": [
+          802980
+        ],
+        "MNhl59": [
+          801335
+        ],
+        "MNhl62": [
+          903090
+        ],
+        "MNhm03": [
+          802659
+        ],
+        "MNhm42": [
+          800474
+        ],
+        "MNnm03": [
+          802151
+        ],
+        "MNnm08": [
+          802152
+        ],
+        "Pleural remotor/abductor MN": [
+          800290,
+          800553,
+          803314
+        ],
+        "Sternal adductor MN": [
+          807854,
+          815854
+        ],
+        "Sternal anterior rotator MN": [
+          800316,
+          801469,
+          801813,
+          801918,
+          801946,
+          906235
+        ],
+        "Sternal posterior rotator MN": [
+          801761,
+          1050493413
+        ],
+        "Sternotrochanter MN": [
+          801148
+        ],
+        "Ta levator MN": [
+          820110
+        ],
+        "Tergopleural/Pleural promotor MN": [
+          805745
+        ],
+        "Ti extensor MN": [
+          800158,
+          928579
+        ],
+        "Ti flexor MN": [
+          804405,
+          808685
+        ],
+        "hg1 MN": [
+          800917
+        ],
+        "hg4 MN": [
+          800906
+        ]
+      },
+      "L": {
+        "Fe reductor MN": [
+          800578,
+          804941,
+          805598,
+          812111,
+          814163
+        ],
+        "MNad34": [
+          802251
+        ],
+        "MNad42": [
+          801304
+        ],
+        "MNad63": [
+          802937
+        ],
+        "MNhl59": [
+          802731
+        ],
+        "MNhl62": [
+          801736
+        ],
+        "MNhm03": [
+          802806
+        ],
+        "MNhm42": [
+          801933
+        ],
+        "MNnm03": [
+          802923
+        ],
+        "MNnm08": [
+          802781
+        ],
+        "Pleural remotor/abductor MN": [
+          800175,
+          800541,
+          902310
+        ],
+        "Sternal adductor MN": [
+          904184
+        ],
+        "Sternal anterior rotator MN": [
+          801548,
+          802215,
+          806923,
+          832490,
+          903689,
+          919509
+        ],
+        "Sternal posterior rotator MN": [
+          801768,
+          804851,
+          818399,
+          1050335829,
+          1051054875
+        ],
+        "Sternotrochanter MN": [
+          800504
+        ],
+        "Ta levator MN": [
+          1050111955
+        ],
+        "Tergopleural/Pleural promotor MN": [
+          800061,
+          807281
+        ],
+        "Ti extensor MN": [
+          815344
+        ],
+        "Ti flexor MN": [
+          927808
+        ],
+        "hg1 MN": [
+          800241
+        ],
+        "hg4 MN": [
+          800847
+        ]
+      }
+    }
+  },
+  "readouts": {
+    "DNa02_R_Hz": 10360,
+    "DNa02_L_Hz": 523769,
+    "DNg100_L_Hz": 10045,
+    "DNg100_R_Hz": 10056,
+    "DNp09_L_Hz": 10783,
+    "DNp09_R_Hz": 11177
+  },
+  "decoder": {
+    "baseline": [
+      0,
+      0
+    ],
+    "matrix": [
+      [
+        4.666879940078854,
+        -0.09326122573700821
+      ],
+      [
+        -1.1917264176284896,
+        6.025802407836828
+      ]
+    ],
+    "reference": [
+      1.1896102702325573,
+      1.235270413201675
+    ],
+    "deadzone": [
+      0.09341692293429625,
+      0.3378983989374861
+    ],
+    "method": "Least squares global 2x2 from pure calibration conditions and recovered STOP; no combined or holdout data in fit. Same contamination/recovery percentile rule after transform. Turn deadzone solves calibration F p95 normalized absolute contamination <= .15 instead of forcing zero."
+  },
+  "ready": false,
+  "sixActionValidationPassed": true,
+  "stimulusRateHz": 100,
+  "windowCalibrationMs": 50,
+  "temporalDecoder": {
+    "mode": "ema_hysteresis",
+    "tauMs": [
+      100,
+      100
+    ],
+    "matrix": [
+      [
+        1,
+        0
+      ],
+      [
+        0,
+        1
+      ]
+    ],
+    "reference": [
+      0.2937641252782379,
+      0.3000467732211255
+    ],
+    "on": [
+      0.023451455108794695,
+      0.11207171687180144
+    ],
+    "off": [
+      0.023451455108794695,
+      0.05603585843590072
+    ],
+    "hysteresisAxes": [
+      "turn"
+    ]
+  },
+  "temporalValidationSeeds": [
+    20261231,
+    20261232,
+    20261233,
+    20261234,
+    20261235
+  ],
+  "integrationStatus": "Mac validation only; Windows Replay/Live verification required"
+}

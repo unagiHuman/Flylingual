@@ -1,0 +1,27 @@
+{
+  "type": "brain_frame",
+  "sequence": 0,
+  "appliedRequestId": null,
+  "appliedClientTimeMs": null,
+  "requestedAction": "STOP",
+  "brainTimeMs": 50.0,
+  "motor": {
+    "forward": 0.0,
+    "turn": 0.0
+  },
+  "brain": {
+    "DNp09_Hz": 0.0,
+    "DNa02_R_Hz": 0.0,
+    "DNa02_L_Hz": 0.0,
+    "DNa02Difference_Hz": 0.0
+  },
+  "performance": {
+    "windowMs": 50.0,
+    "stepWallTimeMs": 4814.237874932587
+  },
+  "diagnostics": {
+    "receivedCommandCount": null,
+    "overwrittenCommandCount": null,
+    "latestRequestId": null
+  }
+}

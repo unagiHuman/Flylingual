@@ -1,0 +1,30 @@
+{
+  "dataset": "male-cns:v1.0",
+  "annotationSource": "body-annotations-male-cns-v1.0-minconf-0.5.feather",
+  "sourceVersion": "v1.0 minconf 0.5",
+  "readouts": [
+    {
+      "role": "forward_candidate",
+      "bodyIds": ["10783", "11177"],
+      "reportedCellType": "DNp09",
+      "side": ["L", "R"],
+      "evidence": "type, flywireType, instance, and mancType agree in the MaleCNS annotation",
+      "annotationVerified": true,
+      "functionalVerified": false,
+      "limitations": "No accepted upstream-response path or motor calibration yet"
+    },
+    {
+      "role": "turn_candidate",
+      "bodyIds": ["10360", "523769"],
+      "reportedCellType": "DNa02",
+      "side": ["R", "L"],
+      "evidence": "type, flywireType, instance, and mancType agree in the MaleCNS annotation",
+      "annotationVerified": true,
+      "functionalVerified": true,
+      "functionallyVerifiedBodyIds": ["10360"],
+      "functionalEvidence": "AN03A008_R body 13137 stimulation changed DNa02_R body 10360 in all three seeds; blocking the direct edge removed the readout response in all three seeds",
+      "limitations": "DNa02_L has persistent-sequence response evidence but no matching edge-block control; biological motor semantics remain PoC-level"
+    }
+  ],
+  "legacyFlyWireIdsReused": false
+}

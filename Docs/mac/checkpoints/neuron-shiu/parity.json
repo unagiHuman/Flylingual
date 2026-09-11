@@ -1,0 +1,103 @@
+{
+  "spikesEqual": true,
+  "customSpikes": [
+    [
+      2,
+      0
+    ],
+    [
+      0,
+      1
+    ],
+    [
+      0,
+      11
+    ],
+    [
+      0,
+      21
+    ],
+    [
+      0,
+      41
+    ],
+    [
+      1,
+      50
+    ],
+    [
+      0,
+      81
+    ],
+    [
+      0,
+      161
+    ],
+    [
+      1,
+      199
+    ],
+    [
+      0,
+      201
+    ],
+    [
+      3,
+      288
+    ]
+  ],
+  "referenceSpikes": [
+    [
+      0,
+      1
+    ],
+    [
+      0,
+      11
+    ],
+    [
+      0,
+      21
+    ],
+    [
+      0,
+      41
+    ],
+    [
+      0,
+      81
+    ],
+    [
+      0,
+      161
+    ],
+    [
+      0,
+      201
+    ],
+    [
+      1,
+      50
+    ],
+    [
+      1,
+      199
+    ],
+    [
+      2,
+      0
+    ],
+    [
+      3,
+      288
+    ]
+  ],
+  "maxVoltageErrorMv": 2.984279490192421e-13,
+  "maxSynapticErrorMv": 3.552713678800501e-14,
+  "resetNote": "Exact Shiu reset string; w=0 is a local reset temporary, not a synaptic weight mutation.",
+  "customSpikeCount": 11,
+  "referenceSpikeCount": 11,
+  "dtMs": 0.1,
+  "neurons": 10,
+  "passed": true
+}

@@ -1,0 +1,13 @@
+{
+  "capturedAtUtc": "2026-09-11T01:32:42.089491+00:00",
+  "datasetId": "male-cns:v1.0",
+  "representation": "presynaptic CSR of dynamically effective PoC edges",
+  "neuronCount": 211577,
+  "effectiveEdgeCount": 19848648,
+  "positiveEdgeCount": 14875726,
+  "negativeEdgeCount": 4972922,
+  "indptrDtype": "int64",
+  "postIndexDtype": "int32",
+  "signedSynapseCountDtype": "int64",
+  "peakProcessRssBytes": 1104134144
+}

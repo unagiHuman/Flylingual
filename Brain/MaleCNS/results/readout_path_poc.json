@@ -1,0 +1,205 @@
+{
+  "capturedAtUtc": "2026-09-11T01:34:21.958929+00:00",
+  "datasetId": "male-cns:v1.0",
+  "dynamicsModel": "Shiu-style LIF adaptation in persistent NumPy runtime",
+  "physiologicallyValidated": false,
+  "stimulus": {
+    "bodyId": "13137",
+    "type": "AN03A008",
+    "instance": "AN03A008_R",
+    "superclass": "ascending_neuron"
+  },
+  "readout": {
+    "bodyId": "10360",
+    "type": "DNa02",
+    "instance": "DNa02_R",
+    "superclass": "descending_neuron"
+  },
+  "directEdgeSynapseCount": 717,
+  "trials": [
+    {
+      "simulatedMs": 50.0,
+      "totalSimulatedMs": 50.0,
+      "wallMs": 607.9120840877295,
+      "wholeNetworkSpikeCount": 0,
+      "readoutSpikeCounts": {
+        "DNa02_R_candidate": 0
+      },
+      "seed": 20260911,
+      "condition": "baseline",
+      "stimulusBodyIds": [],
+      "readoutBodyIds": [
+        "10360"
+      ],
+      "stimulusReadoutOverlap": false,
+      "stimulusRateHz": 0.0,
+      "readoutRateHz": 0.0,
+      "directEdgeBlocked": false
+    },
+    {
+      "simulatedMs": 50.0,
+      "totalSimulatedMs": 50.0,
+      "wallMs": 583.3234172314405,
+      "wholeNetworkSpikeCount": 826,
+      "readoutSpikeCounts": {
+        "DNa02_R_candidate": 3
+      },
+      "seed": 20260911,
+      "condition": "stimulated",
+      "stimulusBodyIds": [
+        "13137"
+      ],
+      "readoutBodyIds": [
+        "10360"
+      ],
+      "stimulusReadoutOverlap": false,
+      "stimulusRateHz": 100.0,
+      "readoutRateHz": 60.0,
+      "directEdgeBlocked": false
+    },
+    {
+      "simulatedMs": 50.0,
+      "totalSimulatedMs": 50.0,
+      "wallMs": 579.5627497136593,
+      "wholeNetworkSpikeCount": 747,
+      "readoutSpikeCounts": {
+        "DNa02_R_candidate": 0
+      },
+      "seed": 20260911,
+      "condition": "direct_edge_blocked",
+      "stimulusBodyIds": [
+        "13137"
+      ],
+      "readoutBodyIds": [
+        "10360"
+      ],
+      "stimulusReadoutOverlap": false,
+      "stimulusRateHz": 100.0,
+      "readoutRateHz": 0.0,
+      "directEdgeBlocked": true
+    },
+    {
+      "simulatedMs": 50.0,
+      "totalSimulatedMs": 50.0,
+      "wallMs": 527.4906242266297,
+      "wholeNetworkSpikeCount": 0,
+      "readoutSpikeCounts": {
+        "DNa02_R_candidate": 0
+      },
+      "seed": 20260912,
+      "condition": "baseline",
+      "stimulusBodyIds": [],
+      "readoutBodyIds": [
+        "10360"
+      ],
+      "stimulusReadoutOverlap": false,
+      "stimulusRateHz": 0.0,
+      "readoutRateHz": 0.0,
+      "directEdgeBlocked": false
+    },
+    {
+      "simulatedMs": 50.0,
+      "totalSimulatedMs": 50.0,
+      "wallMs": 568.5623325407505,
+      "wholeNetworkSpikeCount": 439,
+      "readoutSpikeCounts": {
+        "DNa02_R_candidate": 3
+      },
+      "seed": 20260912,
+      "condition": "stimulated",
+      "stimulusBodyIds": [
+        "13137"
+      ],
+      "readoutBodyIds": [
+        "10360"
+      ],
+      "stimulusReadoutOverlap": false,
+      "stimulusRateHz": 100.0,
+      "readoutRateHz": 60.0,
+      "directEdgeBlocked": false
+    },
+    {
+      "simulatedMs": 50.0,
+      "totalSimulatedMs": 50.0,
+      "wallMs": 569.0429164096713,
+      "wholeNetworkSpikeCount": 555,
+      "readoutSpikeCounts": {
+        "DNa02_R_candidate": 0
+      },
+      "seed": 20260912,
+      "condition": "direct_edge_blocked",
+      "stimulusBodyIds": [
+        "13137"
+      ],
+      "readoutBodyIds": [
+        "10360"
+      ],
+      "stimulusReadoutOverlap": false,
+      "stimulusRateHz": 100.0,
+      "readoutRateHz": 0.0,
+      "directEdgeBlocked": true
+    },
+    {
+      "simulatedMs": 50.0,
+      "totalSimulatedMs": 50.0,
+      "wallMs": 530.0278337672353,
+      "wholeNetworkSpikeCount": 0,
+      "readoutSpikeCounts": {
+        "DNa02_R_candidate": 0
+      },
+      "seed": 20260913,
+      "condition": "baseline",
+      "stimulusBodyIds": [],
+      "readoutBodyIds": [
+        "10360"
+      ],
+      "stimulusReadoutOverlap": false,
+      "stimulusRateHz": 0.0,
+      "readoutRateHz": 0.0,
+      "directEdgeBlocked": false
+    },
+    {
+      "simulatedMs": 50.0,
+      "totalSimulatedMs": 50.0,
+      "wallMs": 591.5776249021292,
+      "wholeNetworkSpikeCount": 1045,
+      "readoutSpikeCounts": {
+        "DNa02_R_candidate": 4
+      },
+      "seed": 20260913,
+      "condition": "stimulated",
+      "stimulusBodyIds": [
+        "13137"
+      ],
+      "readoutBodyIds": [
+        "10360"
+      ],
+      "stimulusReadoutOverlap": false,
+      "stimulusRateHz": 100.0,
+      "readoutRateHz": 80.0,
+      "directEdgeBlocked": false
+    },
+    {
+      "simulatedMs": 50.0,
+      "totalSimulatedMs": 50.0,
+      "wallMs": 585.7362924143672,
+      "wholeNetworkSpikeCount": 791,
+      "readoutSpikeCounts": {
+        "DNa02_R_candidate": 0
+      },
+      "seed": 20260913,
+      "condition": "direct_edge_blocked",
+      "stimulusBodyIds": [
+        "13137"
+      ],
+      "readoutBodyIds": [
+        "10360"
+      ],
+      "stimulusReadoutOverlap": false,
+      "stimulusRateHz": 100.0,
+      "readoutRateHz": 0.0,
+      "directEdgeBlocked": true
+    }
+  ],
+  "peakProcessRssBytes": 106086400
+}

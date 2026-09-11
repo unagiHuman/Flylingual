@@ -1,0 +1,5 @@
+{
+  "type": "error",
+  "error": "missing_request_id",
+  "message": "requestId is required"
+}

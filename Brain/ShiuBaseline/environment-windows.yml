@@ -1,0 +1,20 @@
+# Minimal native-Windows environment; not a claim of Mac package parity.
+# Python/Brian2/NumPy: environment.yml. Cython: Windows handoff baseline.
+# Remaining fixed versions: environment_full.yml, without platform build strings.
+name: flybrain-shiu-win
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.10
+  - brian2=2.5.1
+  - cython=0.29.37
+  - numpy=1.24
+  - pandas=1.4.3
+  - joblib=1.2.0
+  - pyarrow=11.0.0
+  - sympy=1.12
+  - jinja2=2.11.3
+  - markupsafe=1.1.1
+  - setuptools=67.8.0
+  - wheel=0.38.4

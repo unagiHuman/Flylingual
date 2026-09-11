@@ -1,0 +1,7 @@
+# Rebuild in a fresh Windows Python 3.10 environment; do not copy the Mac conda directory.
+brian2==2.5.1
+Cython==0.29.37
+numpy==1.24.3
+pandas==2.3.3
+pyarrow==24.0.0
+psutil==7.2.2

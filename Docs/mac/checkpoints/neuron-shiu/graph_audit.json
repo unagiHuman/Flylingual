@@ -1,0 +1,95 @@
+{
+  "entities_before": 211577,
+  "neurons_after": 166700,
+  "glia_excluded": 11864,
+  "other_excluded": 33013,
+  "other_exclusionReason": "unclassified superclass, not asserted non-neuronal",
+  "includedSuperclasses": [
+    "ENS",
+    "ascending_neuron",
+    "cb_efferent",
+    "cb_endocrine",
+    "cb_intrinsic",
+    "cb_motor",
+    "cb_sensory",
+    "cb_sensory_tbc",
+    "descending_neuron",
+    "descending_neuron_tbc",
+    "efferent_ascending",
+    "efferent_descending",
+    "ol_intrinsic",
+    "ol_sensory",
+    "sensory_ascending",
+    "sensory_ascending_tbc",
+    "sensory_descending",
+    "visual_centrifugal",
+    "visual_projection",
+    "visual_projection_tbc",
+    "vnc_efferent",
+    "vnc_endocrine",
+    "vnc_intrinsic",
+    "vnc_motor",
+    "vnc_sensory",
+    "vnc_sensory_tbc",
+    "vnc_tbc"
+  ],
+  "edges_before": 26028386,
+  "edges_after": 25582938,
+  "removed_edges": 445448,
+  "effective_edges": 19670694,
+  "isolated_neurons": 217,
+  "datasetManifest": {
+    "dataset": "male-cns:v1.0",
+    "sourcePage": "https://male-cns.janelia.org/download/",
+    "licenseNotice": "CC-BY; consult the license linked from the official source page.",
+    "files": {
+      "annotations": {
+        "filename": "body-annotations-male-cns-v1.0-minconf-0.5.feather",
+        "url": "https://storage.googleapis.com/flyem-male-cns/v1.0/connectome-data/flat-connectome/body-annotations-male-cns-v1.0-minconf-0.5.feather",
+        "bytes": 14483314,
+        "sha256": "2177e246113e4cfbf1e7772ec37c6da1955ff22e8063d0b1f833101f99a9a3b2",
+        "publisherChecksumVerified": false,
+        "downloadedAtUtc": "2026-09-10T23:44:34.915161+00:00",
+        "headers": {
+          "ETag": "\"50a7718770c57220f160ba4f431ab89e\"",
+          "Last-Modified": "Wed, 03 Jun 2026 13:54:38 GMT",
+          "Content-Length": "14483314",
+          "Content-Type": "application/octet-stream",
+          "x-goog-hash": "crc32c=vjz9cg=="
+        }
+      },
+      "neurotransmitters": {
+        "filename": "body-neurotransmitters-male-cns-v1.0.feather",
+        "url": "https://storage.googleapis.com/flyem-male-cns/v1.0/connectome-data/flat-connectome/body-neurotransmitters-male-cns-v1.0.feather",
+        "bytes": 43282834,
+        "sha256": "95c9289220663abeb3409f3ad9e5a7f8a53f8093f5139d15502cd08da8879621",
+        "publisherChecksumVerified": false,
+        "downloadedAtUtc": "2026-09-10T23:44:36.999935+00:00",
+        "headers": {
+          "ETag": "\"3d842b12fe5c49eefade528d7dd24a1f\"",
+          "Last-Modified": "Mon, 08 Jun 2026 05:01:39 GMT",
+          "Content-Length": "43282834",
+          "Content-Type": "application/octet-stream",
+          "x-goog-hash": "crc32c=jcpNFg=="
+        }
+      },
+      "weights": {
+        "filename": "connectome-weights-male-cns-v1.0-minconf-0.5.feather",
+        "url": "https://storage.googleapis.com/flyem-male-cns/v1.0/connectome-data/flat-connectome/connectome-weights-male-cns-v1.0-minconf-0.5.feather",
+        "bytes": 1051241946,
+        "sha256": "e35da783d1c686b2b58b3b87cd6a403ae43bfcfba8bff28e08ef752c1a56afc1",
+        "publisherChecksumVerified": false,
+        "downloadedAtUtc": "2026-09-10T23:45:23.936969+00:00",
+        "headers": {
+          "ETag": "\"f30e9dcca25cfd021bf1e7b3d975599e\"",
+          "Last-Modified": "Wed, 03 Jun 2026 13:54:47 GMT",
+          "Content-Length": "1051241946",
+          "Content-Type": "application/octet-stream",
+          "x-goog-hash": "crc32c=dKRPVQ=="
+        }
+      }
+    }
+  },
+  "rssBytes": 1593098240,
+  "peakRssBytes": 2026274816
+}

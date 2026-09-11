@@ -1,0 +1,254 @@
+{
+  "frames": 200,
+  "errors": [],
+  "sequenceIncreasing": true,
+  "metadataMismatch": 0,
+  "actions": [
+    {
+      "action": "STOP",
+      "sentUtc": "2026-09-11T07:20:03.5203158Z",
+      "frames": 1,
+      "firstCorrespondingMs": null,
+      "firstZeroMotorMs": 244.331
+    },
+    {
+      "action": "FORWARD",
+      "sentUtc": "2026-09-11T07:20:04.0079049Z",
+      "frames": 22,
+      "firstCorrespondingMs": 519.594,
+      "firstZeroMotorMs": null
+    },
+    {
+      "action": "STOP",
+      "sentUtc": "2026-09-11T07:20:12.0203262Z",
+      "frames": 14,
+      "firstCorrespondingMs": 728.57,
+      "firstZeroMotorMs": 2596.34
+    },
+    {
+      "action": "TURN_R",
+      "sentUtc": "2026-09-11T07:20:17.4511002Z",
+      "frames": 22,
+      "firstCorrespondingMs": 500.409,
+      "firstZeroMotorMs": null
+    },
+    {
+      "action": "STOP",
+      "sentUtc": "2026-09-11T07:20:25.4584669Z",
+      "frames": 26,
+      "firstCorrespondingMs": 771.1949999999999,
+      "firstZeroMotorMs": 1885.9840000000002
+    },
+    {
+      "action": "TURN_L",
+      "sentUtc": "2026-09-11T07:20:35.4955854Z",
+      "frames": 22,
+      "firstCorrespondingMs": 767.245,
+      "firstZeroMotorMs": null
+    },
+    {
+      "action": "STOP",
+      "sentUtc": "2026-09-11T07:20:43.5109015Z",
+      "frames": 11,
+      "firstCorrespondingMs": 589.5500000000001,
+      "firstZeroMotorMs": 1695.816
+    },
+    {
+      "action": "FORWARD_R",
+      "sentUtc": "2026-09-11T07:20:47.7463439Z",
+      "frames": 22,
+      "firstCorrespondingMs": 437.342,
+      "firstZeroMotorMs": null
+    },
+    {
+      "action": "STOP",
+      "sentUtc": "2026-09-11T07:20:55.7620986Z",
+      "frames": 23,
+      "firstCorrespondingMs": 722.9499999999999,
+      "firstZeroMotorMs": 2601.684
+    },
+    {
+      "action": "FORWARD_L",
+      "sentUtc": "2026-09-11T07:21:04.4131861Z",
+      "frames": 21,
+      "firstCorrespondingMs": 698.5930000000001,
+      "firstZeroMotorMs": null
+    },
+    {
+      "action": "STOP",
+      "sentUtc": "2026-09-11T07:21:12.4140570Z",
+      "frames": 15,
+      "firstCorrespondingMs": 590.511,
+      "firstZeroMotorMs": 2464.895
+    }
+  ],
+  "staleSamples": 0,
+  "motionSamples": 1219,
+  "maxFrameAgeSeconds": 0.3821088,
+  "events": [
+    "2026-09-11T07:20:02.9884727Z t=2.102837 START endpoint=192.168.1.7:8766",
+    "2026-09-11T07:20:03.5167964Z t=2.63075185 INPUT STOP",
+    "2026-09-11T07:20:04.0063532Z t=3.12080121 INITIAL_STOP_PASS",
+    "2026-09-11T07:20:04.0079049Z t=3.121 INPUT FORWARD",
+    "2026-09-11T07:20:12.0203262Z t=11.1334019 FORWARD_OBSERVED distance=1.42621052",
+    "2026-09-11T07:20:12.0203262Z t=11.1337042 INPUT STOP",
+    "2026-09-11T07:20:17.4485782Z t=16.5620136 PHYSICAL_STOP_CONFIRMED elapsed=5.4279623 criterion=pose_0.01_yaw_1deg",
+    "2026-09-11T07:20:17.4485782Z t=16.5621834 BASIC_GATE_PASS",
+    "2026-09-11T07:20:17.4485782Z t=16.5622635 INPUT TURN_R",
+    "2026-09-11T07:20:25.4584669Z t=24.5719719 TURN_R_OBSERVED distance=0.164043218",
+    "2026-09-11T07:20:25.4584669Z t=24.5722351 INPUT STOP",
+    "2026-09-11T07:20:35.4941311Z t=34.608326 PHYSICAL_STOP_CONFIRMED elapsed=10.0357552 criterion=pose_0.01_yaw_1deg",
+    "2026-09-11T07:20:35.4955854Z t=34.6087227 INPUT TURN_L",
+    "2026-09-11T07:20:43.5109015Z t=42.624382 TURN_L_OBSERVED distance=-0.118160978",
+    "2026-09-11T07:20:43.5109015Z t=42.624588 INPUT STOP",
+    "2026-09-11T07:20:47.7457921Z t=46.8589859 PHYSICAL_STOP_CONFIRMED elapsed=4.234123 criterion=pose_0.01_yaw_1deg",
+    "2026-09-11T07:20:47.7457921Z t=46.8591347 INPUT FORWARD_R",
+    "2026-09-11T07:20:55.7620986Z t=54.8759041 FORWARD_R_OBSERVED distance=-2.14846945",
+    "2026-09-11T07:20:55.7620986Z t=54.8760757 INPUT STOP",
+    "2026-09-11T07:21:04.4131861Z t=63.5260048 PHYSICAL_STOP_CONFIRMED elapsed=8.649651 criterion=pose_0.01_yaw_1deg",
+    "2026-09-11T07:21:04.4131861Z t=63.5262 INPUT FORWARD_L",
+    "2026-09-11T07:21:12.4140570Z t=71.52737 FORWARD_L_OBSERVED distance=-0.6034205",
+    "2026-09-11T07:21:12.4140570Z t=71.52752 INPUT STOP",
+    "2026-09-11T07:21:17.9506280Z t=77.0634 PHYSICAL_STOP_CONFIRMED elapsed=5.535713 criterion=pose_0.01_yaw_1deg",
+    "2026-09-11T07:21:17.9506280Z t=77.06373 TRIAL_COMPLETE"
+  ],
+  "bodyResponses": [
+    {
+      "action": "STOP",
+      "inputTime": 2.63075185,
+      "observedSeconds": 0.48997915000000036,
+      "onsetPoseThresholdSeconds": null,
+      "stopPoseWindowStartSeconds": null,
+      "displacement": 0.0,
+      "yawDelta": 0
+    },
+    {
+      "action": "FORWARD",
+      "inputTime": 3.121,
+      "observedSeconds": 7.9929746,
+      "onsetPoseThresholdSeconds": 0.13303165999999989,
+      "stopPoseWindowStartSeconds": null,
+      "displacement": 1.9326703812371613,
+      "yawDelta": 58.71268500000005
+    },
+    {
+      "action": "STOP",
+      "inputTime": 11.1337042,
+      "observedSeconds": 5.428236899999998,
+      "onsetPoseThresholdSeconds": null,
+      "stopPoseWindowStartSeconds": 3.2027596999999997,
+      "displacement": 0.4734252328631852,
+      "yawDelta": 15.340434199999997
+    },
+    {
+      "action": "TURN_R",
+      "inputTime": 16.5622635,
+      "observedSeconds": 7.9931488,
+      "onsetPoseThresholdSeconds": 1.6793690000000012,
+      "stopPoseWindowStartSeconds": null,
+      "displacement": 0.6810722796641783,
+      "yawDelta": 56.29080930000001
+    },
+    {
+      "action": "STOP",
+      "inputTime": 24.5722351,
+      "observedSeconds": 10.0359549,
+      "onsetPoseThresholdSeconds": null,
+      "stopPoseWindowStartSeconds": 7.898674900000003,
+      "displacement": 0.036732352623831344,
+      "yawDelta": 48.084641000000005
+    },
+    {
+      "action": "TURN_L",
+      "inputTime": 34.6087227,
+      "observedSeconds": 7.982391299999996,
+      "onsetPoseThresholdSeconds": 1.4005699000000007,
+      "stopPoseWindowStartSeconds": null,
+      "displacement": 0.7244708514103196,
+      "yawDelta": -21.087051000000002
+    },
+    {
+      "action": "STOP",
+      "inputTime": 42.624588,
+      "observedSeconds": 4.234336899999995,
+      "onsetPoseThresholdSeconds": null,
+      "stopPoseWindowStartSeconds": 2.0163219999999953,
+      "displacement": 0.13896374318937532,
+      "yawDelta": -2.88879399999999
+    },
+    {
+      "action": "FORWARD_R",
+      "inputTime": 46.8591347,
+      "observedSeconds": 8.016693100000005,
+      "onsetPoseThresholdSeconds": 0.9677429000000046,
+      "stopPoseWindowStartSeconds": null,
+      "displacement": 2.328048464789134,
+      "yawDelta": 221.6617531
+    },
+    {
+      "action": "STOP",
+      "inputTime": 54.8760757,
+      "observedSeconds": 8.649834300000002,
+      "onsetPoseThresholdSeconds": null,
+      "stopPoseWindowStartSeconds": 6.450759900000001,
+      "displacement": 0.5786799669474678,
+      "yawDelta": 21.550333900000002
+    },
+    {
+      "action": "FORWARD_L",
+      "inputTime": 63.5262,
+      "observedSeconds": 7.984439999999992,
+      "onsetPoseThresholdSeconds": 1.0596499999999907,
+      "stopPoseWindowStartSeconds": null,
+      "displacement": 1.6130236284485064,
+      "yawDelta": 18.100773000000004
+    },
+    {
+      "action": "STOP",
+      "inputTime": 71.52752,
+      "observedSeconds": 5.502490000000009,
+      "onsetPoseThresholdSeconds": null,
+      "stopPoseWindowStartSeconds": 3.064620000000005,
+      "displacement": 0.23763546610339037,
+      "yawDelta": -4.727095200000001
+    }
+  ],
+  "poseSegments": [
+    {
+      "stage": "0",
+      "rows": 2,
+      "startTime": 2.62751675,
+      "endTime": 3.120731,
+      "displacement": {
+        "x": 0.0003097838881,
+        "y": -0.008768679999999973,
+        "z": -0.0020053579899999997
+      },
+      "yawDelta": -0.007019000000013875
+    },
+    {
+      "stage": "1",
+      "rows": 660,
+      "startTime": 3.186905,
+      "endTime": 71.51064,
+      "displacement": {
+        "x": 0.10948699094700001,
+        "y": -0.38436875999999986,
+        "z": 3.5341911450000003
+      },
+      "yawDelta": 418.61683700000003
+    },
+    {
+      "stage": "2",
+      "rows": 557,
+      "startTime": 11.1678391,
+      "endTime": 77.03001,
+      "displacement": {
+        "x": -1.3583379709999999,
+        "y": 0.05706429499999999,
+        "z": 2.15885917
+      },
+      "yawDelta": -5.429789999999969
+    }
+  ]
+}

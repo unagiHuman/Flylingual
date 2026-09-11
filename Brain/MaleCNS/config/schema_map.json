@@ -1,0 +1,35 @@
+{
+  "datasetId": "male-cns:v1.0",
+  "annotations": {
+    "id": {"column": "bodyId", "arrowType": "int64", "jsonType": "string"},
+    "cellType": "type",
+    "instance": "instance",
+    "side": "somaSide",
+    "class": "class",
+    "superclass": "superclass",
+    "status": "status",
+    "statusLabel": "statusLabel",
+    "crossDatasetType": "flywireType",
+    "pandasIndex": "range"
+  },
+  "neurotransmitters": {
+    "id": {"column": "body", "arrowType": "int64", "jsonType": "string"},
+    "predictedCategory": "predicted_nt",
+    "predictedConfidence": "predicted_nt_confidence",
+    "groundTruth": "ground_truth",
+    "consensusCategory": "consensus_nt",
+    "pandasIndex": "range"
+  },
+  "weights": {
+    "preId": "body_pre",
+    "postId": "body_post",
+    "synapseCount": "weight",
+    "arrowTypes": {"body_pre": "int64", "body_post": "int64", "weight": "int64"},
+    "direction": "body_pre_to_body_post",
+    "pandasIndex": "range"
+  },
+  "notes": [
+    "Mappings were measured from the downloaded Feather v2 files; column names were not assumed.",
+    "IDs remain integers internally and must be serialized as strings at JSON boundaries."
+  ]
+}

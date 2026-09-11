@@ -1,0 +1,369 @@
+{
+  "model": "Shiu-compatible LIF dynamics applied to the MaleCNS connectome",
+  "ready": false,
+  "recurrentScale": 0.1,
+  "trials": [
+    {
+      "seed": 20260921,
+      "windowMs": 100,
+      "initializationMs": 0.30241720378398895,
+      "frames": [
+        {
+          "stimulated": false,
+          "readoutHz": 0.0,
+          "spikes": 0,
+          "wallMs": 661.9006246328354
+        },
+        {
+          "stimulated": true,
+          "readoutHz": 100.0,
+          "spikes": 126,
+          "wallMs": 662.3962912708521
+        },
+        {
+          "stimulated": false,
+          "readoutHz": 10.0,
+          "spikes": 2,
+          "wallMs": 656.7695420235395
+        },
+        {
+          "stimulated": false,
+          "readoutHz": 0.0,
+          "spikes": 0,
+          "wallMs": 664.5436668768525
+        }
+      ]
+    },
+    {
+      "seed": 20260922,
+      "windowMs": 100,
+      "initializationMs": 0.3294162452220917,
+      "frames": [
+        {
+          "stimulated": false,
+          "readoutHz": 0.0,
+          "spikes": 0,
+          "wallMs": 700.4452915862203
+        },
+        {
+          "stimulated": true,
+          "readoutHz": 90.0,
+          "spikes": 123,
+          "wallMs": 692.5141252577305
+        },
+        {
+          "stimulated": false,
+          "readoutHz": 10.0,
+          "spikes": 1,
+          "wallMs": 681.8091664463282
+        },
+        {
+          "stimulated": false,
+          "readoutHz": 0.0,
+          "spikes": 0,
+          "wallMs": 696.5020000934601
+        }
+      ]
+    },
+    {
+      "seed": 20260923,
+      "windowMs": 100,
+      "initializationMs": 0.22695772349834442,
+      "frames": [
+        {
+          "stimulated": false,
+          "readoutHz": 0.0,
+          "spikes": 0,
+          "wallMs": 694.4126663729548
+        },
+        {
+          "stimulated": true,
+          "readoutHz": 80.0,
+          "spikes": 94,
+          "wallMs": 696.0926670581102
+        },
+        {
+          "stimulated": false,
+          "readoutHz": 0.0,
+          "spikes": 0,
+          "wallMs": 676.1823752894998
+        },
+        {
+          "stimulated": false,
+          "readoutHz": 0.0,
+          "spikes": 0,
+          "wallMs": 666.2462912499905
+        }
+      ]
+    }
+  ],
+  "benchmarks": [
+    {
+      "seed": 20260924,
+      "windowMs": 25,
+      "initializationMs": 0.22645853459835052,
+      "frames": [
+        {
+          "stimulated": false,
+          "readoutHz": 0.0,
+          "spikes": 0,
+          "wallMs": 171.47454153746367
+        },
+        {
+          "stimulated": true,
+          "readoutHz": 40.0,
+          "spikes": 20,
+          "wallMs": 168.96808333694935
+        },
+        {
+          "stimulated": false,
+          "readoutHz": 40.0,
+          "spikes": 1,
+          "wallMs": 171.95666674524546
+        },
+        {
+          "stimulated": false,
+          "readoutHz": 0.0,
+          "spikes": 0,
+          "wallMs": 189.6409997716546
+        },
+        {
+          "stimulated": true,
+          "readoutHz": 80.0,
+          "spikes": 23,
+          "wallMs": 168.8918750733137
+        },
+        {
+          "stimulated": false,
+          "readoutHz": 0.0,
+          "spikes": 1,
+          "wallMs": 169.77533418685198
+        },
+        {
+          "stimulated": false,
+          "readoutHz": 0.0,
+          "spikes": 0,
+          "wallMs": 168.39795745909214
+        },
+        {
+          "stimulated": true,
+          "readoutHz": 40.0,
+          "spikes": 18,
+          "wallMs": 172.97962494194508
+        },
+        {
+          "stimulated": false,
+          "readoutHz": 40.0,
+          "spikes": 1,
+          "wallMs": 171.79833352565765
+        },
+        {
+          "stimulated": false,
+          "readoutHz": 0.0,
+          "spikes": 0,
+          "wallMs": 168.66095922887325
+        },
+        {
+          "stimulated": true,
+          "readoutHz": 80.0,
+          "spikes": 22,
+          "wallMs": 169.31208316236734
+        },
+        {
+          "stimulated": false,
+          "readoutHz": 0.0,
+          "spikes": 0,
+          "wallMs": 169.82158366590738
+        }
+      ],
+      "firstStepMs": 171.47454153746367,
+      "warmSamples": 11,
+      "meanMs": 171.83668191798708,
+      "medianMs": 169.77533418685198,
+      "p95Ms": 181.31031235679984,
+      "simulatedWallRatio": 0.14548698055012382
+    },
+    {
+      "seed": 20260924,
+      "windowMs": 50,
+      "initializationMs": 0.2527078613638878,
+      "frames": [
+        {
+          "stimulated": false,
+          "readoutHz": 0.0,
+          "spikes": 0,
+          "wallMs": 342.77612436562777
+        },
+        {
+          "stimulated": true,
+          "readoutHz": 80.0,
+          "spikes": 45,
+          "wallMs": 359.78595819324255
+        },
+        {
+          "stimulated": false,
+          "readoutHz": 0.0,
+          "spikes": 0,
+          "wallMs": 335.08649934083223
+        },
+        {
+          "stimulated": false,
+          "readoutHz": 0.0,
+          "spikes": 0,
+          "wallMs": 331.9036243483424
+        },
+        {
+          "stimulated": true,
+          "readoutHz": 60.0,
+          "spikes": 41,
+          "wallMs": 334.1171247884631
+        },
+        {
+          "stimulated": false,
+          "readoutHz": 20.0,
+          "spikes": 2,
+          "wallMs": 331.2248755246401
+        },
+        {
+          "stimulated": false,
+          "readoutHz": 0.0,
+          "spikes": 0,
+          "wallMs": 332.72220846265554
+        },
+        {
+          "stimulated": true,
+          "readoutHz": 80.0,
+          "spikes": 55,
+          "wallMs": 340.1052076369524
+        },
+        {
+          "stimulated": false,
+          "readoutHz": 20.0,
+          "spikes": 1,
+          "wallMs": 336.4577926695347
+        },
+        {
+          "stimulated": false,
+          "readoutHz": 0.0,
+          "spikes": 0,
+          "wallMs": 340.5377082526684
+        },
+        {
+          "stimulated": true,
+          "readoutHz": 100.0,
+          "spikes": 58,
+          "wallMs": 342.1268751844764
+        },
+        {
+          "stimulated": false,
+          "readoutHz": 0.0,
+          "spikes": 0,
+          "wallMs": 337.85845898091793
+        }
+      ],
+      "firstStepMs": 342.77612436562777,
+      "warmSamples": 11,
+      "meanMs": 338.35693939842963,
+      "medianMs": 336.4577926695347,
+      "p95Ms": 350.95641668885946,
+      "simulatedWallRatio": 0.1477729408739062
+    },
+    {
+      "seed": 20260924,
+      "windowMs": 100,
+      "initializationMs": 0.3870408982038498,
+      "frames": [
+        {
+          "stimulated": false,
+          "readoutHz": 0.0,
+          "spikes": 0,
+          "wallMs": 681.444208137691
+        },
+        {
+          "stimulated": true,
+          "readoutHz": 80.0,
+          "spikes": 89,
+          "wallMs": 688.3838754147291
+        },
+        {
+          "stimulated": false,
+          "readoutHz": 0.0,
+          "spikes": 0,
+          "wallMs": 679.3471248820424
+        },
+        {
+          "stimulated": false,
+          "readoutHz": 0.0,
+          "spikes": 0,
+          "wallMs": 680.3320841863751
+        },
+        {
+          "stimulated": true,
+          "readoutHz": 90.0,
+          "spikes": 114,
+          "wallMs": 693.343666382134
+        },
+        {
+          "stimulated": false,
+          "readoutHz": 0.0,
+          "spikes": 0,
+          "wallMs": 685.6558322906494
+        },
+        {
+          "stimulated": false,
+          "readoutHz": 0.0,
+          "spikes": 0,
+          "wallMs": 679.3859163299203
+        },
+        {
+          "stimulated": true,
+          "readoutHz": 90.0,
+          "spikes": 117,
+          "wallMs": 679.6666672453284
+        },
+        {
+          "stimulated": false,
+          "readoutHz": 0.0,
+          "spikes": 0,
+          "wallMs": 662.6641657203436
+        },
+        {
+          "stimulated": false,
+          "readoutHz": 0.0,
+          "spikes": 0,
+          "wallMs": 680.1936673000455
+        },
+        {
+          "stimulated": true,
+          "readoutHz": 90.0,
+          "spikes": 103,
+          "wallMs": 681.9796245545149
+        },
+        {
+          "stimulated": false,
+          "readoutHz": 10.0,
+          "spikes": 1,
+          "wallMs": 684.6676664426923
+        }
+      ],
+      "firstStepMs": 681.444208137691,
+      "warmSamples": 11,
+      "meanMs": 681.4200264317068,
+      "medianMs": 680.3320841863751,
+      "p95Ms": 690.8637708984315,
+      "simulatedWallRatio": 0.14675236435837594
+    }
+  ],
+  "mappedBytes": 238715536,
+  "fileBytes": 238716048,
+  "warmTouchChecksums": [
+    1221212928552.0,
+    1913603055504.0,
+    1327124771543.0,
+    1313771.5800000026
+  ],
+  "warmTouchMinorFaults": 14554,
+  "warmTouchMajorFaults": 18,
+  "rssBytes": 1249001472,
+  "peakRssBytes": 2026274816
+}

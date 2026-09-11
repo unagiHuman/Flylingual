@@ -1,0 +1,1248 @@
+{
+  "sourceCommit": "253a1ec9eda78a14873999325bbe7d697918f715",
+  "unity": "6000.5.5f1",
+  "status": "PROVISIONAL_REPLAY_GATE",
+  "parser": {
+    "shiu": {
+      "frames": 110,
+      "sha256": "441f6df2556d7b887b73e9a5bd1e848acdd2ef40b4eda2e5f1b36e07be6dda1a",
+      "parserPass": true,
+      "segments": [
+        {
+          "action": "STOP",
+          "count": 10,
+          "last4SignPass": true,
+          "lastMotor": {
+            "forward": 0.0,
+            "turn": 0.0
+          }
+        },
+        {
+          "action": "FORWARD",
+          "count": 10,
+          "last4SignPass": true,
+          "lastMotor": {
+            "forward": 0.6666666666666676,
+            "turn": 0.0
+          }
+        },
+        {
+          "action": "STOP",
+          "count": 10,
+          "last4SignPass": true,
+          "lastMotor": {
+            "forward": 0.0,
+            "turn": 0.0
+          }
+        },
+        {
+          "action": "TURN_R",
+          "count": 10,
+          "last4SignPass": true,
+          "lastMotor": {
+            "forward": 0.0,
+            "turn": 0.47413793103448604
+          }
+        },
+        {
+          "action": "STOP",
+          "count": 10,
+          "last4SignPass": true,
+          "lastMotor": {
+            "forward": 0.0,
+            "turn": 0.0
+          }
+        },
+        {
+          "action": "TURN_L",
+          "count": 10,
+          "last4SignPass": true,
+          "lastMotor": {
+            "forward": 0.0,
+            "turn": -0.8189655172413841
+          }
+        },
+        {
+          "action": "STOP",
+          "count": 10,
+          "last4SignPass": true,
+          "lastMotor": {
+            "forward": 0.0,
+            "turn": 0.0
+          }
+        },
+        {
+          "action": "FORWARD_R",
+          "count": 10,
+          "last4SignPass": true,
+          "lastMotor": {
+            "forward": 0.6666666666666691,
+            "turn": 1.0
+          }
+        },
+        {
+          "action": "STOP",
+          "count": 10,
+          "last4SignPass": true,
+          "lastMotor": {
+            "forward": 0.0,
+            "turn": 0.0
+          }
+        },
+        {
+          "action": "FORWARD_L",
+          "count": 10,
+          "last4SignPass": true,
+          "lastMotor": {
+            "forward": 0.8333333333333363,
+            "turn": -0.991379310344833
+          }
+        },
+        {
+          "action": "STOP",
+          "count": 10,
+          "last4SignPass": true,
+          "lastMotor": {
+            "forward": 0.0,
+            "turn": 0.0
+          }
+        }
+      ]
+    },
+    "malecns": {
+      "frames": 76,
+      "sha256": "d7638ff329e02b9d050570a69e67ce5678a01604bce06c3882a90ce5cfcb6e57",
+      "parserPass": true,
+      "segments": [
+        {
+          "action": "STOP",
+          "count": 6,
+          "last4SignPass": true,
+          "lastMotor": {
+            "forward": 0.0,
+            "turn": 0.0
+          }
+        },
+        {
+          "action": "FORWARD",
+          "count": 8,
+          "last4SignPass": true,
+          "lastMotor": {
+            "forward": 0.870837659255918,
+            "turn": 0.0
+          }
+        },
+        {
+          "action": "STOP",
+          "count": 6,
+          "last4SignPass": false,
+          "lastMotor": {
+            "forward": 0.0,
+            "turn": 0.0
+          }
+        },
+        {
+          "action": "TURN_R",
+          "count": 8,
+          "last4SignPass": true,
+          "lastMotor": {
+            "forward": 0.0,
+            "turn": 0.5780931537445688
+          }
+        },
+        {
+          "action": "STOP",
+          "count": 6,
+          "last4SignPass": false,
+          "lastMotor": {
+            "forward": 0.0,
+            "turn": 0.0
+          }
+        },
+        {
+          "action": "TURN_L",
+          "count": 8,
+          "last4SignPass": true,
+          "lastMotor": {
+            "forward": 0.004445221858297906,
+            "turn": -1.0
+          }
+        },
+        {
+          "action": "STOP",
+          "count": 6,
+          "last4SignPass": false,
+          "lastMotor": {
+            "forward": 0.0,
+            "turn": 0.0
+          }
+        },
+        {
+          "action": "FORWARD_R",
+          "count": 8,
+          "last4SignPass": true,
+          "lastMotor": {
+            "forward": 1.0,
+            "turn": 0.4013253622015999
+          }
+        },
+        {
+          "action": "STOP",
+          "count": 6,
+          "last4SignPass": false,
+          "lastMotor": {
+            "forward": 0.0,
+            "turn": 0.0
+          }
+        },
+        {
+          "action": "FORWARD_L",
+          "count": 8,
+          "last4SignPass": true,
+          "lastMotor": {
+            "forward": 0.9289340396219548,
+            "turn": -0.70581390005751
+          }
+        },
+        {
+          "action": "STOP",
+          "count": 6,
+          "last4SignPass": false,
+          "lastMotor": {
+            "forward": 0.0,
+            "turn": 0.0
+          }
+        }
+      ]
+    }
+  },
+  "steering": [
+    {
+      "path": "artifacts\\windows\\m1\\FORWARD\\steering.csv",
+      "steps": 546,
+      "duration": 10.90010669,
+      "yawDelta": 44.811232852799996,
+      "common10s": {
+        "steps": 501,
+        "duration": 10.00008609,
+        "yawDelta": 43.339557452799994
+      },
+      "means": {
+        "rawForward": 0.5904405723754579,
+        "rawTurn": 0.0,
+        "cpgForward": 0.5792706815490842,
+        "cpgTurn": 0.0,
+        "leftScale": 1.0,
+        "rightScale": 1.0,
+        "yawRate": 4.274645550820916
+      },
+      "start": {
+        "x": 0.0300890282,
+        "y": 0.903851032,
+        "z": 0.0160221364,
+        "yaw": 0.0396925472
+      },
+      "end": {
+        "x": 0.8024648,
+        "y": 0.911706865,
+        "z": 0.6849396,
+        "yaw": 44.8509254
+      },
+      "legs": {
+        "LF": {
+          "coxa": [
+            -32.5111923,
+            32.9929657
+          ],
+          "femur": [
+            0.0,
+            23.955616
+          ],
+          "tibia": [
+            -32.5111923,
+            0.0
+          ],
+          "attached": [
+            0.0,
+            0.0
+          ],
+          "normalForce": [
+            0.0,
+            0.0
+          ]
+        },
+        "LH": {
+          "coxa": [
+            -32.5111923,
+            32.9929657
+          ],
+          "femur": [
+            0.0,
+            23.955616
+          ],
+          "tibia": [
+            -32.5111923,
+            0.0
+          ],
+          "attached": [
+            0.0,
+            1.0
+          ],
+          "normalForce": [
+            0.0,
+            1.15365648
+          ]
+        },
+        "LM": {
+          "coxa": [
+            -32.9929657,
+            32.5111923
+          ],
+          "femur": [
+            0.0,
+            24.3106041
+          ],
+          "tibia": [
+            -32.99296,
+            0.0
+          ],
+          "attached": [
+            0.0,
+            1.0
+          ],
+          "normalForce": [
+            0.0,
+            1.15365648
+          ]
+        },
+        "RF": {
+          "coxa": [
+            -32.9929657,
+            32.5111923
+          ],
+          "femur": [
+            0.0,
+            24.3106041
+          ],
+          "tibia": [
+            -32.99296,
+            0.0
+          ],
+          "attached": [
+            0.0,
+            0.0
+          ],
+          "normalForce": [
+            0.0,
+            0.0
+          ]
+        },
+        "RH": {
+          "coxa": [
+            -32.9929657,
+            32.5111923
+          ],
+          "femur": [
+            0.0,
+            24.3106041
+          ],
+          "tibia": [
+            -32.99296,
+            0.0
+          ],
+          "attached": [
+            0.0,
+            1.0
+          ],
+          "normalForce": [
+            0.0,
+            1.15365648
+          ]
+        },
+        "RM": {
+          "coxa": [
+            -32.5111923,
+            32.9929657
+          ],
+          "femur": [
+            0.0,
+            23.955616
+          ],
+          "tibia": [
+            -32.5111923,
+            0.0
+          ],
+          "attached": [
+            0.0,
+            1.0
+          ],
+          "normalForce": [
+            0.0,
+            1.15365648
+          ]
+        }
+      }
+    },
+    {
+      "path": "artifacts\\windows\\m1\\FORWARD_L\\steering.csv",
+      "steps": 547,
+      "duration": 10.92010709,
+      "yawDelta": -48.290971975999966,
+      "common10s": {
+        "steps": 501,
+        "duration": 10.00008609,
+        "yawDelta": -46.63749897599995
+      },
+      "means": {
+        "rawForward": 0.714359671345521,
+        "rawTurn": -0.4104760974003656,
+        "cpgForward": 0.7021396858855576,
+        "cpgTurn": -0.4008693017210439,
+        "leftScale": 0.3986960482261243,
+        "rightScale": 1.5585346103290676,
+        "yawRate": -4.232426819013858
+      },
+      "start": {
+        "x": 0.0292910039,
+        "y": 0.9026518,
+        "z": 0.0177208725,
+        "yaw": 0.041917976
+      },
+      "end": {
+        "x": -1.31032383,
+        "y": 0.926262259,
+        "z": -1.04241,
+        "yaw": 311.750946
+      },
+      "legs": {
+        "LF": {
+          "coxa": [
+            -23.99958,
+            19.8523827
+          ],
+          "femur": [
+            0.0,
+            25.0671787
+          ],
+          "tibia": [
+            -34.0197449,
+            0.0
+          ],
+          "attached": [
+            0.0,
+            0.0
+          ],
+          "normalForce": [
+            0.0,
+            0.0
+          ]
+        },
+        "LH": {
+          "coxa": [
+            -23.99958,
+            19.8523827
+          ],
+          "femur": [
+            0.0,
+            25.0671787
+          ],
+          "tibia": [
+            -34.0197449,
+            0.0
+          ],
+          "attached": [
+            0.0,
+            1.0
+          ],
+          "normalForce": [
+            0.0,
+            1.15365648
+          ]
+        },
+        "LM": {
+          "coxa": [
+            -19.85238,
+            23.99958
+          ],
+          "femur": [
+            0.0,
+            25.78914
+          ],
+          "tibia": [
+            -34.9995461,
+            0.0
+          ],
+          "attached": [
+            0.0,
+            1.0
+          ],
+          "normalForce": [
+            0.0,
+            1.15365648
+          ]
+        },
+        "RF": {
+          "coxa": [
+            -64.74917,
+            61.47045
+          ],
+          "femur": [
+            0.0,
+            25.78914
+          ],
+          "tibia": [
+            -34.9995461,
+            0.0
+          ],
+          "attached": [
+            0.0,
+            1.0
+          ],
+          "normalForce": [
+            0.0,
+            1.15365648
+          ]
+        },
+        "RH": {
+          "coxa": [
+            -64.74917,
+            61.47045
+          ],
+          "femur": [
+            0.0,
+            25.78914
+          ],
+          "tibia": [
+            -34.9995461,
+            0.0
+          ],
+          "attached": [
+            0.0,
+            1.0
+          ],
+          "normalForce": [
+            0.0,
+            1.15365648
+          ]
+        },
+        "RM": {
+          "coxa": [
+            -61.47045,
+            64.74916
+          ],
+          "femur": [
+            0.0,
+            25.0671787
+          ],
+          "tibia": [
+            -34.0197449,
+            0.0
+          ],
+          "attached": [
+            0.0,
+            1.0
+          ],
+          "normalForce": [
+            0.0,
+            1.15365648
+          ]
+        }
+      }
+    },
+    {
+      "path": "artifacts\\windows\\m1\\FORWARD_R\\steering.csv",
+      "steps": 552,
+      "duration": 11.02010939,
+      "yawDelta": 221.257004,
+      "common10s": {
+        "steps": 501,
+        "duration": 10.00008609,
+        "yawDelta": 200.076507
+      },
+      "means": {
+        "rawForward": 0.6823516354474638,
+        "rawTurn": 0.28671742942572465,
+        "cpgForward": 0.6694591524509058,
+        "cpgTurn": 0.2809146467977518,
+        "leftScale": 1.4213719696376812,
+        "rightScale": 0.5786280306902174,
+        "yawRate": 20.01239332977156
+      },
+      "start": {
+        "x": 0.0318506025,
+        "y": 0.901582658,
+        "z": 0.00102317194,
+        "yaw": 359.903229
+      },
+      "end": {
+        "x": 1.36277437,
+        "y": 0.9269536,
+        "z": -0.8240794,
+        "yaw": 221.160233
+      },
+      "legs": {
+        "LF": {
+          "coxa": [
+            -60.48418,
+            59.8331947
+          ],
+          "femur": [
+            0.0,
+            27.814724
+          ],
+          "tibia": [
+            -37.7485542,
+            0.0
+          ],
+          "attached": [
+            0.0,
+            0.0
+          ],
+          "normalForce": [
+            0.0,
+            0.0
+          ]
+        },
+        "LH": {
+          "coxa": [
+            -60.48418,
+            59.8331947
+          ],
+          "femur": [
+            0.0,
+            27.814724
+          ],
+          "tibia": [
+            -37.7485542,
+            0.0
+          ],
+          "attached": [
+            0.0,
+            0.0
+          ],
+          "normalForce": [
+            0.0,
+            0.0
+          ]
+        },
+        "LM": {
+          "coxa": [
+            -59.8332,
+            60.48418
+          ],
+          "femur": [
+            0.0,
+            27.4937115
+          ],
+          "tibia": [
+            -37.3128929,
+            0.0
+          ],
+          "attached": [
+            0.0,
+            1.0
+          ],
+          "normalForce": [
+            0.0,
+            1.15365648
+          ]
+        },
+        "RF": {
+          "coxa": [
+            -14.8005056,
+            18.3604469
+          ],
+          "femur": [
+            0.0,
+            27.4937115
+          ],
+          "tibia": [
+            -37.3128929,
+            0.0
+          ],
+          "attached": [
+            0.0,
+            0.0
+          ],
+          "normalForce": [
+            0.0,
+            0.0
+          ]
+        },
+        "RH": {
+          "coxa": [
+            -14.8005056,
+            18.3604469
+          ],
+          "femur": [
+            0.0,
+            27.4937115
+          ],
+          "tibia": [
+            -37.3128929,
+            0.0
+          ],
+          "attached": [
+            0.0,
+            0.0
+          ],
+          "normalForce": [
+            0.0,
+            0.0
+          ]
+        },
+        "RM": {
+          "coxa": [
+            -18.3604469,
+            14.8005056
+          ],
+          "femur": [
+            0.0,
+            27.814724
+          ],
+          "tibia": [
+            -37.7485542,
+            0.0
+          ],
+          "attached": [
+            0.0,
+            1.0
+          ],
+          "normalForce": [
+            0.0,
+            1.15365648
+          ]
+        }
+      }
+    },
+    {
+      "path": "artifacts\\windows\\m1\\STOP\\steering.csv",
+      "steps": 545,
+      "duration": 10.88010619,
+      "yawDelta": 20.359279052800005,
+      "common10s": {
+        "steps": 501,
+        "duration": 10.00008609,
+        "yawDelta": 15.742325152800005
+      },
+      "means": {
+        "rawForward": 0.1017682110253211,
+        "rawTurn": -0.020385616284770643,
+        "cpgForward": 0.10068081243336624,
+        "cpgTurn": -0.020393884973282733,
+        "leftScale": 0.9694091733699083,
+        "rightScale": 1.0105108657211008,
+        "yawRate": 1.9028363406444038
+      },
+      "start": {
+        "x": 0.0300890282,
+        "y": 0.903851032,
+        "z": 0.0160221364,
+        "yaw": 0.0396925472
+      },
+      "end": {
+        "x": -0.0324218534,
+        "y": 0.900836766,
+        "z": -0.103009164,
+        "yaw": 20.3989716
+      },
+      "legs": {
+        "LF": {
+          "coxa": [
+            -23.5681744,
+            43.9196777
+          ],
+          "femur": [
+            0.0,
+            18.9849968
+          ],
+          "tibia": [
+            -25.7653542,
+            0.0
+          ],
+          "attached": [
+            0.0,
+            0.0
+          ],
+          "normalForce": [
+            0.0,
+            0.0
+          ]
+        },
+        "LH": {
+          "coxa": [
+            -23.5681744,
+            43.9196777
+          ],
+          "femur": [
+            0.0,
+            18.9849968
+          ],
+          "tibia": [
+            -25.7653542,
+            0.0
+          ],
+          "attached": [
+            0.0,
+            0.0
+          ],
+          "normalForce": [
+            0.0,
+            0.0
+          ]
+        },
+        "LM": {
+          "coxa": [
+            -43.91968,
+            23.5681744
+          ],
+          "femur": [
+            0.0,
+            20.6713715
+          ],
+          "tibia": [
+            -28.0540028,
+            0.0
+          ],
+          "attached": [
+            0.0,
+            1.0
+          ],
+          "normalForce": [
+            0.0,
+            1.15365648
+          ]
+        },
+        "RF": {
+          "coxa": [
+            -31.29891,
+            47.665905
+          ],
+          "femur": [
+            0.0,
+            20.6713715
+          ],
+          "tibia": [
+            -28.0540028,
+            0.0
+          ],
+          "attached": [
+            0.0,
+            0.0
+          ],
+          "normalForce": [
+            0.0,
+            0.0
+          ]
+        },
+        "RH": {
+          "coxa": [
+            -31.29891,
+            47.665905
+          ],
+          "femur": [
+            0.0,
+            20.6713715
+          ],
+          "tibia": [
+            -28.0540028,
+            0.0
+          ],
+          "attached": [
+            0.0,
+            0.0
+          ],
+          "normalForce": [
+            0.0,
+            0.0
+          ]
+        },
+        "RM": {
+          "coxa": [
+            -47.665905,
+            31.29891
+          ],
+          "femur": [
+            0.0,
+            18.9849968
+          ],
+          "tibia": [
+            -25.7653542,
+            0.0
+          ],
+          "attached": [
+            0.0,
+            1.0
+          ],
+          "normalForce": [
+            0.0,
+            1.15365648
+          ]
+        }
+      }
+    },
+    {
+      "path": "artifacts\\windows\\m1\\TURN_L\\steering.csv",
+      "steps": 546,
+      "duration": 10.90010669,
+      "yawDelta": -20.994817976000007,
+      "common10s": {
+        "steps": 501,
+        "duration": 10.00008609,
+        "yawDelta": -14.833317976000018
+      },
+      "means": {
+        "rawForward": 0.0007612291985347985,
+        "rawTurn": -0.6946719247252747,
+        "cpgForward": 0.0007368044669081588,
+        "cpgTurn": -0.6825644257798534,
+        "leftScale": -0.023846639226153845,
+        "rightScale": 1.691489821959707,
+        "yawRate": -1.6479341774445055
+      },
+      "start": {
+        "x": 0.0292910039,
+        "y": 0.9026518,
+        "z": 0.0177208725,
+        "yaw": 0.041917976
+      },
+      "end": {
+        "x": -2.38710737,
+        "y": 0.905246,
+        "z": -1.40658545,
+        "yaw": 339.0471
+      },
+      "legs": {
+        "LF": {
+          "coxa": [
+            -13.2903395,
+            13.2989321
+          ],
+          "femur": [
+            0.0,
+            19.5984383
+          ],
+          "tibia": [
+            -26.5978813,
+            0.0
+          ],
+          "attached": [
+            0.0,
+            0.0
+          ],
+          "normalForce": [
+            0.0,
+            0.0
+          ]
+        },
+        "LH": {
+          "coxa": [
+            -13.2903395,
+            13.2989321
+          ],
+          "femur": [
+            0.0,
+            19.5984383
+          ],
+          "tibia": [
+            -26.5978813,
+            0.0
+          ],
+          "attached": [
+            0.0,
+            0.0
+          ],
+          "normalForce": [
+            0.0,
+            0.0
+          ]
+        },
+        "LM": {
+          "coxa": [
+            -13.2989321,
+            13.2903395
+          ],
+          "femur": [
+            0.0,
+            19.58599
+          ],
+          "tibia": [
+            -26.5809879,
+            0.0
+          ],
+          "attached": [
+            0.0,
+            1.0
+          ],
+          "normalForce": [
+            0.0,
+            1.15365648
+          ]
+        },
+        "RF": {
+          "coxa": [
+            -49.1748276,
+            49.20608
+          ],
+          "femur": [
+            0.0,
+            19.58599
+          ],
+          "tibia": [
+            -26.5809879,
+            0.0
+          ],
+          "attached": [
+            0.0,
+            1.0
+          ],
+          "normalForce": [
+            0.0,
+            1.15365648
+          ]
+        },
+        "RH": {
+          "coxa": [
+            -49.1748276,
+            49.20608
+          ],
+          "femur": [
+            0.0,
+            19.58599
+          ],
+          "tibia": [
+            -26.5809879,
+            0.0
+          ],
+          "attached": [
+            0.0,
+            1.0
+          ],
+          "normalForce": [
+            0.0,
+            1.15365648
+          ]
+        },
+        "RM": {
+          "coxa": [
+            -49.20608,
+            49.1748276
+          ],
+          "femur": [
+            0.0,
+            19.5984383
+          ],
+          "tibia": [
+            -26.5978813,
+            0.0
+          ],
+          "attached": [
+            0.0,
+            1.0
+          ],
+          "normalForce": [
+            0.0,
+            1.15365648
+          ]
+        }
+      }
+    },
+    {
+      "path": "artifacts\\windows\\m1\\TURN_R\\steering.csv",
+      "steps": 546,
+      "duration": 10.90010669,
+      "yawDelta": 56.125365499999944,
+      "common10s": {
+        "steps": 501,
+        "duration": 10.00008609,
+        "yawDelta": 56.71026539999994
+      },
+      "means": {
+        "rawForward": 0.0,
+        "rawTurn": 0.3579861928241758,
+        "cpgForward": 0.0,
+        "cpgTurn": 0.3507826234595879,
+        "leftScale": 1.5256179854212455,
+        "rightScale": 0.47382606372710623,
+        "yawRate": 5.220324626491759
+      },
+      "start": {
+        "x": 0.02693531,
+        "y": 0.902187169,
+        "z": 0.0181557965,
+        "yaw": 359.7986
+      },
+      "end": {
+        "x": 0.6284919,
+        "y": 0.918927968,
+        "z": 0.559620261,
+        "yaw": 55.9239655
+      },
+      "legs": {
+        "LF": {
+          "coxa": [
+            -26.49608,
+            28.2994747
+          ],
+          "femur": [
+            0.0,
+            10.6732426
+          ],
+          "tibia": [
+            -14.4851151,
+            0.0
+          ],
+          "attached": [
+            0.0,
+            0.0
+          ],
+          "normalForce": [
+            0.0,
+            0.0
+          ]
+        },
+        "LH": {
+          "coxa": [
+            -26.49608,
+            28.2994747
+          ],
+          "femur": [
+            0.0,
+            10.6732426
+          ],
+          "tibia": [
+            -14.4851151,
+            0.0
+          ],
+          "attached": [
+            0.0,
+            0.0
+          ],
+          "normalForce": [
+            0.0,
+            0.0
+          ]
+        },
+        "LM": {
+          "coxa": [
+            -28.2994747,
+            26.4960823
+          ],
+          "femur": [
+            0.0,
+            11.2714834
+          ],
+          "tibia": [
+            -15.2970133,
+            0.0
+          ],
+          "attached": [
+            0.0,
+            1.0
+          ],
+          "normalForce": [
+            0.0,
+            1.15365648
+          ]
+        },
+        "RF": {
+          "coxa": [
+            -4.35898638,
+            8.182278
+          ],
+          "femur": [
+            0.0,
+            11.2714834
+          ],
+          "tibia": [
+            -15.2970133,
+            0.0
+          ],
+          "attached": [
+            0.0,
+            0.0
+          ],
+          "normalForce": [
+            0.0,
+            0.0
+          ]
+        },
+        "RH": {
+          "coxa": [
+            -4.35898638,
+            8.182278
+          ],
+          "femur": [
+            0.0,
+            11.2714834
+          ],
+          "tibia": [
+            -15.2970133,
+            0.0
+          ],
+          "attached": [
+            0.0,
+            0.0
+          ],
+          "normalForce": [
+            0.0,
+            0.0
+          ]
+        },
+        "RM": {
+          "coxa": [
+            -8.182279,
+            4.35898638
+          ],
+          "femur": [
+            0.0,
+            10.6732426
+          ],
+          "tibia": [
+            -14.4851151,
+            0.0
+          ],
+          "attached": [
+            0.0,
+            1.0
+          ],
+          "normalForce": [
+            0.0,
+            1.15365648
+          ]
+        }
+      }
+    }
+  ],
+  "warmupMaleCns": {
+    "backend": "Replay",
+    "unityVersion": "6000.5.5f1",
+    "recordedFrames": 76,
+    "observedFrames": 76,
+    "skippedFrames": 0,
+    "physicsJoints": 18,
+    "footPads": 6,
+    "visualPhysicsComponents": 0,
+    "frameTimeP95Ms": 16.68369483947754,
+    "fixedDeltaTime": 0.019999992102384567,
+    "maxVisualEndpointError": 6.558204290740832E-07,
+    "e2e": "N/A: offline playback"
+  },
+  "live": "NOT_RUN",
+  "ready": false,
+  "warmupShiu": {
+    "backend": "Replay",
+    "unityVersion": "6000.5.5f1",
+    "recordedFrames": 110,
+    "observedFrames": 110,
+    "skippedFrames": 0,
+    "physicsJoints": 18,
+    "footPads": 6,
+    "visualPhysicsComponents": 0,
+    "frameTimeP95Ms": 16.681001663208008,
+    "fixedDeltaTime": 0.019999992102384567,
+    "maxVisualEndpointError": 5.990192448734888E-07,
+    "e2e": "N/A: offline playback"
+  },
+  "playerExceptionMatches": 0
+}

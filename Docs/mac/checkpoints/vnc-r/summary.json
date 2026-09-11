@@ -1,0 +1,346 @@
+{
+  "ready": false,
+  "modelUnchanged": true,
+  "seeds": [
+    20260921,
+    20260922,
+    20260923
+  ],
+  "populationDefinition": "Retained neuron-only IDs with annotation superclass startswith vnc_; excludes projecting non-vnc classes; not every neuron with VNC arbor.",
+  "annotationSource": "body-annotations-male-cns-v1.0-minconf-0.5.feather",
+  "vncCount": 20429,
+  "stimulusIds": [
+    13137,
+    529641,
+    14784,
+    10975,
+    11371,
+    11625,
+    14123,
+    16327,
+    14766,
+    519926
+  ],
+  "stimulusHz": 100,
+  "dtMs": 0.1,
+  "phaseMs": [
+    100,
+    100,
+    100,
+    100
+  ],
+  "trials": [
+    {
+      "seed": 20260921,
+      "frames": [
+        {
+          "phase": "baseline",
+          "wallMs": 675.8620832115412,
+          "allSpikes": 0,
+          "vncSpikes": 0,
+          "DNa02_R_Hz": 0
+        },
+        {
+          "phase": "stimulation",
+          "wallMs": 679.304082877934,
+          "allSpikes": 126,
+          "vncSpikes": 0,
+          "DNa02_R_Hz": 100
+        },
+        {
+          "phase": "recovery1",
+          "wallMs": 673.9022089168429,
+          "allSpikes": 2,
+          "vncSpikes": 0,
+          "DNa02_R_Hz": 10
+        },
+        {
+          "phase": "recovery2",
+          "wallMs": 674.3281660601497,
+          "allSpikes": 0,
+          "vncSpikes": 0,
+          "DNa02_R_Hz": 0
+        }
+      ]
+    },
+    {
+      "seed": 20260922,
+      "frames": [
+        {
+          "phase": "baseline",
+          "wallMs": 713.3496245369315,
+          "allSpikes": 0,
+          "vncSpikes": 0,
+          "DNa02_R_Hz": 0
+        },
+        {
+          "phase": "stimulation",
+          "wallMs": 677.2942086681724,
+          "allSpikes": 123,
+          "vncSpikes": 0,
+          "DNa02_R_Hz": 90
+        },
+        {
+          "phase": "recovery1",
+          "wallMs": 688.408249989152,
+          "allSpikes": 1,
+          "vncSpikes": 0,
+          "DNa02_R_Hz": 10
+        },
+        {
+          "phase": "recovery2",
+          "wallMs": 669.2036250606179,
+          "allSpikes": 0,
+          "vncSpikes": 0,
+          "DNa02_R_Hz": 0
+        }
+      ]
+    },
+    {
+      "seed": 20260923,
+      "frames": [
+        {
+          "phase": "baseline",
+          "wallMs": 673.4581673517823,
+          "allSpikes": 0,
+          "vncSpikes": 0,
+          "DNa02_R_Hz": 0
+        },
+        {
+          "phase": "stimulation",
+          "wallMs": 675.1194996759295,
+          "allSpikes": 94,
+          "vncSpikes": 0,
+          "DNa02_R_Hz": 80
+        },
+        {
+          "phase": "recovery1",
+          "wallMs": 673.5417917370796,
+          "allSpikes": 0,
+          "vncSpikes": 0,
+          "DNa02_R_Hz": 0
+        },
+        {
+          "phase": "recovery2",
+          "wallMs": 683.396584354341,
+          "allSpikes": 0,
+          "vncSpikes": 0,
+          "DNa02_R_Hz": 0
+        }
+      ]
+    }
+  ],
+  "activatedCount": 0,
+  "suppressedCount": 0,
+  "stableActivatedCount": 0,
+  "structuralDiagnostics": {
+    "effectiveReachableVnc": 20320,
+    "directEffectiveVnc": 371,
+    "reachableAnnotatedMotor": 708,
+    "DNa02EffectiveOutEdges": 650,
+    "note": "Reachability does not imply firing or DNa02-mediated causal response."
+  },
+  "top50Activated": [],
+  "top50Suppressed": [],
+  "annotatedMotorCandidates": [],
+  "paths": [],
+  "laterality": {
+    "R": {
+      "neurons": 6829,
+      "summedRateBySeedPhase": [
+        [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ]
+      ],
+      "meanPerNeuronRateBySeedPhase": [
+        [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ]
+      ]
+    },
+    "L": {
+      "neurons": 6858,
+      "summedRateBySeedPhase": [
+        [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ]
+      ],
+      "meanPerNeuronRateBySeedPhase": [
+        [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ]
+      ]
+    }
+  },
+  "suppressionCaveat": "Zero baseline cannot demonstrate suppression. Empty rankings are not padded.",
+  "leftExperiment": "Not run; requires promising R motor-related candidate and review of evidence.",
+  "runtimeSeconds": 8.904652666300535,
+  "rssBytes": 740442112,
+  "peakRssBytes": 811417600,
+  "sourceHashes": {
+    "explore_vnc.py": "e48c69d710dbaad76e93b0b2eba1d80419b7a484bb50b5d2db2cb82807a8294e",
+    "shiu_compatible.py": "25079422f7b9efabfb60e1c5482218f38ea3c4ef34957c611e17f62fe0528a42"
+  },
+  "graphProvenance": {
+    "utc": "2026-09-11T03:46:13.754808+00:00",
+    "python": "3.10.21 | packaged by conda-forge | (main, Aug 21 2026, 22:37:53) [Clang 19.1.7 ]",
+    "numpy": "1.24.3",
+    "brian2": "2.5.1",
+    "platform": "macOS-15.6-arm64-arm-64bit",
+    "machine": "arm64",
+    "ramBytes": 17179869184,
+    "sourceHashes": {
+      "Brain/MaleCNS/neuron_checkpoint.py": "204d7800778ec2b30c32af435bdb7036cd0e6140e73832ad23d79efd5e4f0c63",
+      "Brain/MaleCNS/shiu_compatible.py": "25079422f7b9efabfb60e1c5482218f38ea3c4ef34957c611e17f62fe0528a42",
+      "Brain/ShiuBaseline/model.py": "fc45837d7122c6ce2a7f3f2f23c515992e4b232aadb919efabb72337fac88e4e",
+      "Brain/MaleCNS/config/game_mapping_exploratory_v1.json": "4846cfc8b8077e15e9e36276eb23e4ddb24404178e95dba10eb925bb4316a852",
+      "Brain/MaleCNS/config/nt_policy_exploratory_lif_v1.json": "21339444f5ba80eee0b6a9757a99d7cdacdd1d6da282a066e9e8dea1435a2569"
+    },
+    "arrayFiles": {
+      "count.npy": {
+        "bytes": 204663632,
+        "sha256": "181c6950851dd7a4daeedd5be1393ae0e9dfad52bf74ff06d0b20ff0ea0b7e91"
+      },
+      "body_ids.npy": {
+        "bytes": 1333728,
+        "sha256": "ab90597b7b0ce07cbc22cb39a65b70bea2ac73cc7fd225951bd9d73f2fc8dd3f"
+      },
+      "weights.npy": {
+        "bytes": 157365680,
+        "sha256": "be6abf9067e01967c69113f0eb6531b2e751e7201bd592164445d056c8573383"
+      },
+      "pre.npy": {
+        "bytes": 102331880,
+        "sha256": "da4fb4a0ea2d3a2a12f81d62798394855dd5c287167ade5776b82aa63c724566"
+      },
+      "post.npy": {
+        "bytes": 102331880,
+        "sha256": "a72be90fe40d3fe4b451f3ba2dfa8f36be83c7fe7874f80c06e72472cb2061ec"
+      },
+      "indptr.npy": {
+        "bytes": 1333736,
+        "sha256": "0b466606b702ac097daffd3b46eea8a75851470b9c8624f7d63df1a1d8014923"
+      },
+      "targets.npy": {
+        "bytes": 78682904,
+        "sha256": "e45df87667bac2da61fca6e881708a6d305e8330f1b5ac865080f5fc6d2242d9"
+      },
+      "sign.npy": {
+        "bytes": 25583066,
+        "sha256": "a310465730f7968f2f3e811049f1b02ab16e4f90994e5c7f15a0a9a344d90fa8"
+      }
+    }
+  },
+  "datasetManifest": {
+    "dataset": "male-cns:v1.0",
+    "sourcePage": "https://male-cns.janelia.org/download/",
+    "licenseNotice": "CC-BY; consult the license linked from the official source page.",
+    "files": {
+      "annotations": {
+        "filename": "body-annotations-male-cns-v1.0-minconf-0.5.feather",
+        "url": "https://storage.googleapis.com/flyem-male-cns/v1.0/connectome-data/flat-connectome/body-annotations-male-cns-v1.0-minconf-0.5.feather",
+        "bytes": 14483314,
+        "sha256": "2177e246113e4cfbf1e7772ec37c6da1955ff22e8063d0b1f833101f99a9a3b2",
+        "publisherChecksumVerified": false,
+        "downloadedAtUtc": "2026-09-10T23:44:34.915161+00:00",
+        "headers": {
+          "ETag": "\"50a7718770c57220f160ba4f431ab89e\"",
+          "Last-Modified": "Wed, 03 Jun 2026 13:54:38 GMT",
+          "Content-Length": "14483314",
+          "Content-Type": "application/octet-stream",
+          "x-goog-hash": "crc32c=vjz9cg=="
+        }
+      },
+      "neurotransmitters": {
+        "filename": "body-neurotransmitters-male-cns-v1.0.feather",
+        "url": "https://storage.googleapis.com/flyem-male-cns/v1.0/connectome-data/flat-connectome/body-neurotransmitters-male-cns-v1.0.feather",
+        "bytes": 43282834,
+        "sha256": "95c9289220663abeb3409f3ad9e5a7f8a53f8093f5139d15502cd08da8879621",
+        "publisherChecksumVerified": false,
+        "downloadedAtUtc": "2026-09-10T23:44:36.999935+00:00",
+        "headers": {
+          "ETag": "\"3d842b12fe5c49eefade528d7dd24a1f\"",
+          "Last-Modified": "Mon, 08 Jun 2026 05:01:39 GMT",
+          "Content-Length": "43282834",
+          "Content-Type": "application/octet-stream",
+          "x-goog-hash": "crc32c=jcpNFg=="
+        }
+      },
+      "weights": {
+        "filename": "connectome-weights-male-cns-v1.0-minconf-0.5.feather",
+        "url": "https://storage.googleapis.com/flyem-male-cns/v1.0/connectome-data/flat-connectome/connectome-weights-male-cns-v1.0-minconf-0.5.feather",
+        "bytes": 1051241946,
+        "sha256": "e35da783d1c686b2b58b3b87cd6a403ae43bfcfba8bff28e08ef752c1a56afc1",
+        "publisherChecksumVerified": false,
+        "downloadedAtUtc": "2026-09-10T23:45:23.936969+00:00",
+        "headers": {
+          "ETag": "\"f30e9dcca25cfd021bf1e7b3d975599e\"",
+          "Last-Modified": "Wed, 03 Jun 2026 13:54:47 GMT",
+          "Content-Length": "1051241946",
+          "Content-Type": "application/octet-stream",
+          "x-goog-hash": "crc32c=dKRPVQ=="
+        }
+      }
+    }
+  }
+}

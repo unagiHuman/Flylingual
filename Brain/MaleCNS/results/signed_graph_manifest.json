@@ -1,0 +1,35 @@
+{
+  "capturedAtUtc": "2026-09-11T01:30:31.957428+00:00",
+  "datasetId": "male-cns:v1.0",
+  "policyId": "exploratory-lif-ach-gaba-v1",
+  "policySha256": "21339444f5ba80eee0b6a9757a99d7cdacdd1d6da282a066e9e8dea1435a2569",
+  "structuralEdgeCount": 26028386,
+  "effectiveEdgeCount": 19848648,
+  "positiveEdgeCount": 14875726,
+  "negativeEdgeCount": 4972922,
+  "inactiveEdgeCount": 6179738,
+  "rowsByConsensusNt": {
+    "acetylcholine": 14875726,
+    "dopamine": 243358,
+    "gaba": 4972922,
+    "glutamate": 4829818,
+    "histamine": 97020,
+    "octopamine": 149420,
+    "serotonin": 45794,
+    "unclear": 814328
+  },
+  "synapseCountByConsensusNt": {
+    "acetylcholine": 73861957,
+    "dopamine": 585766,
+    "gaba": 25838003,
+    "glutamate": 21139743,
+    "histamine": 742030,
+    "octopamine": 469190,
+    "serotonin": 133463,
+    "unclear": 2595781
+  },
+  "representation": "structural pre/post/weight arrays plus per-edge int8 sign",
+  "signedDynamicsReady": true,
+  "physiologicallyValidated": false,
+  "peakProcessRssBytes": 795705344
+}

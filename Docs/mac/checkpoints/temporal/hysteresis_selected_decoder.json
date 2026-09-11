@@ -1,0 +1,46 @@
+{
+  "config": {
+    "mode": "ema_hysteresis",
+    "tauMs": [
+      100,
+      100
+    ],
+    "matrix": [
+      [
+        1,
+        0
+      ],
+      [
+        0,
+        1
+      ]
+    ],
+    "reference": [
+      0.2937641252782379,
+      0.3000467732211255
+    ],
+    "on": [
+      0.023451455108794695,
+      0.11207171687180144
+    ],
+    "off": [
+      0.023451455108794695,
+      0.05603585843590072
+    ],
+    "hysteresisAxes": [
+      "turn"
+    ]
+  },
+  "calibrationPassed": true,
+  "calibrationSeeds": [
+    20261211,
+    20261212,
+    20261213
+  ],
+  "ready": false,
+  "rationale": "EMA holdout failed; turn-only symmetric hysteresis with off=max(on/2, calibration recovered STOP max*1.05); no held-out values used for thresholds.",
+  "sourceHashes": {
+    "evaluate_temporal_hysteresis.py": "7aca4a3269722d1104b50807f20365ba6c16c73d91ef7517ed28c72784c4798e",
+    "temporal_motor_decoder.py": "eba1bd6c807d7b50191b533401554eec3867999507e2d8f71455b6f71bc3e409"
+  }
+}

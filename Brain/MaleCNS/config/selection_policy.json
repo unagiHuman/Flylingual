@@ -1,0 +1,12 @@
+{
+  "datasetId": "male-cns:v1.0",
+  "policyId": "annotation-bodyid-v1",
+  "include": "Every non-null unique bodyId in body-annotations-male-cns-v1.0-minconf-0.5.feather",
+  "exclude": ["Null bodyId", "Duplicate annotation rows after the first occurrence"],
+  "emptyTypePolicy": "keep",
+  "brainAndVncPolicy": "keep both; report superclass and somaNeuromere distributions",
+  "selfEdgePolicy": "keep and report separately",
+  "isolatedNeuronPolicy": "keep in the selected neuron set and report",
+  "edgePolicy": "Keep only rows whose body_pre and body_post are both selected; aggregate duplicate pairs by summing weight",
+  "denseMatricesAllowed": false
+}

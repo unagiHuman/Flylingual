@@ -1,0 +1,424 @@
+{
+  "files": [
+    {
+      "path": "/Users/isaoohta/UnityGame/FlyBrain/Data/malecns/v1.0/body-annotations-male-cns-v1.0-minconf-0.5.feather",
+      "fileBytes": 14483314,
+      "format": "arrow-ipc-file/feather-v2",
+      "schema": [
+        {
+          "name": "assignedOlHex1",
+          "type": "double",
+          "nullable": true
+        },
+        {
+          "name": "assignedOlHex2",
+          "type": "double",
+          "nullable": true
+        },
+        {
+          "name": "bodyId",
+          "type": "int64",
+          "nullable": true
+        },
+        {
+          "name": "flywireType",
+          "type": "string",
+          "nullable": true
+        },
+        {
+          "name": "group",
+          "type": "double",
+          "nullable": true
+        },
+        {
+          "name": "instance",
+          "type": "string",
+          "nullable": true
+        },
+        {
+          "name": "somaSide",
+          "type": "string",
+          "nullable": true
+        },
+        {
+          "name": "statusLabel",
+          "type": "dictionary<values=string, indices=int8, ordered=1>",
+          "nullable": true
+        },
+        {
+          "name": "superclass",
+          "type": "string",
+          "nullable": true
+        },
+        {
+          "name": "type",
+          "type": "string",
+          "nullable": true
+        },
+        {
+          "name": "vfbId",
+          "type": "string",
+          "nullable": true
+        },
+        {
+          "name": "hemibrainType",
+          "type": "string",
+          "nullable": true
+        },
+        {
+          "name": "itoleeHl",
+          "type": "string",
+          "nullable": true
+        },
+        {
+          "name": "supertype",
+          "type": "string",
+          "nullable": true
+        },
+        {
+          "name": "birthtime",
+          "type": "string",
+          "nullable": true
+        },
+        {
+          "name": "mancBodyid",
+          "type": "double",
+          "nullable": true
+        },
+        {
+          "name": "mancGroup",
+          "type": "double",
+          "nullable": true
+        },
+        {
+          "name": "mancType",
+          "type": "string",
+          "nullable": true
+        },
+        {
+          "name": "subclass",
+          "type": "string",
+          "nullable": true
+        },
+        {
+          "name": "synonyms",
+          "type": "string",
+          "nullable": true
+        },
+        {
+          "name": "class",
+          "type": "string",
+          "nullable": true
+        },
+        {
+          "name": "rootSide",
+          "type": "string",
+          "nullable": true
+        },
+        {
+          "name": "somaNeuromere",
+          "type": "string",
+          "nullable": true
+        },
+        {
+          "name": "trumanHl",
+          "type": "string",
+          "nullable": true
+        },
+        {
+          "name": "dimorphism",
+          "type": "string",
+          "nullable": true
+        },
+        {
+          "name": "matchingNotes",
+          "type": "string",
+          "nullable": true
+        },
+        {
+          "name": "entryNerve",
+          "type": "string",
+          "nullable": true
+        },
+        {
+          "name": "mancSerial",
+          "type": "double",
+          "nullable": true
+        },
+        {
+          "name": "mcnsSerial",
+          "type": "double",
+          "nullable": true
+        },
+        {
+          "name": "serialMotif",
+          "type": "string",
+          "nullable": true
+        },
+        {
+          "name": "fruDsx",
+          "type": "string",
+          "nullable": true
+        },
+        {
+          "name": "exitNerve",
+          "type": "string",
+          "nullable": true
+        },
+        {
+          "name": "receptorType",
+          "type": "string",
+          "nullable": true
+        },
+        {
+          "name": "somaLocation",
+          "type": "list<item: int64>",
+          "nullable": true
+        },
+        {
+          "name": "tosomaLocation",
+          "type": "list<item: int64>",
+          "nullable": true
+        },
+        {
+          "name": "status",
+          "type": "string",
+          "nullable": true
+        }
+      ],
+      "schemaMetadata": {
+        "pandas": "{\"index_columns\": [{\"kind\": \"range\", \"name\": null, \"start\": 0, \"stop\": 211577, \"step\": 1}], \"column_indexes\": [{\"name\": null, \"field_name\": null, \"pandas_type\": \"unicode\", \"numpy_type\": \"object\", \"metadata\": {\"encoding\": \"UTF-8\"}}], \"columns\": [{\"name\": \"assignedOlHex1\", \"field_name\": \"assignedOlHex1\", \"pandas_type\": \"float64\", \"numpy_type\": \"float64\", \"metadata\": null}, {\"name\": \"assignedOlHex2\", \"field_name\": \"assignedOlHex2\", \"pandas_type\": \"float64\", \"numpy_type\": \"float64\", \"metadata\": null}, {\"name\": \"bodyId\", \"field_name\": \"bodyId\", \"pandas_type\": \"int64\", \"numpy_type\": \"int64\", \"metadata\": null}, {\"name\": \"flywireType\", \"field_name\": \"flywireType\", \"pandas_type\": \"unicode\", \"numpy_type\": \"object\", \"metadata\": null}, {\"name\": \"group\", \"field_name\": \"group\", \"pandas_type\": \"float64\", \"numpy_type\": \"float64\", \"metadata\": null}, {\"name\": \"instance\", \"field_name\": \"instance\", \"pandas_type\": \"unicode\", \"numpy_type\": \"object\", \"metadata\": null}, {\"name\": \"somaSide\", \"field_name\": \"somaSide\", \"pandas_type\": \"unicode\", \"numpy_type\": \"object\", \"metadata\": null}, {\"name\": \"statusLabel\", \"field_name\": \"statusLabel\", \"pandas_type\": \"categorical\", \"numpy_type\": \"int8\", \"metadata\": {\"num_categories\": 30, \"ordered\": true}}, {\"name\": \"superclass\", \"field_name\": \"superclass\", \"pandas_type\": \"unicode\", \"numpy_type\": \"object\", \"metadata\": null}, {\"name\": \"type\", \"field_name\": \"type\", \"pandas_type\": \"unicode\", \"numpy_type\": \"object\", \"metadata\": null}, {\"name\": \"vfbId\", \"field_name\": \"vfbId\", \"pandas_type\": \"unicode\", \"numpy_type\": \"object\", \"metadata\": null}, {\"name\": \"hemibrainType\", \"field_name\": \"hemibrainType\", \"pandas_type\": \"unicode\", \"numpy_type\": \"object\", \"metadata\": null}, {\"name\": \"itoleeHl\", \"field_name\": \"itoleeHl\", \"pandas_type\": \"unicode\", \"numpy_type\": \"object\", \"metadata\": null}, {\"name\": \"supertype\", \"field_name\": \"supertype\", \"pandas_type\": \"unicode\", \"numpy_type\": \"object\", \"metadata\": null}, {\"name\": \"birthtime\", \"field_name\": \"birthtime\", \"pandas_type\": \"unicode\", \"numpy_type\": \"object\", \"metadata\": null}, {\"name\": \"mancBodyid\", \"field_name\": \"mancBodyid\", \"pandas_type\": \"float64\", \"numpy_type\": \"float64\", \"metadata\": null}, {\"name\": \"mancGroup\", \"field_name\": \"mancGroup\", \"pandas_type\": \"float64\", \"numpy_type\": \"float64\", \"metadata\": null}, {\"name\": \"mancType\", \"field_name\": \"mancType\", \"pandas_type\": \"unicode\", \"numpy_type\": \"object\", \"metadata\": null}, {\"name\": \"subclass\", \"field_name\": \"subclass\", \"pandas_type\": \"unicode\", \"numpy_type\": \"object\", \"metadata\": null}, {\"name\": \"synonyms\", \"field_name\": \"synonyms\", \"pandas_type\": \"unicode\", \"numpy_type\": \"object\", \"metadata\": null}, {\"name\": \"class\", \"field_name\": \"class\", \"pandas_type\": \"unicode\", \"numpy_type\": \"object\", \"metadata\": null}, {\"name\": \"rootSide\", \"field_name\": \"rootSide\", \"pandas_type\": \"unicode\", \"numpy_type\": \"object\", \"metadata\": null}, {\"name\": \"somaNeuromere\", \"field_name\": \"somaNeuromere\", \"pandas_type\": \"unicode\", \"numpy_type\": \"object\", \"metadata\": null}, {\"name\": \"trumanHl\", \"field_name\": \"trumanHl\", \"pandas_type\": \"unicode\", \"numpy_type\": \"object\", \"metadata\": null}, {\"name\": \"dimorphism\", \"field_name\": \"dimorphism\", \"pandas_type\": \"unicode\", \"numpy_type\": \"object\", \"metadata\": null}, {\"name\": \"matchingNotes\", \"field_name\": \"matchingNotes\", \"pandas_type\": \"unicode\", \"numpy_type\": \"object\", \"metadata\": null}, {\"name\": \"entryNerve\", \"field_name\": \"entryNerve\", \"pandas_type\": \"unicode\", \"numpy_type\": \"object\", \"metadata\": null}, {\"name\": \"mancSerial\", \"field_name\": \"mancSerial\", \"pandas_type\": \"float64\", \"numpy_type\": \"float64\", \"metadata\": null}, {\"name\": \"mcnsSerial\", \"field_name\": \"mcnsSerial\", \"pandas_type\": \"float64\", \"numpy_type\": \"float64\", \"metadata\": null}, {\"name\": \"serialMotif\", \"field_name\": \"serialMotif\", \"pandas_type\": \"unicode\", \"numpy_type\": \"object\", \"metadata\": null}, {\"name\": \"fruDsx\", \"field_name\": \"fruDsx\", \"pandas_type\": \"unicode\", \"numpy_type\": \"object\", \"metadata\": null}, {\"name\": \"exitNerve\", \"field_name\": \"exitNerve\", \"pandas_type\": \"unicode\", \"numpy_type\": \"object\", \"metadata\": null}, {\"name\": \"receptorType\", \"field_name\": \"receptorType\", \"pandas_type\": \"unicode\", \"numpy_type\": \"object\", \"metadata\": null}, {\"name\": \"somaLocation\", \"field_name\": \"somaLocation\", \"pandas_type\": \"list[int64]\", \"numpy_type\": \"object\", \"metadata\": null}, {\"name\": \"tosomaLocation\", \"field_name\": \"tosomaLocation\", \"pandas_type\": \"list[int64]\", \"numpy_type\": \"object\", \"metadata\": null}, {\"name\": \"status\", \"field_name\": \"status\", \"pandas_type\": \"unicode\", \"numpy_type\": \"object\", \"metadata\": null}], \"creator\": {\"library\": \"pyarrow\", \"version\": \"19.0.1\"}, \"pandas_version\": \"2.2.2\"}"
+      },
+      "recordBatchCount": 4,
+      "rowCount": null,
+      "sample": [
+        {
+          "assignedOlHex1": null,
+          "assignedOlHex2": null,
+          "bodyId": 10001,
+          "flywireType": "DNp01",
+          "group": 10001.0,
+          "instance": "DNp01(GF)_R",
+          "somaSide": "R",
+          "statusLabel": "Roughly traced",
+          "superclass": "descending_neuron",
+          "type": "DNp01",
+          "vfbId": "VFB_jrmc30my",
+          "hemibrainType": "Giant Fiber",
+          "itoleeHl": "putative_primary",
+          "supertype": null,
+          "birthtime": "early",
+          "mancBodyid": 10000.0,
+          "mancGroup": 10000.0,
+          "mancType": "DNp01",
+          "subclass": "lt",
+          "synonyms": "Kennedy and Broadie 2018: GF",
+          "class": null,
+          "rootSide": null,
+          "somaNeuromere": null,
+          "trumanHl": null,
+          "dimorphism": null,
+          "matchingNotes": null,
+          "entryNerve": null,
+          "mancSerial": null,
+          "mcnsSerial": null,
+          "serialMotif": null,
+          "fruDsx": null,
+          "exitNerve": null,
+          "receptorType": null,
+          "somaLocation": [
+            37124,
+            22258,
+            36274
+          ],
+          "tosomaLocation": null,
+          "status": "Traced"
+        },
+        {
+          "assignedOlHex1": null,
+          "assignedOlHex2": null,
+          "bodyId": 10002,
+          "flywireType": "OCG01d",
+          "group": 10002.0,
+          "instance": "OCG01d_L",
+          "somaSide": "L",
+          "statusLabel": "Roughly traced",
+          "superclass": "visual_projection",
+          "type": "OCG01d",
+          "vfbId": "VFB_jrmc1nh6",
+          "hemibrainType": "OCG01",
+          "itoleeHl": null,
+          "supertype": null,
+          "birthtime": null,
+          "mancBodyid": null,
+          "mancGroup": null,
+          "mancType": null,
+          "subclass": null,
+          "synonyms": null,
+          "class": null,
+          "rootSide": null,
+          "somaNeuromere": null,
+          "trumanHl": null,
+          "dimorphism": null,
+          "matchingNotes": null,
+          "entryNerve": null,
+          "mancSerial": null,
+          "mcnsSerial": null,
+          "serialMotif": null,
+          "fruDsx": null,
+          "exitNerve": null,
+          "receptorType": null,
+          "somaLocation": [
+            50214,
+            10279,
+            27497
+          ],
+          "tosomaLocation": null,
+          "status": "Traced"
+        },
+        {
+          "assignedOlHex1": null,
+          "assignedOlHex2": null,
+          "bodyId": 10003,
+          "flywireType": "VCH",
+          "group": 10003.0,
+          "instance": "VCH_R",
+          "somaSide": "R",
+          "statusLabel": "Prelim Roughly traced",
+          "superclass": "visual_centrifugal",
+          "type": "VCH",
+          "vfbId": "VFB_jrmc074n",
+          "hemibrainType": "VCH",
+          "itoleeHl": "putative_primary",
+          "supertype": null,
+          "birthtime": "early",
+          "mancBodyid": null,
+          "mancGroup": null,
+          "mancType": null,
+          "subclass": null,
+          "synonyms": null,
+          "class": null,
+          "rootSide": null,
+          "somaNeuromere": null,
+          "trumanHl": null,
+          "dimorphism": null,
+          "matchingNotes": null,
+          "entryNerve": null,
+          "mancSerial": null,
+          "mcnsSerial": null,
+          "serialMotif": null,
+          "fruDsx": null,
+          "exitNerve": null,
+          "receptorType": null,
+          "somaLocation": [
+            46716,
+            21029,
+            15714
+          ],
+          "tosomaLocation": null,
+          "status": "Traced"
+        }
+      ]
+    },
+    {
+      "path": "/Users/isaoohta/UnityGame/FlyBrain/Data/malecns/v1.0/body-neurotransmitters-male-cns-v1.0.feather",
+      "fileBytes": 43282834,
+      "format": "arrow-ipc-file/feather-v2",
+      "schema": [
+        {
+          "name": "body",
+          "type": "int64",
+          "nullable": true
+        },
+        {
+          "name": "cell_type",
+          "type": "string",
+          "nullable": true
+        },
+        {
+          "name": "total_nt_predictions",
+          "type": "int32",
+          "nullable": true
+        },
+        {
+          "name": "predicted_nt_confidence",
+          "type": "double",
+          "nullable": true
+        },
+        {
+          "name": "predicted_nt",
+          "type": "string",
+          "nullable": true
+        },
+        {
+          "name": "ground_truth",
+          "type": "string",
+          "nullable": true
+        },
+        {
+          "name": "celltype_total_nt_predictions",
+          "type": "int32",
+          "nullable": true
+        },
+        {
+          "name": "celltype_predicted_nt",
+          "type": "string",
+          "nullable": true
+        },
+        {
+          "name": "celltype_predicted_nt_confidence",
+          "type": "double",
+          "nullable": true
+        },
+        {
+          "name": "consensus_nt",
+          "type": "string",
+          "nullable": true
+        }
+      ],
+      "schemaMetadata": {
+        "pandas": "{\"index_columns\": [{\"kind\": \"range\", \"name\": null, \"start\": 0, \"stop\": 1835518, \"step\": 1}], \"column_indexes\": [{\"name\": null, \"field_name\": null, \"pandas_type\": \"unicode\", \"numpy_type\": \"object\", \"metadata\": {\"encoding\": \"UTF-8\"}}], \"columns\": [{\"name\": \"body\", \"field_name\": \"body\", \"pandas_type\": \"int64\", \"numpy_type\": \"int64\", \"metadata\": null}, {\"name\": \"cell_type\", \"field_name\": \"cell_type\", \"pandas_type\": \"unicode\", \"numpy_type\": \"object\", \"metadata\": null}, {\"name\": \"total_nt_predictions\", \"field_name\": \"total_nt_predictions\", \"pandas_type\": \"int32\", \"numpy_type\": \"int32\", \"metadata\": null}, {\"name\": \"predicted_nt_confidence\", \"field_name\": \"predicted_nt_confidence\", \"pandas_type\": \"float64\", \"numpy_type\": \"float64\", \"metadata\": null}, {\"name\": \"predicted_nt\", \"field_name\": \"predicted_nt\", \"pandas_type\": \"unicode\", \"numpy_type\": \"object\", \"metadata\": null}, {\"name\": \"ground_truth\", \"field_name\": \"ground_truth\", \"pandas_type\": \"unicode\", \"numpy_type\": \"object\", \"metadata\": null}, {\"name\": \"celltype_total_nt_predictions\", \"field_name\": \"celltype_total_nt_predictions\", \"pandas_type\": \"int32\", \"numpy_type\": \"int32\", \"metadata\": null}, {\"name\": \"celltype_predicted_nt\", \"field_name\": \"celltype_predicted_nt\", \"pandas_type\": \"unicode\", \"numpy_type\": \"object\", \"metadata\": null}, {\"name\": \"celltype_predicted_nt_confidence\", \"field_name\": \"celltype_predicted_nt_confidence\", \"pandas_type\": \"float64\", \"numpy_type\": \"float64\", \"metadata\": null}, {\"name\": \"consensus_nt\", \"field_name\": \"consensus_nt\", \"pandas_type\": \"unicode\", \"numpy_type\": \"object\", \"metadata\": null}], \"creator\": {\"library\": \"pyarrow\", \"version\": \"19.0.1\"}, \"pandas_version\": \"2.2.2\"}"
+      },
+      "recordBatchCount": 29,
+      "rowCount": null,
+      "sample": [
+        {
+          "body": 10001,
+          "cell_type": "DNp01",
+          "total_nt_predictions": 1015,
+          "predicted_nt_confidence": 0.5004955542656235,
+          "predicted_nt": "acetylcholine",
+          "ground_truth": null,
+          "celltype_total_nt_predictions": 1991,
+          "celltype_predicted_nt": "acetylcholine",
+          "celltype_predicted_nt_confidence": 0.5282633322710556,
+          "consensus_nt": "acetylcholine"
+        },
+        {
+          "body": 10002,
+          "cell_type": "OCG01d",
+          "total_nt_predictions": 1443,
+          "predicted_nt_confidence": 0.9558953111126071,
+          "predicted_nt": "acetylcholine",
+          "ground_truth": null,
+          "celltype_total_nt_predictions": 2818,
+          "celltype_predicted_nt": "acetylcholine",
+          "celltype_predicted_nt_confidence": 0.9564758206514237,
+          "consensus_nt": "acetylcholine"
+        },
+        {
+          "body": 10003,
+          "cell_type": "VCH",
+          "total_nt_predictions": 4425,
+          "predicted_nt_confidence": 0.8793247902745723,
+          "predicted_nt": "gaba",
+          "ground_truth": "gaba",
+          "celltype_total_nt_predictions": 8721,
+          "celltype_predicted_nt": "gaba",
+          "celltype_predicted_nt_confidence": 0.8747990679914234,
+          "consensus_nt": "gaba"
+        }
+      ]
+    }
+  ]
+}

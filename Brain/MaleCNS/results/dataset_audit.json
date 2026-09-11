@@ -1,0 +1,82 @@
+{
+  "capturedAtUtc": "2026-09-10T23:49:23.150549+00:00",
+  "datasetId": "male-cns:v1.0",
+  "inputs": {
+    "body-annotations-male-cns-v1.0-minconf-0.5.feather": {
+      "bytes": 14483314,
+      "sha256": "2177e246113e4cfbf1e7772ec37c6da1955ff22e8063d0b1f833101f99a9a3b2"
+    },
+    "body-neurotransmitters-male-cns-v1.0.feather": {
+      "bytes": 43282834,
+      "sha256": "95c9289220663abeb3409f3ad9e5a7f8a53f8093f5139d15502cd08da8879621"
+    },
+    "connectome-weights-male-cns-v1.0-minconf-0.5.feather": {
+      "bytes": 1051241946,
+      "sha256": "e35da783d1c686b2b58b3b87cd6a403ae43bfcfba8bff28e08ef752c1a56afc1"
+    }
+  },
+  "annotations": {
+    "rowCount": 211577,
+    "nullIdCount": 0,
+    "duplicateIdRowCount": 0,
+    "selectedNeuronCount": 211577,
+    "minId": "10001",
+    "maxId": "1571825087",
+    "selectedNtCategoryCounts": {
+      "acetylcholine": 104173,
+      "dopamine": 396,
+      "gaba": 22186,
+      "glutamate": 29443,
+      "histamine": 8024,
+      "missing": 24561,
+      "octopamine": 101,
+      "serotonin": 48,
+      "unclear": 22645
+    }
+  },
+  "neurotransmitters": {
+    "rowCount": 1835518,
+    "uniqueIdCount": 1835518,
+    "selectedMissingCount": 24561
+  },
+  "structuralGraph": {
+    "rawRowCount": 151856684,
+    "rawSynapseCount": 311833243,
+    "selectedRowCountBeforePairAggregation": 26028386,
+    "selectedSynapseCount": 125365933,
+    "outsideSelectionRowCount": 125828298,
+    "outsideSelectionSynapseCount": 186467310,
+    "selfEdgeRowCount": 123,
+    "selfEdgeSynapseCount": 542,
+    "zeroWeightRowCount": 0,
+    "selectedPreNeuronCount": 184762,
+    "selectedPostNeuronCount": 185814,
+    "selectedIncidentNeuronCount": 188778,
+    "selectedIsolatedNeuronCount": 22799,
+    "outputRowsByConsensusNt": {
+      "acetylcholine": 14875726,
+      "dopamine": 243358,
+      "gaba": 4972922,
+      "glutamate": 4829818,
+      "histamine": 97020,
+      "octopamine": 149420,
+      "serotonin": 45794,
+      "unclear": 814328
+    },
+    "outputSynapseCountByConsensusNt": {
+      "acetylcholine": 73861957,
+      "dopamine": 585766,
+      "gaba": 25838003,
+      "glutamate": 21139743,
+      "histamine": 742030,
+      "octopamine": 469190,
+      "serotonin": 133463,
+      "unclear": 2595781
+    },
+    "duplicatePairCount": 0,
+    "selectedEdgeCountAfterPairAggregation": 26028386,
+    "selectedSelfEdgeCount": 112,
+    "aggregationStatus": "verified by build_sparse_graph.py"
+  },
+  "peakProcessRssBytes": 1573470208
+}

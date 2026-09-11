@@ -1,0 +1,863 @@
+{
+  "motor_readout": "VNC_SUBTHRESHOLD_POPULATION",
+  "ready": false,
+  "selection": "Positive direct ipsilateral DNa02 targets annotated vnc_motor; retain types represented on both sides; equal type then neuron weights; no response-fitted signs.",
+  "populations": {
+    "R": {
+      "Fe reductor MN": [
+        801693,
+        803830,
+        806898,
+        811652,
+        813566,
+        821769,
+        835074,
+        902962,
+        905145
+      ],
+      "MNad34": [
+        802252
+      ],
+      "MNad42": [
+        801899
+      ],
+      "MNad63": [
+        802980
+      ],
+      "MNhl59": [
+        801335
+      ],
+      "MNhl62": [
+        903090
+      ],
+      "MNhm03": [
+        802659
+      ],
+      "MNhm42": [
+        800474
+      ],
+      "MNnm03": [
+        802151
+      ],
+      "MNnm08": [
+        802152
+      ],
+      "Pleural remotor/abductor MN": [
+        800290,
+        800553,
+        803314
+      ],
+      "Sternal adductor MN": [
+        807854,
+        815854
+      ],
+      "Sternal anterior rotator MN": [
+        800316,
+        801469,
+        801813,
+        801918,
+        801946,
+        906235
+      ],
+      "Sternal posterior rotator MN": [
+        801761,
+        1050493413
+      ],
+      "Sternotrochanter MN": [
+        801148
+      ],
+      "Ta levator MN": [
+        820110
+      ],
+      "Tergopleural/Pleural promotor MN": [
+        805745
+      ],
+      "Ti extensor MN": [
+        800158,
+        928579
+      ],
+      "Ti flexor MN": [
+        804405,
+        808685
+      ],
+      "hg1 MN": [
+        800917
+      ],
+      "hg4 MN": [
+        800906
+      ]
+    },
+    "L": {
+      "Fe reductor MN": [
+        800578,
+        804941,
+        805598,
+        812111,
+        814163
+      ],
+      "MNad34": [
+        802251
+      ],
+      "MNad42": [
+        801304
+      ],
+      "MNad63": [
+        802937
+      ],
+      "MNhl59": [
+        802731
+      ],
+      "MNhl62": [
+        801736
+      ],
+      "MNhm03": [
+        802806
+      ],
+      "MNhm42": [
+        801933
+      ],
+      "MNnm03": [
+        802923
+      ],
+      "MNnm08": [
+        802781
+      ],
+      "Pleural remotor/abductor MN": [
+        800175,
+        800541,
+        902310
+      ],
+      "Sternal adductor MN": [
+        904184
+      ],
+      "Sternal anterior rotator MN": [
+        801548,
+        802215,
+        806923,
+        832490,
+        903689,
+        919509
+      ],
+      "Sternal posterior rotator MN": [
+        801768,
+        804851,
+        818399,
+        1050335829,
+        1051054875
+      ],
+      "Sternotrochanter MN": [
+        800504
+      ],
+      "Ta levator MN": [
+        1050111955
+      ],
+      "Tergopleural/Pleural promotor MN": [
+        800061,
+        807281
+      ],
+      "Ti extensor MN": [
+        815344
+      ],
+      "Ti flexor MN": [
+        927808
+      ],
+      "hg1 MN": [
+        800241
+      ],
+      "hg4 MN": [
+        800847
+      ]
+    }
+  },
+  "formula": "response=type-balanced mean(window mean v - initial baseline mean v); raw=R-L; turn=sign(raw)*clip((abs(raw)-deadzone)/(reference-deadzone),0,1)",
+  "referenceMv": 0.22792254674999887,
+  "deadzoneMv": 0.004558450934999978,
+  "normalization": "p95 absolute calibration STIM raw; deadzone=max(1.1*max recovered STOP raw, .02*reference)",
+  "model": "MaleCNS + Shiu-compatible LIF",
+  "windowMs": 100,
+  "dtMs": 0.1,
+  "stimulusMapping": {
+    "datasetId": "male-cns:v1.0",
+    "mappingId": "exploratory-direct-inputs-v1",
+    "stimulusRateHz": 100.0,
+    "groups": {
+      "F": [
+        "14033",
+        "11656",
+        "13672",
+        "13968",
+        "521212",
+        "544664",
+        "520401",
+        "14726",
+        "12980",
+        "11592",
+        "12964",
+        "13648",
+        "31440",
+        "11108",
+        "13336",
+        "18905",
+        "12018",
+        "20768",
+        "14789",
+        "526146"
+      ],
+      "R": [
+        "13137",
+        "529641",
+        "14784",
+        "10975",
+        "11371",
+        "11625",
+        "14123",
+        "16327",
+        "14766",
+        "519926"
+      ],
+      "L": [
+        "13538",
+        "15957",
+        "519228",
+        "11306",
+        "14191",
+        "519624",
+        "519461",
+        "57832",
+        "10971",
+        "47107"
+      ]
+    },
+    "readouts": {
+      "DNa02_R": "10360",
+      "DNa02_L": "523769",
+      "DNp09_L": "10783",
+      "DNp09_R": "11177"
+    },
+    "evidence": {
+      "R": "The top 10 positive direct inputs to DNa02_R are combined; AN03A008_R body 13137 has a +717 edge and passed the three-seed edge-block PoC",
+      "L": "The top 10 positive direct inputs to DNa02_L are combined; functional validation pending",
+      "F": "The top 10 positive direct inputs for each DNp09 side are combined as an exploratory upstream group; functional validation pending"
+    },
+    "limitations": "Exploratory game mapping only. Action semantics and motor calibration are not yet certified."
+  },
+  "baselinePolicy": "Initial100ms only; never reset membrane or force STOP output",
+  "populationAnnotation": [
+    {
+      "bodyId": 800061,
+      "type": "Tergopleural/Pleural promotor MN",
+      "instance": "Tergopleural/Pleural promotor MN_L",
+      "superclass": "vnc_motor",
+      "somaSide": "L",
+      "somaNeuromere": "T1"
+    },
+    {
+      "bodyId": 800158,
+      "type": "Ti extensor MN",
+      "instance": "Ti extensor MN_R",
+      "superclass": "vnc_motor",
+      "somaSide": "R",
+      "somaNeuromere": "T3"
+    },
+    {
+      "bodyId": 800175,
+      "type": "Pleural remotor/abductor MN",
+      "instance": "Pleural remotor/abductor MN_L",
+      "superclass": "vnc_motor",
+      "somaSide": "L",
+      "somaNeuromere": "T3"
+    },
+    {
+      "bodyId": 800241,
+      "type": "hg1 MN",
+      "instance": "hg1 MN_L",
+      "superclass": "vnc_motor",
+      "somaSide": "L",
+      "somaNeuromere": "T2"
+    },
+    {
+      "bodyId": 800290,
+      "type": "Pleural remotor/abductor MN",
+      "instance": "Pleural remotor/abductor MN_R",
+      "superclass": "vnc_motor",
+      "somaSide": "R",
+      "somaNeuromere": "T3"
+    },
+    {
+      "bodyId": 800316,
+      "type": "Sternal anterior rotator MN",
+      "instance": "Sternal anterior rotator MN",
+      "superclass": "vnc_motor",
+      "somaSide": "R",
+      "somaNeuromere": "T3"
+    },
+    {
+      "bodyId": 800474,
+      "type": "MNhm42",
+      "instance": "MNhm42_R",
+      "superclass": "vnc_motor",
+      "somaSide": "R",
+      "somaNeuromere": "T3"
+    },
+    {
+      "bodyId": 800504,
+      "type": "Sternotrochanter MN",
+      "instance": "Sternotrochanter MN_L",
+      "superclass": "vnc_motor",
+      "somaSide": "L",
+      "somaNeuromere": "T3"
+    },
+    {
+      "bodyId": 800541,
+      "type": "Pleural remotor/abductor MN",
+      "instance": "Pleural remotor/abductor MN_L",
+      "superclass": "vnc_motor",
+      "somaSide": "L",
+      "somaNeuromere": "T2"
+    },
+    {
+      "bodyId": 800553,
+      "type": "Pleural remotor/abductor MN",
+      "instance": "Pleural remotor/abductor MN_R",
+      "superclass": "vnc_motor",
+      "somaSide": "R",
+      "somaNeuromere": "T3"
+    },
+    {
+      "bodyId": 800578,
+      "type": "Fe reductor MN",
+      "instance": "Fe reductor MN_L",
+      "superclass": "vnc_motor",
+      "somaSide": "L",
+      "somaNeuromere": "T3"
+    },
+    {
+      "bodyId": 800847,
+      "type": "hg4 MN",
+      "instance": "hg4 MN_L",
+      "superclass": "vnc_motor",
+      "somaSide": "L",
+      "somaNeuromere": "T2"
+    },
+    {
+      "bodyId": 800906,
+      "type": "hg4 MN",
+      "instance": "hg4 MN_R",
+      "superclass": "vnc_motor",
+      "somaSide": "R",
+      "somaNeuromere": "T2"
+    },
+    {
+      "bodyId": 800917,
+      "type": "hg1 MN",
+      "instance": "hg1 MN_R",
+      "superclass": "vnc_motor",
+      "somaSide": "R",
+      "somaNeuromere": "T2"
+    },
+    {
+      "bodyId": 801148,
+      "type": "Sternotrochanter MN",
+      "instance": "Sternotrochanter MN_R",
+      "superclass": "vnc_motor",
+      "somaSide": "R",
+      "somaNeuromere": "T3"
+    },
+    {
+      "bodyId": 801304,
+      "type": "MNad42",
+      "instance": "MNad42_L",
+      "superclass": "vnc_motor",
+      "somaSide": "L",
+      "somaNeuromere": "A1"
+    },
+    {
+      "bodyId": 801335,
+      "type": "MNhl59",
+      "instance": "MNhl59_R",
+      "superclass": "vnc_motor",
+      "somaSide": "R",
+      "somaNeuromere": "T3"
+    },
+    {
+      "bodyId": 801469,
+      "type": "Sternal anterior rotator MN",
+      "instance": "Sternal anterior rotator MN_R",
+      "superclass": "vnc_motor",
+      "somaSide": "R",
+      "somaNeuromere": "T1"
+    },
+    {
+      "bodyId": 801548,
+      "type": "Sternal anterior rotator MN",
+      "instance": "Sternal anterior rotator MN_L",
+      "superclass": "vnc_motor",
+      "somaSide": "L",
+      "somaNeuromere": "T3"
+    },
+    {
+      "bodyId": 801693,
+      "type": "Fe reductor MN",
+      "instance": "Fe reductor MN_R",
+      "superclass": "vnc_motor",
+      "somaSide": "R",
+      "somaNeuromere": "T3"
+    },
+    {
+      "bodyId": 801736,
+      "type": "MNhl62",
+      "instance": "MNhl62_L",
+      "superclass": "vnc_motor",
+      "somaSide": "L",
+      "somaNeuromere": "T3"
+    },
+    {
+      "bodyId": 801761,
+      "type": "Sternal posterior rotator MN",
+      "instance": "Sternal posterior rotator MN_R",
+      "superclass": "vnc_motor",
+      "somaSide": "R",
+      "somaNeuromere": "T2"
+    },
+    {
+      "bodyId": 801768,
+      "type": "Sternal posterior rotator MN",
+      "instance": "Sternal posterior rotator MN_L",
+      "superclass": "vnc_motor",
+      "somaSide": "L",
+      "somaNeuromere": "T2"
+    },
+    {
+      "bodyId": 801813,
+      "type": "Sternal anterior rotator MN",
+      "instance": "Sternal anterior rotator MN_R",
+      "superclass": "vnc_motor",
+      "somaSide": "R",
+      "somaNeuromere": "T2"
+    },
+    {
+      "bodyId": 801899,
+      "type": "MNad42",
+      "instance": "MNad42_R",
+      "superclass": "vnc_motor",
+      "somaSide": "R",
+      "somaNeuromere": "A1"
+    },
+    {
+      "bodyId": 801918,
+      "type": "Sternal anterior rotator MN",
+      "instance": "Sternal anterior rotator MN_R",
+      "superclass": "vnc_motor",
+      "somaSide": "R",
+      "somaNeuromere": "T1"
+    },
+    {
+      "bodyId": 801933,
+      "type": "MNhm42",
+      "instance": "MNhm42_L",
+      "superclass": "vnc_motor",
+      "somaSide": "L",
+      "somaNeuromere": "T3"
+    },
+    {
+      "bodyId": 801946,
+      "type": "Sternal anterior rotator MN",
+      "instance": "Sternal anterior rotator MN_R",
+      "superclass": "vnc_motor",
+      "somaSide": "R",
+      "somaNeuromere": "T2"
+    },
+    {
+      "bodyId": 802151,
+      "type": "MNnm03",
+      "instance": "MNnm03_R",
+      "superclass": "vnc_motor",
+      "somaSide": "R",
+      "somaNeuromere": "T1"
+    },
+    {
+      "bodyId": 802152,
+      "type": "MNnm08",
+      "instance": "MNnm08_R",
+      "superclass": "vnc_motor",
+      "somaSide": "R",
+      "somaNeuromere": "T1"
+    },
+    {
+      "bodyId": 802215,
+      "type": "Sternal anterior rotator MN",
+      "instance": "Sternal anterior rotator MN",
+      "superclass": "vnc_motor",
+      "somaSide": "L",
+      "somaNeuromere": "T3"
+    },
+    {
+      "bodyId": 802251,
+      "type": "MNad34",
+      "instance": "MNad34_L",
+      "superclass": "vnc_motor",
+      "somaSide": "L",
+      "somaNeuromere": "A1"
+    },
+    {
+      "bodyId": 802252,
+      "type": "MNad34",
+      "instance": "MNad34_R",
+      "superclass": "vnc_motor",
+      "somaSide": "R",
+      "somaNeuromere": "A1"
+    },
+    {
+      "bodyId": 802659,
+      "type": "MNhm03",
+      "instance": "MNhm03_R",
+      "superclass": "vnc_motor",
+      "somaSide": "R",
+      "somaNeuromere": "T3"
+    },
+    {
+      "bodyId": 802731,
+      "type": "MNhl59",
+      "instance": "MNhl59_L",
+      "superclass": "vnc_motor",
+      "somaSide": "L",
+      "somaNeuromere": "T3"
+    },
+    {
+      "bodyId": 802781,
+      "type": "MNnm08",
+      "instance": "MNnm08_L",
+      "superclass": "vnc_motor",
+      "somaSide": "L",
+      "somaNeuromere": "T1"
+    },
+    {
+      "bodyId": 802806,
+      "type": "MNhm03",
+      "instance": "MNhm03_L",
+      "superclass": "vnc_motor",
+      "somaSide": "L",
+      "somaNeuromere": "T3"
+    },
+    {
+      "bodyId": 802923,
+      "type": "MNnm03",
+      "instance": "MNnm03_L",
+      "superclass": "vnc_motor",
+      "somaSide": "L",
+      "somaNeuromere": "T1"
+    },
+    {
+      "bodyId": 802937,
+      "type": "MNad63",
+      "instance": "MNad63_L",
+      "superclass": "vnc_motor",
+      "somaSide": "L",
+      "somaNeuromere": "A1"
+    },
+    {
+      "bodyId": 802980,
+      "type": "MNad63",
+      "instance": "MNad63_R",
+      "superclass": "vnc_motor",
+      "somaSide": "R",
+      "somaNeuromere": "A1"
+    },
+    {
+      "bodyId": 803314,
+      "type": "Pleural remotor/abductor MN",
+      "instance": "Pleural remotor/abductor MN_R",
+      "superclass": "vnc_motor",
+      "somaSide": "R",
+      "somaNeuromere": "T1"
+    },
+    {
+      "bodyId": 803830,
+      "type": "Fe reductor MN",
+      "instance": "Fe reductor MN_R",
+      "superclass": "vnc_motor",
+      "somaSide": "R",
+      "somaNeuromere": "T1"
+    },
+    {
+      "bodyId": 804405,
+      "type": "Ti flexor MN",
+      "instance": "Ti flexor MN_R",
+      "superclass": "vnc_motor",
+      "somaSide": "R",
+      "somaNeuromere": "T2"
+    },
+    {
+      "bodyId": 804851,
+      "type": "Sternal posterior rotator MN",
+      "instance": "Sternal posterior rotator MN_L",
+      "superclass": "vnc_motor",
+      "somaSide": "L",
+      "somaNeuromere": "T1"
+    },
+    {
+      "bodyId": 804941,
+      "type": "Fe reductor MN",
+      "instance": "Fe reductor MN_L",
+      "superclass": "vnc_motor",
+      "somaSide": "L",
+      "somaNeuromere": "T1"
+    },
+    {
+      "bodyId": 805598,
+      "type": "Fe reductor MN",
+      "instance": "Fe reductor MN_L",
+      "superclass": "vnc_motor",
+      "somaSide": "L",
+      "somaNeuromere": "T1"
+    },
+    {
+      "bodyId": 805745,
+      "type": "Tergopleural/Pleural promotor MN",
+      "instance": "Tergopleural/Pleural promotor MN_R",
+      "superclass": "vnc_motor",
+      "somaSide": "R",
+      "somaNeuromere": "T1"
+    },
+    {
+      "bodyId": 806898,
+      "type": "Fe reductor MN",
+      "instance": "Fe reductor MN_R",
+      "superclass": "vnc_motor",
+      "somaSide": "R",
+      "somaNeuromere": "T1"
+    },
+    {
+      "bodyId": 806923,
+      "type": "Sternal anterior rotator MN",
+      "instance": "Sternal anterior rotator MN_L",
+      "superclass": "vnc_motor",
+      "somaSide": "L",
+      "somaNeuromere": "T1"
+    },
+    {
+      "bodyId": 807281,
+      "type": "Tergopleural/Pleural promotor MN",
+      "instance": "Tergopleural/Pleural promotor MN_L",
+      "superclass": "vnc_motor",
+      "somaSide": "L",
+      "somaNeuromere": "T1"
+    },
+    {
+      "bodyId": 807854,
+      "type": "Sternal adductor MN",
+      "instance": "Sternal adductor MN_R",
+      "superclass": "vnc_motor",
+      "somaSide": "R",
+      "somaNeuromere": "T3"
+    },
+    {
+      "bodyId": 808685,
+      "type": "Ti flexor MN",
+      "instance": "Ti flexor MN_R",
+      "superclass": "vnc_motor",
+      "somaSide": "R",
+      "somaNeuromere": "T3"
+    },
+    {
+      "bodyId": 811652,
+      "type": "Fe reductor MN",
+      "instance": "Fe reductor MN_R",
+      "superclass": "vnc_motor",
+      "somaSide": "R",
+      "somaNeuromere": "T1"
+    },
+    {
+      "bodyId": 812111,
+      "type": "Fe reductor MN",
+      "instance": "Fe reductor MN_L",
+      "superclass": "vnc_motor",
+      "somaSide": "L",
+      "somaNeuromere": "T1"
+    },
+    {
+      "bodyId": 813566,
+      "type": "Fe reductor MN",
+      "instance": "Fe reductor MN_R",
+      "superclass": "vnc_motor",
+      "somaSide": "R",
+      "somaNeuromere": "T1"
+    },
+    {
+      "bodyId": 814163,
+      "type": "Fe reductor MN",
+      "instance": "Fe reductor MN_L",
+      "superclass": "vnc_motor",
+      "somaSide": "L",
+      "somaNeuromere": "T1"
+    },
+    {
+      "bodyId": 815344,
+      "type": "Ti extensor MN",
+      "instance": "Ti extensor MN_L",
+      "superclass": "vnc_motor",
+      "somaSide": "L",
+      "somaNeuromere": "T1"
+    },
+    {
+      "bodyId": 815854,
+      "type": "Sternal adductor MN",
+      "instance": "Sternal adductor MN_R",
+      "superclass": "vnc_motor",
+      "somaSide": "R",
+      "somaNeuromere": "T1"
+    },
+    {
+      "bodyId": 818399,
+      "type": "Sternal posterior rotator MN",
+      "instance": "Sternal posterior rotator MN_L",
+      "superclass": "vnc_motor",
+      "somaSide": "L",
+      "somaNeuromere": "T3"
+    },
+    {
+      "bodyId": 820110,
+      "type": "Ta levator MN",
+      "instance": "Ta levator MN_R",
+      "superclass": "vnc_motor",
+      "somaSide": "R",
+      "somaNeuromere": "T1"
+    },
+    {
+      "bodyId": 821769,
+      "type": "Fe reductor MN",
+      "instance": "Fe reductor MN_R",
+      "superclass": "vnc_motor",
+      "somaSide": "R",
+      "somaNeuromere": "T2"
+    },
+    {
+      "bodyId": 832490,
+      "type": "Sternal anterior rotator MN",
+      "instance": "Sternal anterior rotator MN_L",
+      "superclass": "vnc_motor",
+      "somaSide": "L",
+      "somaNeuromere": "T2"
+    },
+    {
+      "bodyId": 835074,
+      "type": "Fe reductor MN",
+      "instance": "Fe reductor MN_R",
+      "superclass": "vnc_motor",
+      "somaSide": "R",
+      "somaNeuromere": "T1"
+    },
+    {
+      "bodyId": 902310,
+      "type": "Pleural remotor/abductor MN",
+      "instance": "Pleural remotor/abductor MN_L",
+      "superclass": "vnc_motor",
+      "somaSide": "L",
+      "somaNeuromere": "T3"
+    },
+    {
+      "bodyId": 902962,
+      "type": "Fe reductor MN",
+      "instance": "Fe reductor MN_R",
+      "superclass": "vnc_motor",
+      "somaSide": "R",
+      "somaNeuromere": "T3"
+    },
+    {
+      "bodyId": 903090,
+      "type": "MNhl62",
+      "instance": "MNhl62_R",
+      "superclass": "vnc_motor",
+      "somaSide": "R",
+      "somaNeuromere": "T3"
+    },
+    {
+      "bodyId": 903689,
+      "type": "Sternal anterior rotator MN",
+      "instance": "Sternal anterior rotator MN_L",
+      "superclass": "vnc_motor",
+      "somaSide": "L",
+      "somaNeuromere": "T2"
+    },
+    {
+      "bodyId": 904184,
+      "type": "Sternal adductor MN",
+      "instance": "Sternal adductor MN_L",
+      "superclass": "vnc_motor",
+      "somaSide": "L",
+      "somaNeuromere": "T3"
+    },
+    {
+      "bodyId": 905145,
+      "type": "Fe reductor MN",
+      "instance": "Fe reductor MN_R",
+      "superclass": "vnc_motor",
+      "somaSide": "R",
+      "somaNeuromere": "T2"
+    },
+    {
+      "bodyId": 906235,
+      "type": "Sternal anterior rotator MN",
+      "instance": "Sternal anterior rotator MN_R",
+      "superclass": "vnc_motor",
+      "somaSide": "R",
+      "somaNeuromere": "T3"
+    },
+    {
+      "bodyId": 919509,
+      "type": "Sternal anterior rotator MN",
+      "instance": "Sternal anterior rotator MN_L",
+      "superclass": "vnc_motor",
+      "somaSide": "L",
+      "somaNeuromere": "T1"
+    },
+    {
+      "bodyId": 927808,
+      "type": "Ti flexor MN",
+      "instance": "Ti flexor MN_L",
+      "superclass": "vnc_motor",
+      "somaSide": "L",
+      "somaNeuromere": "T2"
+    },
+    {
+      "bodyId": 928579,
+      "type": "Ti extensor MN",
+      "instance": "Ti extensor MN_R",
+      "superclass": "vnc_motor",
+      "somaSide": "R",
+      "somaNeuromere": "T2"
+    },
+    {
+      "bodyId": 1050111955,
+      "type": "Ta levator MN",
+      "instance": "Ta levator MN_L",
+      "superclass": "vnc_motor",
+      "somaSide": "L",
+      "somaNeuromere": "T1"
+    },
+    {
+      "bodyId": 1050335829,
+      "type": "Sternal posterior rotator MN",
+      "instance": "Sternal posterior rotator MN_L",
+      "superclass": "vnc_motor",
+      "somaSide": "L",
+      "somaNeuromere": "T1"
+    },
+    {
+      "bodyId": 1050493413,
+      "type": "Sternal posterior rotator MN",
+      "instance": "Sternal posterior rotator MN_R",
+      "superclass": "vnc_motor",
+      "somaSide": "R",
+      "somaNeuromere": "T3"
+    },
+    {
+      "bodyId": 1051054875,
+      "type": "Sternal posterior rotator MN",
+      "instance": "Sternal posterior rotator MN_L",
+      "superclass": "vnc_motor",
+      "somaSide": "L",
+      "somaNeuromere": "T2"
+    }
+  ]
+}

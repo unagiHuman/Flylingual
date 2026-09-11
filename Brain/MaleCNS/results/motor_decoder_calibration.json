@@ -1,0 +1,204 @@
+{
+  "capturedAtUtc": "2026-09-11T01:39:23.307861+00:00",
+  "datasetId": "male-cns:v1.0",
+  "mappingId": "exploratory-direct-inputs-v1",
+  "recurrentWeightScale": 0.1,
+  "trainingSeeds": [
+    20260911,
+    20260912
+  ],
+  "holdoutSeed": 20260913,
+  "calibration": {
+    "forwardReferenceHz": 20.0,
+    "turnReferenceHz": 92.99999999999999,
+    "turnDeadzoneHz": 5.0,
+    "forwardSampleCount": 6,
+    "turnSampleCount": 8,
+    "straightSampleCount": 2,
+    "method": "95th percentiles; deadzone is straight 95th percentile plus quarter-window spike resolution"
+  },
+  "decoderConfig": {
+    "forwardReferenceHz": 20.0,
+    "turnReferenceHz": 92.99999999999999,
+    "turnDeadzoneHz": 5.0
+  },
+  "holdout": [
+    {
+      "sequence": 0,
+      "requestedAction": "STOP",
+      "raw": {
+        "DNp09_Hz": 0.0,
+        "DNp09_L_Hz": 0.0,
+        "DNp09_R_Hz": 0.0,
+        "DNa02_R_Hz": 0.0,
+        "DNa02_L_Hz": 0.0,
+        "DNa02Difference_Hz": 0.0
+      },
+      "motor": {
+        "forward": 0.0,
+        "turn": 0.0
+      }
+    },
+    {
+      "sequence": 1,
+      "requestedAction": "FORWARD",
+      "raw": {
+        "DNp09_Hz": 20.0,
+        "DNp09_L_Hz": 20.0,
+        "DNp09_R_Hz": 20.0,
+        "DNa02_R_Hz": 0.0,
+        "DNa02_L_Hz": 0.0,
+        "DNa02Difference_Hz": 0.0
+      },
+      "motor": {
+        "forward": 1.0,
+        "turn": 0.0
+      }
+    },
+    {
+      "sequence": 2,
+      "requestedAction": "STOP",
+      "raw": {
+        "DNp09_Hz": 10.0,
+        "DNp09_L_Hz": 20.0,
+        "DNp09_R_Hz": 0.0,
+        "DNa02_R_Hz": 0.0,
+        "DNa02_L_Hz": 0.0,
+        "DNa02Difference_Hz": 0.0
+      },
+      "motor": {
+        "forward": 0.5,
+        "turn": 0.0
+      }
+    },
+    {
+      "sequence": 3,
+      "requestedAction": "TURN_R",
+      "raw": {
+        "DNp09_Hz": 0.0,
+        "DNp09_L_Hz": 0.0,
+        "DNp09_R_Hz": 0.0,
+        "DNa02_R_Hz": 80.0,
+        "DNa02_L_Hz": 0.0,
+        "DNa02Difference_Hz": 80.0
+      },
+      "motor": {
+        "forward": 0.0,
+        "turn": 0.8522727272727274
+      }
+    },
+    {
+      "sequence": 4,
+      "requestedAction": "STOP",
+      "raw": {
+        "DNp09_Hz": 0.0,
+        "DNp09_L_Hz": 0.0,
+        "DNp09_R_Hz": 0.0,
+        "DNa02_R_Hz": 20.0,
+        "DNa02_L_Hz": 0.0,
+        "DNa02Difference_Hz": 20.0
+      },
+      "motor": {
+        "forward": 0.0,
+        "turn": 0.17045454545454547
+      }
+    },
+    {
+      "sequence": 5,
+      "requestedAction": "TURN_L",
+      "raw": {
+        "DNp09_Hz": 0.0,
+        "DNp09_L_Hz": 0.0,
+        "DNp09_R_Hz": 0.0,
+        "DNa02_R_Hz": 0.0,
+        "DNa02_L_Hz": 80.0,
+        "DNa02Difference_Hz": -80.0
+      },
+      "motor": {
+        "forward": 0.0,
+        "turn": -0.8522727272727274
+      }
+    },
+    {
+      "sequence": 6,
+      "requestedAction": "STOP",
+      "raw": {
+        "DNp09_Hz": 0.0,
+        "DNp09_L_Hz": 0.0,
+        "DNp09_R_Hz": 0.0,
+        "DNa02_R_Hz": 0.0,
+        "DNa02_L_Hz": 0.0,
+        "DNa02Difference_Hz": 0.0
+      },
+      "motor": {
+        "forward": 0.0,
+        "turn": 0.0
+      }
+    },
+    {
+      "sequence": 7,
+      "requestedAction": "FORWARD_R",
+      "raw": {
+        "DNp09_Hz": 20.0,
+        "DNp09_L_Hz": 20.0,
+        "DNp09_R_Hz": 20.0,
+        "DNa02_R_Hz": 60.0,
+        "DNa02_L_Hz": 0.0,
+        "DNa02Difference_Hz": 60.0
+      },
+      "motor": {
+        "forward": 1.0,
+        "turn": 0.6250000000000001
+      }
+    },
+    {
+      "sequence": 8,
+      "requestedAction": "STOP",
+      "raw": {
+        "DNp09_Hz": 0.0,
+        "DNp09_L_Hz": 0.0,
+        "DNp09_R_Hz": 0.0,
+        "DNa02_R_Hz": 20.0,
+        "DNa02_L_Hz": 0.0,
+        "DNa02Difference_Hz": 20.0
+      },
+      "motor": {
+        "forward": 0.0,
+        "turn": 0.17045454545454547
+      }
+    },
+    {
+      "sequence": 9,
+      "requestedAction": "FORWARD_L",
+      "raw": {
+        "DNp09_Hz": 20.0,
+        "DNp09_L_Hz": 20.0,
+        "DNp09_R_Hz": 20.0,
+        "DNa02_R_Hz": 0.0,
+        "DNa02_L_Hz": 100.0,
+        "DNa02Difference_Hz": -100.0
+      },
+      "motor": {
+        "forward": 1.0,
+        "turn": -1.0
+      }
+    },
+    {
+      "sequence": 10,
+      "requestedAction": "STOP",
+      "raw": {
+        "DNp09_Hz": 0.0,
+        "DNp09_L_Hz": 0.0,
+        "DNp09_R_Hz": 0.0,
+        "DNa02_R_Hz": 0.0,
+        "DNa02_L_Hz": 20.0,
+        "DNa02Difference_Hz": -20.0
+      },
+      "motor": {
+        "forward": 0.0,
+        "turn": -0.17045454545454547
+      }
+    }
+  ],
+  "limitations": "Three single-sequence seeds are PoC evidence, not biological validation or robust production calibration."
+}

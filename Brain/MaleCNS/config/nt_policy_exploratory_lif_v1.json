@@ -1,0 +1,23 @@
+{
+  "datasetId": "male-cns:v1.0",
+  "policyId": "exploratory-lif-ach-gaba-v1",
+  "mode": "exploratory",
+  "sourceColumn": "consensus_nt",
+  "categories": {
+    "acetylcholine": {"sign": 1, "status": "PoC fast excitatory assumption"},
+    "gaba": {"sign": -1, "status": "PoC fast inhibitory assumption"},
+    "glutamate": {"sign": 0, "status": "excluded because receptor sign is unresolved"},
+    "histamine": {"sign": 0, "status": "excluded from this minimal LIF PoC"},
+    "dopamine": {"sign": 0, "status": "modulatory; excluded from fast synapses"},
+    "octopamine": {"sign": 0, "status": "modulatory; excluded from fast synapses"},
+    "serotonin": {"sign": 0, "status": "modulatory; excluded from fast synapses"},
+    "unclear": {"sign": 0, "status": "unknown; excluded"},
+    "missing": {"sign": 0, "status": "missing; excluded"}
+  },
+  "weightRule": "signedWeight = synapseCount * sign",
+  "limitations": [
+    "This is a game-oriented exploratory LIF policy, not a validated MaleCNS physiological model.",
+    "A structural edge with sign zero is retained in the structural graph but is dynamically inactive.",
+    "The strict audit-only policy remains the scientific default and is not modified by this file."
+  ]
+}

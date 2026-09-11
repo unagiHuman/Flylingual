@@ -1,0 +1,67 @@
+{
+  "goals": [
+    {
+      "run": 1,
+      "seconds": 49.50867,
+      "head": {
+        "headX": -0.8313296,
+        "headY": 1.02094615,
+        "headZ": 4.33972931
+      }
+    },
+    {
+      "run": 2,
+      "seconds": 44.72468,
+      "head": {
+        "headX": -0.6996117,
+        "headY": 1.02379584,
+        "headZ": 4.967126
+      }
+    },
+    {
+      "run": 3,
+      "seconds": 40.74833,
+      "head": {
+        "headX": -0.8386919,
+        "headY": 1.07361674,
+        "headZ": 4.36701727
+      }
+    }
+  ],
+  "fallRestart": "pass: natural fall and measured spawn reset",
+  "steering": [
+    {
+      "path": "artifacts\\windows\\check-20260911-132938\\FORWARD_L\\steering.csv",
+      "common10s": {
+        "steps": 501,
+        "duration": 10.00008609,
+        "yawDelta": -96.68701719999999
+      }
+    },
+    {
+      "path": "artifacts\\windows\\check-20260911-132938\\FORWARD_R\\steering.csv",
+      "common10s": {
+        "steps": 501,
+        "duration": 10.00008609,
+        "yawDelta": 351.7462718
+      }
+    }
+  ],
+  "frames": {
+    "backend": "Replay",
+    "unityVersion": "6000.5.5f1",
+    "recordedFrames": 110,
+    "observedFrames": 110,
+    "skippedFrames": 0,
+    "physicsJoints": 18,
+    "footPads": 6,
+    "visualPhysicsComponents": 0,
+    "frameTimeP95Ms": 16.684297561645508,
+    "fixedDeltaTime": 0.019999992102384567,
+    "maxVisualEndpointError": 5.962326667940943e-07,
+    "e2e": "N/A: offline playback"
+  },
+  "nativeInput": "pass: W/A/D recorded frames and visually checked R",
+  "exceptions": 0,
+  "status": "PASS"
+}

@@ -1,0 +1,26 @@
+{
+  "protocolVersion": 1,
+  "calibration": {
+    "source_result": "/Users/isaoohta/UnityGame/FlyBrain/Work/Drosophila_brain_model/results/codex_run/brain_controller_sequence_cython_50ms.json",
+    "source_step_ms": 50.0,
+    "forward_reference_hz": 120.0,
+    "turn_reference_hz": 160.99999999999994,
+    "turn_deadzone_hz": 45.0,
+    "percentile": 95.0,
+    "safety_margin_hz": 5.0,
+    "forward_sample_count": 30,
+    "turn_sample_count": 40,
+    "forward_deadzone_sample_count": 10,
+    "forward_reference_method": "95th percentile of DNp09 firing rates in F, F+R, and F+L windows",
+    "turn_reference_method": "95th percentile of abs(DNa02_R - DNa02_L) in R, L, F+R, and F+L windows",
+    "deadzone_method": "95th percentile of abs(DNa02_R - DNa02_L) in F windows + one-quarter of one-spike rate resolution",
+    "forwardReferenceHz": 120.0,
+    "turnReferenceHz": 160.99999999999994,
+    "turnDeadzoneHz": 45.0
+  },
+  "decoderConfig": {
+    "forwardReferenceHz": 120.0,
+    "turnReferenceHz": 160.99999999999994,
+    "turnDeadzoneHz": 45.0
+  }
+}

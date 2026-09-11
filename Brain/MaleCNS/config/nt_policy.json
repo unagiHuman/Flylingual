@@ -1,0 +1,23 @@
+{
+  "datasetId": "male-cns:v1.0",
+  "policyId": "audit-only-unresolved-v1",
+  "sourceColumn": "consensus_nt",
+  "mode": "strict",
+  "categories": {
+    "acetylcholine": {"sign": null, "status": "requires documented model assumption"},
+    "gaba": {"sign": null, "status": "requires documented model assumption"},
+    "glutamate": {"sign": null, "status": "receptor-dependent; unresolved"},
+    "histamine": {"sign": null, "status": "unresolved for this LIF adaptation"},
+    "dopamine": {"sign": null, "status": "modulatory; not mapped to a fast synapse"},
+    "octopamine": {"sign": null, "status": "modulatory; not mapped to a fast synapse"},
+    "serotonin": {"sign": null, "status": "modulatory; not mapped to a fast synapse"},
+    "unclear": {"sign": null, "status": "unknown"},
+    "missing": {"sign": null, "status": "unknown"}
+  },
+  "strictBehavior": "Stop signed graph construction when any selected output edge has a null sign.",
+  "explorationBehavior": "A future explicitly named exploratory policy may set unresolved output weights to zero, but this file does not authorize it.",
+  "provenance": [
+    "MaleCNS consensus_nt is a transmitter prediction and does not by itself define receptor sign or LIF time constants.",
+    "The copied Shiu baseline does not contain a neurotransmitter-to-sign policy to reuse."
+  ]
+}

@@ -1,0 +1,46 @@
+{
+  "config": {
+    "mode": "ema_deadzone",
+    "tauMs": [
+      100,
+      100
+    ],
+    "matrix": [
+      [
+        1,
+        0
+      ],
+      [
+        0,
+        1
+      ]
+    ],
+    "reference": [
+      0.2937641252782379,
+      0.3000467732211255
+    ],
+    "on": [
+      0.023451455108794695,
+      0.11207171687180144
+    ],
+    "off": [
+      0.023451455108794695,
+      0.11207171687180144
+    ]
+  },
+  "calibrationPassed": true,
+  "calibrationPassedSeeds": 3,
+  "calibrationSeeds": [
+    20261211,
+    20261212,
+    20261213
+  ],
+  "ready": false,
+  "selectionRule": "Max calibration passed seeds, then blocks; ties prefer simpler mode, shorter tau. No validation data used.",
+  "gate": "Active final four 50ms windows correct; STOP by300ms. PureF turn exactly deadzone (EMA-only tolerance .02), TURN forward<=.15.",
+  "parameterSource": "Thresholds from pureF/TURN and STOP only; combined used for ranking tau/mode, not neuron signs or thresholds.",
+  "sourceHashes": {
+    "evaluate_temporal_decoder.py": "ed65248a2231fca7f124c0960de1a9398921687ad0d0ed3c8c1add829623055d",
+    "temporal_motor_decoder.py": "8b4a82958ad5d5886ebd2086a6a4844344aa755e7ce166ff2021e6bab566ad02"
+  }
+}

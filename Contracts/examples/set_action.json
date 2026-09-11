@@ -1,0 +1,5 @@
+{
+  "type": "set_action",
+  "requestId": "debug-stop-1",
+  "action": "STOP"
+}

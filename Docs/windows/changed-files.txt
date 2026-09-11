@@ -1,0 +1,204 @@
+ArtSource/Blender/FlyVisual.blend
+ArtSource/Blender/FlyVisual.blend1
+ArtSource/Blender/FlyVisual_preview.png
+ArtSource/Blender/README.md
+ArtSource/Blender/SHA256.json
+ArtSource/Blender/generate_fly.py
+ArtSource/Blender/start_mcp.py
+Brain/ShiuBaseline/environment-windows.yml
+Contracts/examples/README.md
+Contracts/examples/brain_frame.json
+Contracts/examples/error.json
+Contracts/examples/set_action.json
+Contracts/examples/status.json
+Contracts/fixtures/shiu_game_brain_controller_frames_wire_v1.jsonl
+Docs/windows/README_WINDOWS.md
+Docs/windows/SHIU_WINDOWS.md
+Docs/windows/changed-files.txt
+Docs/windows/game_progress_20260911.md
+Docs/windows/replay_acceptance.md
+Docs/windows/replay_acceptance_results.json
+Docs/windows/replay_freeze.json
+Docs/windows/windows_validation_report.md
+UnityProject/Assets/Config.meta
+UnityProject/Assets/Config/FlyGameplayPreset.asset
+UnityProject/Assets/Config/FlyGameplayPreset.asset.meta
+UnityProject/Assets/FlyVisual.meta
+UnityProject/Assets/FlyVisual/FlyVisual.fbx
+UnityProject/Assets/FlyVisual/FlyVisual.fbx.meta
+UnityProject/Assets/StreamingAssets.meta
+UnityProject/Assets/StreamingAssets/shiu_game_brain_controller_frames_wire_v1.jsonl
+UnityProject/Assets/StreamingAssets/shiu_game_brain_controller_frames_wire_v1.jsonl.meta
+UnityProject/Assets/VisualDemo.meta
+UnityProject/Assets/VisualDemo/AbdomenDark.mat
+UnityProject/Assets/VisualDemo/AbdomenDark.mat.meta
+UnityProject/Assets/VisualDemo/AscentGameSession.cs
+UnityProject/Assets/VisualDemo/AscentGameSession.cs.meta
+UnityProject/Assets/VisualDemo/Book - field notes.mat
+UnityProject/Assets/VisualDemo/Book - field notes.mat.meta
+UnityProject/Assets/VisualDemo/Book - second volume.mat
+UnityProject/Assets/VisualDemo/Book - second volume.mat.meta
+UnityProject/Assets/VisualDemo/Book pages.mat
+UnityProject/Assets/VisualDemo/Book pages.mat.meta
+UnityProject/Assets/VisualDemo/Bristle.mat
+UnityProject/Assets/VisualDemo/Bristle.mat.meta
+UnityProject/Assets/VisualDemo/Can.mat
+UnityProject/Assets/VisualDemo/Can.mat.meta
+UnityProject/Assets/VisualDemo/ChitinGold.mat
+UnityProject/Assets/VisualDemo/ChitinGold.mat.meta
+UnityProject/Assets/VisualDemo/Coffee cup.mat
+UnityProject/Assets/VisualDemo/Coffee cup.mat.meta
+UnityProject/Assets/VisualDemo/Coffee.mat
+UnityProject/Assets/VisualDemo/Coffee.mat.meta
+UnityProject/Assets/VisualDemo/CourseTrial.cs
+UnityProject/Assets/VisualDemo/CourseTrial.cs.meta
+UnityProject/Assets/VisualDemo/Desk.mat
+UnityProject/Assets/VisualDemo/Desk.mat.meta
+UnityProject/Assets/VisualDemo/Editor.meta
+UnityProject/Assets/VisualDemo/Editor/WindowsDemoBuilder.cs
+UnityProject/Assets/VisualDemo/Editor/WindowsDemoBuilder.cs.meta
+UnityProject/Assets/VisualDemo/EyeRuby.mat
+UnityProject/Assets/VisualDemo/EyeRuby.mat.meta
+UnityProject/Assets/VisualDemo/First climb - notebook ramp.mat
+UnityProject/Assets/VisualDemo/First climb - notebook ramp.mat.meta
+UnityProject/Assets/VisualDemo/FlyGameplayPreset.cs
+UnityProject/Assets/VisualDemo/FlyGameplayPreset.cs.meta
+UnityProject/Assets/VisualDemo/FlyWingBuzz.cs
+UnityProject/Assets/VisualDemo/FlyWingBuzz.cs.meta
+UnityProject/Assets/VisualDemo/Goal rim 0.mat
+UnityProject/Assets/VisualDemo/Goal rim 0.mat.meta
+UnityProject/Assets/VisualDemo/Goal rim 1.mat
+UnityProject/Assets/VisualDemo/Goal rim 1.mat.meta
+UnityProject/Assets/VisualDemo/Goal rim 10.mat
+UnityProject/Assets/VisualDemo/Goal rim 10.mat.meta
+UnityProject/Assets/VisualDemo/Goal rim 11.mat
+UnityProject/Assets/VisualDemo/Goal rim 11.mat.meta
+UnityProject/Assets/VisualDemo/Goal rim 12.mat
+UnityProject/Assets/VisualDemo/Goal rim 12.mat.meta
+UnityProject/Assets/VisualDemo/Goal rim 13.mat
+UnityProject/Assets/VisualDemo/Goal rim 13.mat.meta
+UnityProject/Assets/VisualDemo/Goal rim 14.mat
+UnityProject/Assets/VisualDemo/Goal rim 14.mat.meta
+UnityProject/Assets/VisualDemo/Goal rim 15.mat
+UnityProject/Assets/VisualDemo/Goal rim 15.mat.meta
+UnityProject/Assets/VisualDemo/Goal rim 16.mat
+UnityProject/Assets/VisualDemo/Goal rim 16.mat.meta
+UnityProject/Assets/VisualDemo/Goal rim 17.mat
+UnityProject/Assets/VisualDemo/Goal rim 17.mat.meta
+UnityProject/Assets/VisualDemo/Goal rim 18.mat
+UnityProject/Assets/VisualDemo/Goal rim 18.mat.meta
+UnityProject/Assets/VisualDemo/Goal rim 19.mat
+UnityProject/Assets/VisualDemo/Goal rim 19.mat.meta
+UnityProject/Assets/VisualDemo/Goal rim 2.mat
+UnityProject/Assets/VisualDemo/Goal rim 2.mat.meta
+UnityProject/Assets/VisualDemo/Goal rim 20.mat
+UnityProject/Assets/VisualDemo/Goal rim 20.mat.meta
+UnityProject/Assets/VisualDemo/Goal rim 21.mat
+UnityProject/Assets/VisualDemo/Goal rim 21.mat.meta
+UnityProject/Assets/VisualDemo/Goal rim 22.mat
+UnityProject/Assets/VisualDemo/Goal rim 22.mat.meta
+UnityProject/Assets/VisualDemo/Goal rim 23.mat
+UnityProject/Assets/VisualDemo/Goal rim 23.mat.meta
+UnityProject/Assets/VisualDemo/Goal rim 24.mat
+UnityProject/Assets/VisualDemo/Goal rim 24.mat.meta
+UnityProject/Assets/VisualDemo/Goal rim 25.mat
+UnityProject/Assets/VisualDemo/Goal rim 25.mat.meta
+UnityProject/Assets/VisualDemo/Goal rim 26.mat
+UnityProject/Assets/VisualDemo/Goal rim 26.mat.meta
+UnityProject/Assets/VisualDemo/Goal rim 27.mat
+UnityProject/Assets/VisualDemo/Goal rim 27.mat.meta
+UnityProject/Assets/VisualDemo/Goal rim 28.mat
+UnityProject/Assets/VisualDemo/Goal rim 28.mat.meta
+UnityProject/Assets/VisualDemo/Goal rim 29.mat
+UnityProject/Assets/VisualDemo/Goal rim 29.mat.meta
+UnityProject/Assets/VisualDemo/Goal rim 3.mat
+UnityProject/Assets/VisualDemo/Goal rim 3.mat.meta
+UnityProject/Assets/VisualDemo/Goal rim 30.mat
+UnityProject/Assets/VisualDemo/Goal rim 30.mat.meta
+UnityProject/Assets/VisualDemo/Goal rim 31.mat
+UnityProject/Assets/VisualDemo/Goal rim 31.mat.meta
+UnityProject/Assets/VisualDemo/Goal rim 4.mat
+UnityProject/Assets/VisualDemo/Goal rim 4.mat.meta
+UnityProject/Assets/VisualDemo/Goal rim 5.mat
+UnityProject/Assets/VisualDemo/Goal rim 5.mat.meta
+UnityProject/Assets/VisualDemo/Goal rim 6.mat
+UnityProject/Assets/VisualDemo/Goal rim 6.mat.meta
+UnityProject/Assets/VisualDemo/Goal rim 7.mat
+UnityProject/Assets/VisualDemo/Goal rim 7.mat.meta
+UnityProject/Assets/VisualDemo/Goal rim 8.mat
+UnityProject/Assets/VisualDemo/Goal rim 8.mat.meta
+UnityProject/Assets/VisualDemo/Goal rim 9.mat
+UnityProject/Assets/VisualDemo/Goal rim 9.mat.meta
+UnityProject/Assets/VisualDemo/Key 0-0.mat
+UnityProject/Assets/VisualDemo/Key 0-0.mat.meta
+UnityProject/Assets/VisualDemo/Key 0-1.mat
+UnityProject/Assets/VisualDemo/Key 0-1.mat.meta
+UnityProject/Assets/VisualDemo/Key 0-2.mat
+UnityProject/Assets/VisualDemo/Key 0-2.mat.meta
+UnityProject/Assets/VisualDemo/Key 0-3.mat
+UnityProject/Assets/VisualDemo/Key 0-3.mat.meta
+UnityProject/Assets/VisualDemo/Key 0-4.mat
+UnityProject/Assets/VisualDemo/Key 0-4.mat.meta
+UnityProject/Assets/VisualDemo/Key 0-5.mat
+UnityProject/Assets/VisualDemo/Key 0-5.mat.meta
+UnityProject/Assets/VisualDemo/Key 1-0.mat
+UnityProject/Assets/VisualDemo/Key 1-0.mat.meta
+UnityProject/Assets/VisualDemo/Key 1-1.mat
+UnityProject/Assets/VisualDemo/Key 1-1.mat.meta
+UnityProject/Assets/VisualDemo/Key 1-2.mat
+UnityProject/Assets/VisualDemo/Key 1-2.mat.meta
+UnityProject/Assets/VisualDemo/Key 1-3.mat
+UnityProject/Assets/VisualDemo/Key 1-3.mat.meta
+UnityProject/Assets/VisualDemo/Key 1-4.mat
+UnityProject/Assets/VisualDemo/Key 1-4.mat.meta
+UnityProject/Assets/VisualDemo/Key 1-5.mat
+UnityProject/Assets/VisualDemo/Key 1-5.mat.meta
+UnityProject/Assets/VisualDemo/Key 2-0.mat
+UnityProject/Assets/VisualDemo/Key 2-0.mat.meta
+UnityProject/Assets/VisualDemo/Key 2-1.mat
+UnityProject/Assets/VisualDemo/Key 2-1.mat.meta
+UnityProject/Assets/VisualDemo/Key 2-2.mat
+UnityProject/Assets/VisualDemo/Key 2-2.mat.meta
+UnityProject/Assets/VisualDemo/Key 2-3.mat
+UnityProject/Assets/VisualDemo/Key 2-3.mat.meta
+UnityProject/Assets/VisualDemo/Key 2-4.mat
+UnityProject/Assets/VisualDemo/Key 2-4.mat.meta
+UnityProject/Assets/VisualDemo/Key 2-5.mat
+UnityProject/Assets/VisualDemo/Key 2-5.mat.meta
+UnityProject/Assets/VisualDemo/Narrow ledge.mat
+UnityProject/Assets/VisualDemo/Narrow ledge.mat.meta
+UnityProject/Assets/VisualDemo/Notebook summit.mat
+UnityProject/Assets/VisualDemo/Notebook summit.mat.meta
+UnityProject/Assets/VisualDemo/SteeringTrial.cs
+UnityProject/Assets/VisualDemo/SteeringTrial.cs.meta
+UnityProject/Assets/VisualDemo/Sugar crystal 0.mat
+UnityProject/Assets/VisualDemo/Sugar crystal 0.mat.meta
+UnityProject/Assets/VisualDemo/Sugar crystal 1.mat
+UnityProject/Assets/VisualDemo/Sugar crystal 1.mat.meta
+UnityProject/Assets/VisualDemo/Sugar crystal 2.mat
+UnityProject/Assets/VisualDemo/Sugar crystal 2.mat.meta
+UnityProject/Assets/VisualDemo/VisualRigMapper.cs
+UnityProject/Assets/VisualDemo/VisualRigMapper.cs.meta
+UnityProject/Assets/VisualDemo/WindowsReplayDemo.cs
+UnityProject/Assets/VisualDemo/WindowsReplayDemo.cs.meta
+UnityProject/Assets/VisualDemo/WindowsReplayDemo.unity
+UnityProject/Assets/VisualDemo/WindowsReplayDemo.unity.meta
+UnityProject/Assets/VisualDemo/WingMembrane.mat
+UnityProject/Assets/VisualDemo/WingMembrane.mat.meta
+UnityProject/Assets/VisualDemo/WingVein.mat
+UnityProject/Assets/VisualDemo/WingVein.mat.meta
+tools/Build-WindowsDemo.ps1
+tools/Start-Replay.ps1
+tools/Test-WindowsReplay.ps1
+tools/analyze_course.py
+tools/analyze_steering.py
+tools/normalize_shiu_replay.py
+tools/summarize_windows_replay.py
+tools/test_normalize_shiu_replay.py
+tools/verify_acceptance.py
+.gitignore
+UnityProject/Assets/FlyLocomotion/FlyLeg.cs
+UnityProject/Assets/FlyLocomotion/FlyLocomotionConfig.cs
+UnityProject/Assets/FlyLocomotion/FlyLocomotionController.cs
+UnityProject/Packages/manifest.json
+UnityProject/Packages/packages-lock.json

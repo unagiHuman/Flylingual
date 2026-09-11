@@ -1,0 +1,1842 @@
+{
+  "scope": "Existing annotation-bodyid-v1 graph, including non-neuron annotations; not certified full-neuron CNS",
+  "structuralManifest": {
+    "capturedAtUtc": "2026-09-10T23:51:05.526440+00:00",
+    "datasetId": "male-cns:v1.0",
+    "representation": "pair-aggregated structural graph; unsigned synapse counts",
+    "neuronCount": 211577,
+    "selectedRowCountBeforePairAggregation": 26028386,
+    "duplicatePairRowCount": 0,
+    "edgeCountAfterPairAggregation": 26028386,
+    "indexDtype": "int32",
+    "bodyIdDtype": "int64",
+    "synapseCountDtype": "int64",
+    "signedDynamicsReady": false,
+    "signedDynamicsBlocker": "nt_policy.json intentionally leaves transmitter signs unresolved",
+    "peakProcessRssBytes": 1626128384
+  },
+  "effectiveManifest": {
+    "capturedAtUtc": "2026-09-11T01:32:42.089491+00:00",
+    "datasetId": "male-cns:v1.0",
+    "representation": "presynaptic CSR of dynamically effective PoC edges",
+    "neuronCount": 211577,
+    "effectiveEdgeCount": 19848648,
+    "positiveEdgeCount": 14875726,
+    "negativeEdgeCount": 4972922,
+    "indptrDtype": "int64",
+    "postIndexDtype": "int32",
+    "signedSynapseCountDtype": "int64",
+    "peakProcessRssBytes": 1104134144
+  },
+  "datasetManifest": {
+    "dataset": "male-cns:v1.0",
+    "sourcePage": "https://male-cns.janelia.org/download/",
+    "licenseNotice": "CC-BY; consult the license linked from the official source page.",
+    "files": {
+      "annotations": {
+        "filename": "body-annotations-male-cns-v1.0-minconf-0.5.feather",
+        "url": "https://storage.googleapis.com/flyem-male-cns/v1.0/connectome-data/flat-connectome/body-annotations-male-cns-v1.0-minconf-0.5.feather",
+        "bytes": 14483314,
+        "sha256": "2177e246113e4cfbf1e7772ec37c6da1955ff22e8063d0b1f833101f99a9a3b2",
+        "publisherChecksumVerified": false,
+        "downloadedAtUtc": "2026-09-10T23:44:34.915161+00:00",
+        "headers": {
+          "ETag": "\"50a7718770c57220f160ba4f431ab89e\"",
+          "Last-Modified": "Wed, 03 Jun 2026 13:54:38 GMT",
+          "Content-Length": "14483314",
+          "Content-Type": "application/octet-stream",
+          "x-goog-hash": "crc32c=vjz9cg=="
+        }
+      },
+      "neurotransmitters": {
+        "filename": "body-neurotransmitters-male-cns-v1.0.feather",
+        "url": "https://storage.googleapis.com/flyem-male-cns/v1.0/connectome-data/flat-connectome/body-neurotransmitters-male-cns-v1.0.feather",
+        "bytes": 43282834,
+        "sha256": "95c9289220663abeb3409f3ad9e5a7f8a53f8093f5139d15502cd08da8879621",
+        "publisherChecksumVerified": false,
+        "downloadedAtUtc": "2026-09-10T23:44:36.999935+00:00",
+        "headers": {
+          "ETag": "\"3d842b12fe5c49eefade528d7dd24a1f\"",
+          "Last-Modified": "Mon, 08 Jun 2026 05:01:39 GMT",
+          "Content-Length": "43282834",
+          "Content-Type": "application/octet-stream",
+          "x-goog-hash": "crc32c=jcpNFg=="
+        }
+      },
+      "weights": {
+        "filename": "connectome-weights-male-cns-v1.0-minconf-0.5.feather",
+        "url": "https://storage.googleapis.com/flyem-male-cns/v1.0/connectome-data/flat-connectome/connectome-weights-male-cns-v1.0-minconf-0.5.feather",
+        "bytes": 1051241946,
+        "sha256": "e35da783d1c686b2b58b3b87cd6a403ae43bfcfba8bff28e08ef752c1a56afc1",
+        "publisherChecksumVerified": false,
+        "downloadedAtUtc": "2026-09-10T23:45:23.936969+00:00",
+        "headers": {
+          "ETag": "\"f30e9dcca25cfd021bf1e7b3d975599e\"",
+          "Last-Modified": "Wed, 03 Jun 2026 13:54:47 GMT",
+          "Content-Length": "1051241946",
+          "Content-Type": "application/octet-stream",
+          "x-goog-hash": "crc32c=dKRPVQ=="
+        }
+      }
+    }
+  },
+  "sourceHashes": {
+    "Brain/MaleCNS/run_execution_checkpoint.py": "ab08f6854d605134594b8411a816d968667385cae1fcfd55a0afa6ca8876f4c7",
+    "Brain/MaleCNS/malecns_brain.py": "c0d8d0ae1594e427e6748936c119625818ae340b2c85f71cc2ec532a38967478",
+    "Brain/MaleCNS/config/game_mapping_exploratory_v1.json": "4846cfc8b8077e15e9e36276eb23e4ddb24404178e95dba10eb925bb4316a852"
+  },
+  "trials": [
+    {
+      "seed": 20260921,
+      "frames": [
+        {
+          "sequence": 0,
+          "brainSimulationTimeMs": 100.0,
+          "windowMs": 100.0,
+          "requestedAction": "STOP",
+          "activeStimulusGroups": [],
+          "activeStimulusIds": [],
+          "brain": {
+            "DNp09_Hz": 0.0,
+            "DNp09_L_Hz": 0.0,
+            "DNp09_R_Hz": 0.0,
+            "DNa02_R_Hz": 0.0,
+            "DNa02_L_Hz": 0.0,
+            "DNa02Difference_Hz": 0.0
+          },
+          "wholeBrainSpikeCount": 0,
+          "performance": {
+            "windowMs": 100.0,
+            "stepWallTimeMs": 1063.3084578439593
+          },
+          "metadata": {
+            "backendId": "malecns_lif_poc",
+            "datasetId": "male-cns:v1.0",
+            "dynamicsModel": "Shiu-style LIF adaptation in persistent NumPy runtime",
+            "recurrentWeightScale": 0.1,
+            "mode": "MALECNS",
+            "ready": false
+          }
+        },
+        {
+          "sequence": 1,
+          "brainSimulationTimeMs": 200.0,
+          "windowMs": 100.0,
+          "requestedAction": "TURN_R",
+          "activeStimulusGroups": [
+            "R"
+          ],
+          "activeStimulusIds": [
+            "13137",
+            "529641",
+            "14784",
+            "10975",
+            "11371",
+            "11625",
+            "14123",
+            "16327",
+            "14766",
+            "519926"
+          ],
+          "brain": {
+            "DNp09_Hz": 0.0,
+            "DNp09_L_Hz": 0.0,
+            "DNp09_R_Hz": 0.0,
+            "DNa02_R_Hz": 100.0,
+            "DNa02_L_Hz": 0.0,
+            "DNa02Difference_Hz": 100.0
+          },
+          "wholeBrainSpikeCount": 125,
+          "performance": {
+            "windowMs": 100.0,
+            "stepWallTimeMs": 1171.70475050807
+          },
+          "metadata": {
+            "backendId": "malecns_lif_poc",
+            "datasetId": "male-cns:v1.0",
+            "dynamicsModel": "Shiu-style LIF adaptation in persistent NumPy runtime",
+            "recurrentWeightScale": 0.1,
+            "mode": "MALECNS",
+            "ready": false
+          }
+        },
+        {
+          "sequence": 2,
+          "brainSimulationTimeMs": 300.0,
+          "windowMs": 100.0,
+          "requestedAction": "STOP",
+          "activeStimulusGroups": [],
+          "activeStimulusIds": [],
+          "brain": {
+            "DNp09_Hz": 0.0,
+            "DNp09_L_Hz": 0.0,
+            "DNp09_R_Hz": 0.0,
+            "DNa02_R_Hz": 0.0,
+            "DNa02_L_Hz": 0.0,
+            "DNa02Difference_Hz": 0.0
+          },
+          "wholeBrainSpikeCount": 0,
+          "performance": {
+            "windowMs": 100.0,
+            "stepWallTimeMs": 1060.510833747685
+          },
+          "metadata": {
+            "backendId": "malecns_lif_poc",
+            "datasetId": "male-cns:v1.0",
+            "dynamicsModel": "Shiu-style LIF adaptation in persistent NumPy runtime",
+            "recurrentWeightScale": 0.1,
+            "mode": "MALECNS",
+            "ready": false
+          }
+        }
+      ],
+      "initializationMs": 187.98699975013733
+    },
+    {
+      "seed": 20260922,
+      "frames": [
+        {
+          "sequence": 0,
+          "brainSimulationTimeMs": 100.0,
+          "windowMs": 100.0,
+          "requestedAction": "STOP",
+          "activeStimulusGroups": [],
+          "activeStimulusIds": [],
+          "brain": {
+            "DNp09_Hz": 0.0,
+            "DNp09_L_Hz": 0.0,
+            "DNp09_R_Hz": 0.0,
+            "DNa02_R_Hz": 0.0,
+            "DNa02_L_Hz": 0.0,
+            "DNa02Difference_Hz": 0.0
+          },
+          "wholeBrainSpikeCount": 0,
+          "performance": {
+            "windowMs": 100.0,
+            "stepWallTimeMs": 1076.0232089087367
+          },
+          "metadata": {
+            "backendId": "malecns_lif_poc",
+            "datasetId": "male-cns:v1.0",
+            "dynamicsModel": "Shiu-style LIF adaptation in persistent NumPy runtime",
+            "recurrentWeightScale": 0.1,
+            "mode": "MALECNS",
+            "ready": false
+          }
+        },
+        {
+          "sequence": 1,
+          "brainSimulationTimeMs": 200.0,
+          "windowMs": 100.0,
+          "requestedAction": "TURN_R",
+          "activeStimulusGroups": [
+            "R"
+          ],
+          "activeStimulusIds": [
+            "13137",
+            "529641",
+            "14784",
+            "10975",
+            "11371",
+            "11625",
+            "14123",
+            "16327",
+            "14766",
+            "519926"
+          ],
+          "brain": {
+            "DNp09_Hz": 0.0,
+            "DNp09_L_Hz": 0.0,
+            "DNp09_R_Hz": 0.0,
+            "DNa02_R_Hz": 100.0,
+            "DNa02_L_Hz": 0.0,
+            "DNa02Difference_Hz": 100.0
+          },
+          "wholeBrainSpikeCount": 119,
+          "performance": {
+            "windowMs": 100.0,
+            "stepWallTimeMs": 1124.1827495396137
+          },
+          "metadata": {
+            "backendId": "malecns_lif_poc",
+            "datasetId": "male-cns:v1.0",
+            "dynamicsModel": "Shiu-style LIF adaptation in persistent NumPy runtime",
+            "recurrentWeightScale": 0.1,
+            "mode": "MALECNS",
+            "ready": false
+          }
+        },
+        {
+          "sequence": 2,
+          "brainSimulationTimeMs": 300.0,
+          "windowMs": 100.0,
+          "requestedAction": "STOP",
+          "activeStimulusGroups": [],
+          "activeStimulusIds": [],
+          "brain": {
+            "DNp09_Hz": 0.0,
+            "DNp09_L_Hz": 0.0,
+            "DNp09_R_Hz": 0.0,
+            "DNa02_R_Hz": 0.0,
+            "DNa02_L_Hz": 0.0,
+            "DNa02Difference_Hz": 0.0
+          },
+          "wholeBrainSpikeCount": 2,
+          "performance": {
+            "windowMs": 100.0,
+            "stepWallTimeMs": 1060.750332660973
+          },
+          "metadata": {
+            "backendId": "malecns_lif_poc",
+            "datasetId": "male-cns:v1.0",
+            "dynamicsModel": "Shiu-style LIF adaptation in persistent NumPy runtime",
+            "recurrentWeightScale": 0.1,
+            "mode": "MALECNS",
+            "ready": false
+          }
+        }
+      ],
+      "initializationMs": 6.537166424095631
+    },
+    {
+      "seed": 20260923,
+      "frames": [
+        {
+          "sequence": 0,
+          "brainSimulationTimeMs": 100.0,
+          "windowMs": 100.0,
+          "requestedAction": "STOP",
+          "activeStimulusGroups": [],
+          "activeStimulusIds": [],
+          "brain": {
+            "DNp09_Hz": 0.0,
+            "DNp09_L_Hz": 0.0,
+            "DNp09_R_Hz": 0.0,
+            "DNa02_R_Hz": 0.0,
+            "DNa02_L_Hz": 0.0,
+            "DNa02Difference_Hz": 0.0
+          },
+          "wholeBrainSpikeCount": 0,
+          "performance": {
+            "windowMs": 100.0,
+            "stepWallTimeMs": 1062.813582830131
+          },
+          "metadata": {
+            "backendId": "malecns_lif_poc",
+            "datasetId": "male-cns:v1.0",
+            "dynamicsModel": "Shiu-style LIF adaptation in persistent NumPy runtime",
+            "recurrentWeightScale": 0.1,
+            "mode": "MALECNS",
+            "ready": false
+          }
+        },
+        {
+          "sequence": 1,
+          "brainSimulationTimeMs": 200.0,
+          "windowMs": 100.0,
+          "requestedAction": "TURN_R",
+          "activeStimulusGroups": [
+            "R"
+          ],
+          "activeStimulusIds": [
+            "13137",
+            "529641",
+            "14784",
+            "10975",
+            "11371",
+            "11625",
+            "14123",
+            "16327",
+            "14766",
+            "519926"
+          ],
+          "brain": {
+            "DNp09_Hz": 0.0,
+            "DNp09_L_Hz": 0.0,
+            "DNp09_R_Hz": 0.0,
+            "DNa02_R_Hz": 80.0,
+            "DNa02_L_Hz": 0.0,
+            "DNa02Difference_Hz": 80.0
+          },
+          "wholeBrainSpikeCount": 94,
+          "performance": {
+            "windowMs": 100.0,
+            "stepWallTimeMs": 1125.2729995176196
+          },
+          "metadata": {
+            "backendId": "malecns_lif_poc",
+            "datasetId": "male-cns:v1.0",
+            "dynamicsModel": "Shiu-style LIF adaptation in persistent NumPy runtime",
+            "recurrentWeightScale": 0.1,
+            "mode": "MALECNS",
+            "ready": false
+          }
+        },
+        {
+          "sequence": 2,
+          "brainSimulationTimeMs": 300.0,
+          "windowMs": 100.0,
+          "requestedAction": "STOP",
+          "activeStimulusGroups": [],
+          "activeStimulusIds": [],
+          "brain": {
+            "DNp09_Hz": 0.0,
+            "DNp09_L_Hz": 0.0,
+            "DNp09_R_Hz": 0.0,
+            "DNa02_R_Hz": 0.0,
+            "DNa02_L_Hz": 0.0,
+            "DNa02Difference_Hz": 0.0
+          },
+          "wholeBrainSpikeCount": 0,
+          "performance": {
+            "windowMs": 100.0,
+            "stepWallTimeMs": 1117.608000524342
+          },
+          "metadata": {
+            "backendId": "malecns_lif_poc",
+            "datasetId": "male-cns:v1.0",
+            "dynamicsModel": "Shiu-style LIF adaptation in persistent NumPy runtime",
+            "recurrentWeightScale": 0.1,
+            "mode": "MALECNS",
+            "ready": false
+          }
+        }
+      ],
+      "initializationMs": 5.976167507469654
+    }
+  ],
+  "benchmarks": [
+    {
+      "windowMs": 25,
+      "initializationMs": 5.2804164588451385,
+      "firstStep": {
+        "sequence": 0,
+        "brainSimulationTimeMs": 25.0,
+        "windowMs": 25.0,
+        "requestedAction": "STOP",
+        "activeStimulusGroups": [],
+        "activeStimulusIds": [],
+        "brain": {
+          "DNp09_Hz": 0.0,
+          "DNp09_L_Hz": 0.0,
+          "DNp09_R_Hz": 0.0,
+          "DNa02_R_Hz": 0.0,
+          "DNa02_L_Hz": 0.0,
+          "DNa02Difference_Hz": 0.0
+        },
+        "wholeBrainSpikeCount": 0,
+        "performance": {
+          "windowMs": 25.0,
+          "stepWallTimeMs": 305.88879249989986
+        },
+        "metadata": {
+          "backendId": "malecns_lif_poc",
+          "datasetId": "male-cns:v1.0",
+          "dynamicsModel": "Shiu-style LIF adaptation in persistent NumPy runtime",
+          "recurrentWeightScale": 0.1,
+          "mode": "MALECNS",
+          "ready": false
+        }
+      },
+      "warmFrames": [
+        {
+          "sequence": 1,
+          "brainSimulationTimeMs": 50.0,
+          "windowMs": 25.0,
+          "requestedAction": "STOP",
+          "activeStimulusGroups": [],
+          "activeStimulusIds": [],
+          "brain": {
+            "DNp09_Hz": 0.0,
+            "DNp09_L_Hz": 0.0,
+            "DNp09_R_Hz": 0.0,
+            "DNa02_R_Hz": 0.0,
+            "DNa02_L_Hz": 0.0,
+            "DNa02Difference_Hz": 0.0
+          },
+          "wholeBrainSpikeCount": 0,
+          "performance": {
+            "windowMs": 25.0,
+            "stepWallTimeMs": 277.48908288776875
+          },
+          "metadata": {
+            "backendId": "malecns_lif_poc",
+            "datasetId": "male-cns:v1.0",
+            "dynamicsModel": "Shiu-style LIF adaptation in persistent NumPy runtime",
+            "recurrentWeightScale": 0.1,
+            "mode": "MALECNS",
+            "ready": false
+          }
+        },
+        {
+          "sequence": 2,
+          "brainSimulationTimeMs": 75.0,
+          "windowMs": 25.0,
+          "requestedAction": "FORWARD",
+          "activeStimulusGroups": [
+            "F"
+          ],
+          "activeStimulusIds": [
+            "14033",
+            "11656",
+            "13672",
+            "13968",
+            "521212",
+            "544664",
+            "520401",
+            "14726",
+            "12980",
+            "11592",
+            "12964",
+            "13648",
+            "31440",
+            "11108",
+            "13336",
+            "18905",
+            "12018",
+            "20768",
+            "14789",
+            "526146"
+          ],
+          "brain": {
+            "DNp09_Hz": 0.0,
+            "DNp09_L_Hz": 0.0,
+            "DNp09_R_Hz": 0.0,
+            "DNa02_R_Hz": 0.0,
+            "DNa02_L_Hz": 0.0,
+            "DNa02Difference_Hz": 0.0
+          },
+          "wholeBrainSpikeCount": 42,
+          "performance": {
+            "windowMs": 25.0,
+            "stepWallTimeMs": 292.35016740858555
+          },
+          "metadata": {
+            "backendId": "malecns_lif_poc",
+            "datasetId": "male-cns:v1.0",
+            "dynamicsModel": "Shiu-style LIF adaptation in persistent NumPy runtime",
+            "recurrentWeightScale": 0.1,
+            "mode": "MALECNS",
+            "ready": false
+          }
+        },
+        {
+          "sequence": 3,
+          "brainSimulationTimeMs": 100.0,
+          "windowMs": 25.0,
+          "requestedAction": "STOP",
+          "activeStimulusGroups": [],
+          "activeStimulusIds": [],
+          "brain": {
+            "DNp09_Hz": 0.0,
+            "DNp09_L_Hz": 0.0,
+            "DNp09_R_Hz": 0.0,
+            "DNa02_R_Hz": 0.0,
+            "DNa02_L_Hz": 0.0,
+            "DNa02Difference_Hz": 0.0
+          },
+          "wholeBrainSpikeCount": 1,
+          "performance": {
+            "windowMs": 25.0,
+            "stepWallTimeMs": 269.68158315867186
+          },
+          "metadata": {
+            "backendId": "malecns_lif_poc",
+            "datasetId": "male-cns:v1.0",
+            "dynamicsModel": "Shiu-style LIF adaptation in persistent NumPy runtime",
+            "recurrentWeightScale": 0.1,
+            "mode": "MALECNS",
+            "ready": false
+          }
+        },
+        {
+          "sequence": 4,
+          "brainSimulationTimeMs": 125.0,
+          "windowMs": 25.0,
+          "requestedAction": "TURN_R",
+          "activeStimulusGroups": [
+            "R"
+          ],
+          "activeStimulusIds": [
+            "13137",
+            "529641",
+            "14784",
+            "10975",
+            "11371",
+            "11625",
+            "14123",
+            "16327",
+            "14766",
+            "519926"
+          ],
+          "brain": {
+            "DNp09_Hz": 0.0,
+            "DNp09_L_Hz": 0.0,
+            "DNp09_R_Hz": 0.0,
+            "DNa02_R_Hz": 40.0,
+            "DNa02_L_Hz": 0.0,
+            "DNa02Difference_Hz": 40.0
+          },
+          "wholeBrainSpikeCount": 19,
+          "performance": {
+            "windowMs": 25.0,
+            "stepWallTimeMs": 279.6039581298828
+          },
+          "metadata": {
+            "backendId": "malecns_lif_poc",
+            "datasetId": "male-cns:v1.0",
+            "dynamicsModel": "Shiu-style LIF adaptation in persistent NumPy runtime",
+            "recurrentWeightScale": 0.1,
+            "mode": "MALECNS",
+            "ready": false
+          }
+        },
+        {
+          "sequence": 5,
+          "brainSimulationTimeMs": 150.0,
+          "windowMs": 25.0,
+          "requestedAction": "STOP",
+          "activeStimulusGroups": [],
+          "activeStimulusIds": [],
+          "brain": {
+            "DNp09_Hz": 0.0,
+            "DNp09_L_Hz": 0.0,
+            "DNp09_R_Hz": 0.0,
+            "DNa02_R_Hz": 40.0,
+            "DNa02_L_Hz": 0.0,
+            "DNa02Difference_Hz": 40.0
+          },
+          "wholeBrainSpikeCount": 1,
+          "performance": {
+            "windowMs": 25.0,
+            "stepWallTimeMs": 269.039792008698
+          },
+          "metadata": {
+            "backendId": "malecns_lif_poc",
+            "datasetId": "male-cns:v1.0",
+            "dynamicsModel": "Shiu-style LIF adaptation in persistent NumPy runtime",
+            "recurrentWeightScale": 0.1,
+            "mode": "MALECNS",
+            "ready": false
+          }
+        },
+        {
+          "sequence": 6,
+          "brainSimulationTimeMs": 175.0,
+          "windowMs": 25.0,
+          "requestedAction": "TURN_L",
+          "activeStimulusGroups": [
+            "L"
+          ],
+          "activeStimulusIds": [
+            "13538",
+            "15957",
+            "519228",
+            "11306",
+            "14191",
+            "519624",
+            "519461",
+            "57832",
+            "10971",
+            "47107"
+          ],
+          "brain": {
+            "DNp09_Hz": 0.0,
+            "DNp09_L_Hz": 0.0,
+            "DNp09_R_Hz": 0.0,
+            "DNa02_R_Hz": 0.0,
+            "DNa02_L_Hz": 80.0,
+            "DNa02Difference_Hz": -80.0
+          },
+          "wholeBrainSpikeCount": 23,
+          "performance": {
+            "windowMs": 25.0,
+            "stepWallTimeMs": 285.78075021505356
+          },
+          "metadata": {
+            "backendId": "malecns_lif_poc",
+            "datasetId": "male-cns:v1.0",
+            "dynamicsModel": "Shiu-style LIF adaptation in persistent NumPy runtime",
+            "recurrentWeightScale": 0.1,
+            "mode": "MALECNS",
+            "ready": false
+          }
+        },
+        {
+          "sequence": 7,
+          "brainSimulationTimeMs": 200.0,
+          "windowMs": 25.0,
+          "requestedAction": "STOP",
+          "activeStimulusGroups": [],
+          "activeStimulusIds": [],
+          "brain": {
+            "DNp09_Hz": 0.0,
+            "DNp09_L_Hz": 0.0,
+            "DNp09_R_Hz": 0.0,
+            "DNa02_R_Hz": 0.0,
+            "DNa02_L_Hz": 0.0,
+            "DNa02Difference_Hz": 0.0
+          },
+          "wholeBrainSpikeCount": 0,
+          "performance": {
+            "windowMs": 25.0,
+            "stepWallTimeMs": 269.47616692632437
+          },
+          "metadata": {
+            "backendId": "malecns_lif_poc",
+            "datasetId": "male-cns:v1.0",
+            "dynamicsModel": "Shiu-style LIF adaptation in persistent NumPy runtime",
+            "recurrentWeightScale": 0.1,
+            "mode": "MALECNS",
+            "ready": false
+          }
+        },
+        {
+          "sequence": 8,
+          "brainSimulationTimeMs": 225.0,
+          "windowMs": 25.0,
+          "requestedAction": "FORWARD_R",
+          "activeStimulusGroups": [
+            "F",
+            "R"
+          ],
+          "activeStimulusIds": [
+            "14033",
+            "11656",
+            "13672",
+            "13968",
+            "521212",
+            "544664",
+            "520401",
+            "14726",
+            "12980",
+            "11592",
+            "12964",
+            "13648",
+            "31440",
+            "11108",
+            "13336",
+            "18905",
+            "12018",
+            "20768",
+            "14789",
+            "526146",
+            "13137",
+            "529641",
+            "14784",
+            "10975",
+            "11371",
+            "11625",
+            "14123",
+            "16327",
+            "14766",
+            "519926"
+          ],
+          "brain": {
+            "DNp09_Hz": 20.0,
+            "DNp09_L_Hz": 40.0,
+            "DNp09_R_Hz": 0.0,
+            "DNa02_R_Hz": 40.0,
+            "DNa02_L_Hz": 0.0,
+            "DNa02Difference_Hz": 40.0
+          },
+          "wholeBrainSpikeCount": 72,
+          "performance": {
+            "windowMs": 25.0,
+            "stepWallTimeMs": 294.3887496367097
+          },
+          "metadata": {
+            "backendId": "malecns_lif_poc",
+            "datasetId": "male-cns:v1.0",
+            "dynamicsModel": "Shiu-style LIF adaptation in persistent NumPy runtime",
+            "recurrentWeightScale": 0.1,
+            "mode": "MALECNS",
+            "ready": false
+          }
+        },
+        {
+          "sequence": 9,
+          "brainSimulationTimeMs": 250.0,
+          "windowMs": 25.0,
+          "requestedAction": "STOP",
+          "activeStimulusGroups": [],
+          "activeStimulusIds": [],
+          "brain": {
+            "DNp09_Hz": 0.0,
+            "DNp09_L_Hz": 0.0,
+            "DNp09_R_Hz": 0.0,
+            "DNa02_R_Hz": 40.0,
+            "DNa02_L_Hz": 0.0,
+            "DNa02Difference_Hz": 40.0
+          },
+          "wholeBrainSpikeCount": 2,
+          "performance": {
+            "windowMs": 25.0,
+            "stepWallTimeMs": 269.1563330590725
+          },
+          "metadata": {
+            "backendId": "malecns_lif_poc",
+            "datasetId": "male-cns:v1.0",
+            "dynamicsModel": "Shiu-style LIF adaptation in persistent NumPy runtime",
+            "recurrentWeightScale": 0.1,
+            "mode": "MALECNS",
+            "ready": false
+          }
+        },
+        {
+          "sequence": 10,
+          "brainSimulationTimeMs": 275.0,
+          "windowMs": 25.0,
+          "requestedAction": "FORWARD_L",
+          "activeStimulusGroups": [
+            "F",
+            "L"
+          ],
+          "activeStimulusIds": [
+            "14033",
+            "11656",
+            "13672",
+            "13968",
+            "521212",
+            "544664",
+            "520401",
+            "14726",
+            "12980",
+            "11592",
+            "12964",
+            "13648",
+            "31440",
+            "11108",
+            "13336",
+            "18905",
+            "12018",
+            "20768",
+            "14789",
+            "526146",
+            "13538",
+            "15957",
+            "519228",
+            "11306",
+            "14191",
+            "519624",
+            "519461",
+            "57832",
+            "10971",
+            "47107"
+          ],
+          "brain": {
+            "DNp09_Hz": 0.0,
+            "DNp09_L_Hz": 0.0,
+            "DNp09_R_Hz": 0.0,
+            "DNa02_R_Hz": 0.0,
+            "DNa02_L_Hz": 80.0,
+            "DNa02Difference_Hz": -80.0
+          },
+          "wholeBrainSpikeCount": 74,
+          "performance": {
+            "windowMs": 25.0,
+            "stepWallTimeMs": 286.2002504989505
+          },
+          "metadata": {
+            "backendId": "malecns_lif_poc",
+            "datasetId": "male-cns:v1.0",
+            "dynamicsModel": "Shiu-style LIF adaptation in persistent NumPy runtime",
+            "recurrentWeightScale": 0.1,
+            "mode": "MALECNS",
+            "ready": false
+          }
+        },
+        {
+          "sequence": 11,
+          "brainSimulationTimeMs": 300.0,
+          "windowMs": 25.0,
+          "requestedAction": "STOP",
+          "activeStimulusGroups": [],
+          "activeStimulusIds": [],
+          "brain": {
+            "DNp09_Hz": 20.0,
+            "DNp09_L_Hz": 40.0,
+            "DNp09_R_Hz": 0.0,
+            "DNa02_R_Hz": 0.0,
+            "DNa02_L_Hz": 40.0,
+            "DNa02Difference_Hz": -40.0
+          },
+          "wholeBrainSpikeCount": 2,
+          "performance": {
+            "windowMs": 25.0,
+            "stepWallTimeMs": 271.5380424633622
+          },
+          "metadata": {
+            "backendId": "malecns_lif_poc",
+            "datasetId": "male-cns:v1.0",
+            "dynamicsModel": "Shiu-style LIF adaptation in persistent NumPy runtime",
+            "recurrentWeightScale": 0.1,
+            "mode": "MALECNS",
+            "ready": false
+          }
+        }
+      ],
+      "sampleCount": 11,
+      "meanMs": 278.6095342175527,
+      "medianMs": 277.48908288776875,
+      "p95Ms": 293.3694585226476,
+      "maxMs": 294.3887496367097,
+      "simulatedToWallRatio": 0.08973131544191416
+    },
+    {
+      "windowMs": 50,
+      "initializationMs": 5.1906658336520195,
+      "firstStep": {
+        "sequence": 0,
+        "brainSimulationTimeMs": 50.0,
+        "windowMs": 50.0,
+        "requestedAction": "STOP",
+        "activeStimulusGroups": [],
+        "activeStimulusIds": [],
+        "brain": {
+          "DNp09_Hz": 0.0,
+          "DNp09_L_Hz": 0.0,
+          "DNp09_R_Hz": 0.0,
+          "DNa02_R_Hz": 0.0,
+          "DNa02_L_Hz": 0.0,
+          "DNa02Difference_Hz": 0.0
+        },
+        "wholeBrainSpikeCount": 0,
+        "performance": {
+          "windowMs": 50.0,
+          "stepWallTimeMs": 533.6965844035149
+        },
+        "metadata": {
+          "backendId": "malecns_lif_poc",
+          "datasetId": "male-cns:v1.0",
+          "dynamicsModel": "Shiu-style LIF adaptation in persistent NumPy runtime",
+          "recurrentWeightScale": 0.1,
+          "mode": "MALECNS",
+          "ready": false
+        }
+      },
+      "warmFrames": [
+        {
+          "sequence": 1,
+          "brainSimulationTimeMs": 100.0,
+          "windowMs": 50.0,
+          "requestedAction": "STOP",
+          "activeStimulusGroups": [],
+          "activeStimulusIds": [],
+          "brain": {
+            "DNp09_Hz": 0.0,
+            "DNp09_L_Hz": 0.0,
+            "DNp09_R_Hz": 0.0,
+            "DNa02_R_Hz": 0.0,
+            "DNa02_L_Hz": 0.0,
+            "DNa02Difference_Hz": 0.0
+          },
+          "wholeBrainSpikeCount": 0,
+          "performance": {
+            "windowMs": 50.0,
+            "stepWallTimeMs": 535.2625418454409
+          },
+          "metadata": {
+            "backendId": "malecns_lif_poc",
+            "datasetId": "male-cns:v1.0",
+            "dynamicsModel": "Shiu-style LIF adaptation in persistent NumPy runtime",
+            "recurrentWeightScale": 0.1,
+            "mode": "MALECNS",
+            "ready": false
+          }
+        },
+        {
+          "sequence": 2,
+          "brainSimulationTimeMs": 150.0,
+          "windowMs": 50.0,
+          "requestedAction": "FORWARD",
+          "activeStimulusGroups": [
+            "F"
+          ],
+          "activeStimulusIds": [
+            "14033",
+            "11656",
+            "13672",
+            "13968",
+            "521212",
+            "544664",
+            "520401",
+            "14726",
+            "12980",
+            "11592",
+            "12964",
+            "13648",
+            "31440",
+            "11108",
+            "13336",
+            "18905",
+            "12018",
+            "20768",
+            "14789",
+            "526146"
+          ],
+          "brain": {
+            "DNp09_Hz": 10.0,
+            "DNp09_L_Hz": 0.0,
+            "DNp09_R_Hz": 20.0,
+            "DNa02_R_Hz": 0.0,
+            "DNa02_L_Hz": 0.0,
+            "DNa02Difference_Hz": 0.0
+          },
+          "wholeBrainSpikeCount": 82,
+          "performance": {
+            "windowMs": 50.0,
+            "stepWallTimeMs": 565.895582549274
+          },
+          "metadata": {
+            "backendId": "malecns_lif_poc",
+            "datasetId": "male-cns:v1.0",
+            "dynamicsModel": "Shiu-style LIF adaptation in persistent NumPy runtime",
+            "recurrentWeightScale": 0.1,
+            "mode": "MALECNS",
+            "ready": false
+          }
+        },
+        {
+          "sequence": 3,
+          "brainSimulationTimeMs": 200.0,
+          "windowMs": 50.0,
+          "requestedAction": "STOP",
+          "activeStimulusGroups": [],
+          "activeStimulusIds": [],
+          "brain": {
+            "DNp09_Hz": 10.0,
+            "DNp09_L_Hz": 20.0,
+            "DNp09_R_Hz": 0.0,
+            "DNa02_R_Hz": 0.0,
+            "DNa02_L_Hz": 0.0,
+            "DNa02Difference_Hz": 0.0
+          },
+          "wholeBrainSpikeCount": 2,
+          "performance": {
+            "windowMs": 50.0,
+            "stepWallTimeMs": 536.07645817101
+          },
+          "metadata": {
+            "backendId": "malecns_lif_poc",
+            "datasetId": "male-cns:v1.0",
+            "dynamicsModel": "Shiu-style LIF adaptation in persistent NumPy runtime",
+            "recurrentWeightScale": 0.1,
+            "mode": "MALECNS",
+            "ready": false
+          }
+        },
+        {
+          "sequence": 4,
+          "brainSimulationTimeMs": 250.0,
+          "windowMs": 50.0,
+          "requestedAction": "TURN_R",
+          "activeStimulusGroups": [
+            "R"
+          ],
+          "activeStimulusIds": [
+            "13137",
+            "529641",
+            "14784",
+            "10975",
+            "11371",
+            "11625",
+            "14123",
+            "16327",
+            "14766",
+            "519926"
+          ],
+          "brain": {
+            "DNp09_Hz": 0.0,
+            "DNp09_L_Hz": 0.0,
+            "DNp09_R_Hz": 0.0,
+            "DNa02_R_Hz": 80.0,
+            "DNa02_L_Hz": 0.0,
+            "DNa02Difference_Hz": 80.0
+          },
+          "wholeBrainSpikeCount": 54,
+          "performance": {
+            "windowMs": 50.0,
+            "stepWallTimeMs": 563.1284583359957
+          },
+          "metadata": {
+            "backendId": "malecns_lif_poc",
+            "datasetId": "male-cns:v1.0",
+            "dynamicsModel": "Shiu-style LIF adaptation in persistent NumPy runtime",
+            "recurrentWeightScale": 0.1,
+            "mode": "MALECNS",
+            "ready": false
+          }
+        },
+        {
+          "sequence": 5,
+          "brainSimulationTimeMs": 300.0,
+          "windowMs": 50.0,
+          "requestedAction": "STOP",
+          "activeStimulusGroups": [],
+          "activeStimulusIds": [],
+          "brain": {
+            "DNp09_Hz": 0.0,
+            "DNp09_L_Hz": 0.0,
+            "DNp09_R_Hz": 0.0,
+            "DNa02_R_Hz": 20.0,
+            "DNa02_L_Hz": 0.0,
+            "DNa02Difference_Hz": 20.0
+          },
+          "wholeBrainSpikeCount": 1,
+          "performance": {
+            "windowMs": 50.0,
+            "stepWallTimeMs": 537.7624584361911
+          },
+          "metadata": {
+            "backendId": "malecns_lif_poc",
+            "datasetId": "male-cns:v1.0",
+            "dynamicsModel": "Shiu-style LIF adaptation in persistent NumPy runtime",
+            "recurrentWeightScale": 0.1,
+            "mode": "MALECNS",
+            "ready": false
+          }
+        },
+        {
+          "sequence": 6,
+          "brainSimulationTimeMs": 350.0,
+          "windowMs": 50.0,
+          "requestedAction": "TURN_L",
+          "activeStimulusGroups": [
+            "L"
+          ],
+          "activeStimulusIds": [
+            "13538",
+            "15957",
+            "519228",
+            "11306",
+            "14191",
+            "519624",
+            "519461",
+            "57832",
+            "10971",
+            "47107"
+          ],
+          "brain": {
+            "DNp09_Hz": 0.0,
+            "DNp09_L_Hz": 0.0,
+            "DNp09_R_Hz": 0.0,
+            "DNa02_R_Hz": 0.0,
+            "DNa02_L_Hz": 100.0,
+            "DNa02Difference_Hz": -100.0
+          },
+          "wholeBrainSpikeCount": 59,
+          "performance": {
+            "windowMs": 50.0,
+            "stepWallTimeMs": 565.8675003796816
+          },
+          "metadata": {
+            "backendId": "malecns_lif_poc",
+            "datasetId": "male-cns:v1.0",
+            "dynamicsModel": "Shiu-style LIF adaptation in persistent NumPy runtime",
+            "recurrentWeightScale": 0.1,
+            "mode": "MALECNS",
+            "ready": false
+          }
+        },
+        {
+          "sequence": 7,
+          "brainSimulationTimeMs": 400.0,
+          "windowMs": 50.0,
+          "requestedAction": "STOP",
+          "activeStimulusGroups": [],
+          "activeStimulusIds": [],
+          "brain": {
+            "DNp09_Hz": 0.0,
+            "DNp09_L_Hz": 0.0,
+            "DNp09_R_Hz": 0.0,
+            "DNa02_R_Hz": 0.0,
+            "DNa02_L_Hz": 0.0,
+            "DNa02Difference_Hz": 0.0
+          },
+          "wholeBrainSpikeCount": 0,
+          "performance": {
+            "windowMs": 50.0,
+            "stepWallTimeMs": 535.1657904684544
+          },
+          "metadata": {
+            "backendId": "malecns_lif_poc",
+            "datasetId": "male-cns:v1.0",
+            "dynamicsModel": "Shiu-style LIF adaptation in persistent NumPy runtime",
+            "recurrentWeightScale": 0.1,
+            "mode": "MALECNS",
+            "ready": false
+          }
+        },
+        {
+          "sequence": 8,
+          "brainSimulationTimeMs": 450.0,
+          "windowMs": 50.0,
+          "requestedAction": "FORWARD_R",
+          "activeStimulusGroups": [
+            "F",
+            "R"
+          ],
+          "activeStimulusIds": [
+            "14033",
+            "11656",
+            "13672",
+            "13968",
+            "521212",
+            "544664",
+            "520401",
+            "14726",
+            "12980",
+            "11592",
+            "12964",
+            "13648",
+            "31440",
+            "11108",
+            "13336",
+            "18905",
+            "12018",
+            "20768",
+            "14789",
+            "526146",
+            "13137",
+            "529641",
+            "14784",
+            "10975",
+            "11371",
+            "11625",
+            "14123",
+            "16327",
+            "14766",
+            "519926"
+          ],
+          "brain": {
+            "DNp09_Hz": 30.0,
+            "DNp09_L_Hz": 40.0,
+            "DNp09_R_Hz": 20.0,
+            "DNa02_R_Hz": 80.0,
+            "DNa02_L_Hz": 0.0,
+            "DNa02Difference_Hz": 80.0
+          },
+          "wholeBrainSpikeCount": 157,
+          "performance": {
+            "windowMs": 50.0,
+            "stepWallTimeMs": 571.3658332824707
+          },
+          "metadata": {
+            "backendId": "malecns_lif_poc",
+            "datasetId": "male-cns:v1.0",
+            "dynamicsModel": "Shiu-style LIF adaptation in persistent NumPy runtime",
+            "recurrentWeightScale": 0.1,
+            "mode": "MALECNS",
+            "ready": false
+          }
+        },
+        {
+          "sequence": 9,
+          "brainSimulationTimeMs": 500.0,
+          "windowMs": 50.0,
+          "requestedAction": "STOP",
+          "activeStimulusGroups": [],
+          "activeStimulusIds": [],
+          "brain": {
+            "DNp09_Hz": 0.0,
+            "DNp09_L_Hz": 0.0,
+            "DNp09_R_Hz": 0.0,
+            "DNa02_R_Hz": 0.0,
+            "DNa02_L_Hz": 0.0,
+            "DNa02Difference_Hz": 0.0
+          },
+          "wholeBrainSpikeCount": 3,
+          "performance": {
+            "windowMs": 50.0,
+            "stepWallTimeMs": 540.6494159251451
+          },
+          "metadata": {
+            "backendId": "malecns_lif_poc",
+            "datasetId": "male-cns:v1.0",
+            "dynamicsModel": "Shiu-style LIF adaptation in persistent NumPy runtime",
+            "recurrentWeightScale": 0.1,
+            "mode": "MALECNS",
+            "ready": false
+          }
+        },
+        {
+          "sequence": 10,
+          "brainSimulationTimeMs": 550.0,
+          "windowMs": 50.0,
+          "requestedAction": "FORWARD_L",
+          "activeStimulusGroups": [
+            "F",
+            "L"
+          ],
+          "activeStimulusIds": [
+            "14033",
+            "11656",
+            "13672",
+            "13968",
+            "521212",
+            "544664",
+            "520401",
+            "14726",
+            "12980",
+            "11592",
+            "12964",
+            "13648",
+            "31440",
+            "11108",
+            "13336",
+            "18905",
+            "12018",
+            "20768",
+            "14789",
+            "526146",
+            "13538",
+            "15957",
+            "519228",
+            "11306",
+            "14191",
+            "519624",
+            "519461",
+            "57832",
+            "10971",
+            "47107"
+          ],
+          "brain": {
+            "DNp09_Hz": 20.0,
+            "DNp09_L_Hz": 20.0,
+            "DNp09_R_Hz": 20.0,
+            "DNa02_R_Hz": 0.0,
+            "DNa02_L_Hz": 100.0,
+            "DNa02Difference_Hz": -100.0
+          },
+          "wholeBrainSpikeCount": 163,
+          "performance": {
+            "windowMs": 50.0,
+            "stepWallTimeMs": 584.778000600636
+          },
+          "metadata": {
+            "backendId": "malecns_lif_poc",
+            "datasetId": "male-cns:v1.0",
+            "dynamicsModel": "Shiu-style LIF adaptation in persistent NumPy runtime",
+            "recurrentWeightScale": 0.1,
+            "mode": "MALECNS",
+            "ready": false
+          }
+        },
+        {
+          "sequence": 11,
+          "brainSimulationTimeMs": 600.0,
+          "windowMs": 50.0,
+          "requestedAction": "STOP",
+          "activeStimulusGroups": [],
+          "activeStimulusIds": [],
+          "brain": {
+            "DNp09_Hz": 0.0,
+            "DNp09_L_Hz": 0.0,
+            "DNp09_R_Hz": 0.0,
+            "DNa02_R_Hz": 0.0,
+            "DNa02_L_Hz": 0.0,
+            "DNa02Difference_Hz": 0.0
+          },
+          "wholeBrainSpikeCount": 8,
+          "performance": {
+            "windowMs": 50.0,
+            "stepWallTimeMs": 541.00879188627
+          },
+          "metadata": {
+            "backendId": "malecns_lif_poc",
+            "datasetId": "male-cns:v1.0",
+            "dynamicsModel": "Shiu-style LIF adaptation in persistent NumPy runtime",
+            "recurrentWeightScale": 0.1,
+            "mode": "MALECNS",
+            "ready": false
+          }
+        }
+      ],
+      "sampleCount": 11,
+      "meanMs": 552.4509847164154,
+      "medianMs": 541.00879188627,
+      "p95Ms": 578.0719169415534,
+      "maxMs": 584.778000600636,
+      "simulatedToWallRatio": 0.09050576681597561
+    },
+    {
+      "windowMs": 100,
+      "initializationMs": 6.19883369654417,
+      "firstStep": {
+        "sequence": 0,
+        "brainSimulationTimeMs": 100.0,
+        "windowMs": 100.0,
+        "requestedAction": "STOP",
+        "activeStimulusGroups": [],
+        "activeStimulusIds": [],
+        "brain": {
+          "DNp09_Hz": 0.0,
+          "DNp09_L_Hz": 0.0,
+          "DNp09_R_Hz": 0.0,
+          "DNa02_R_Hz": 0.0,
+          "DNa02_L_Hz": 0.0,
+          "DNa02Difference_Hz": 0.0
+        },
+        "wholeBrainSpikeCount": 0,
+        "performance": {
+          "windowMs": 100.0,
+          "stepWallTimeMs": 1080.2638744935393
+        },
+        "metadata": {
+          "backendId": "malecns_lif_poc",
+          "datasetId": "male-cns:v1.0",
+          "dynamicsModel": "Shiu-style LIF adaptation in persistent NumPy runtime",
+          "recurrentWeightScale": 0.1,
+          "mode": "MALECNS",
+          "ready": false
+        }
+      },
+      "warmFrames": [
+        {
+          "sequence": 1,
+          "brainSimulationTimeMs": 200.0,
+          "windowMs": 100.0,
+          "requestedAction": "STOP",
+          "activeStimulusGroups": [],
+          "activeStimulusIds": [],
+          "brain": {
+            "DNp09_Hz": 0.0,
+            "DNp09_L_Hz": 0.0,
+            "DNp09_R_Hz": 0.0,
+            "DNa02_R_Hz": 0.0,
+            "DNa02_L_Hz": 0.0,
+            "DNa02Difference_Hz": 0.0
+          },
+          "wholeBrainSpikeCount": 0,
+          "performance": {
+            "windowMs": 100.0,
+            "stepWallTimeMs": 1084.6965843811631
+          },
+          "metadata": {
+            "backendId": "malecns_lif_poc",
+            "datasetId": "male-cns:v1.0",
+            "dynamicsModel": "Shiu-style LIF adaptation in persistent NumPy runtime",
+            "recurrentWeightScale": 0.1,
+            "mode": "MALECNS",
+            "ready": false
+          }
+        },
+        {
+          "sequence": 2,
+          "brainSimulationTimeMs": 300.0,
+          "windowMs": 100.0,
+          "requestedAction": "FORWARD",
+          "activeStimulusGroups": [
+            "F"
+          ],
+          "activeStimulusIds": [
+            "14033",
+            "11656",
+            "13672",
+            "13968",
+            "521212",
+            "544664",
+            "520401",
+            "14726",
+            "12980",
+            "11592",
+            "12964",
+            "13648",
+            "31440",
+            "11108",
+            "13336",
+            "18905",
+            "12018",
+            "20768",
+            "14789",
+            "526146"
+          ],
+          "brain": {
+            "DNp09_Hz": 20.0,
+            "DNp09_L_Hz": 20.0,
+            "DNp09_R_Hz": 20.0,
+            "DNa02_R_Hz": 0.0,
+            "DNa02_L_Hz": 0.0,
+            "DNa02Difference_Hz": 0.0
+          },
+          "wholeBrainSpikeCount": 191,
+          "performance": {
+            "windowMs": 100.0,
+            "stepWallTimeMs": 1152.5657922029495
+          },
+          "metadata": {
+            "backendId": "malecns_lif_poc",
+            "datasetId": "male-cns:v1.0",
+            "dynamicsModel": "Shiu-style LIF adaptation in persistent NumPy runtime",
+            "recurrentWeightScale": 0.1,
+            "mode": "MALECNS",
+            "ready": false
+          }
+        },
+        {
+          "sequence": 3,
+          "brainSimulationTimeMs": 400.0,
+          "windowMs": 100.0,
+          "requestedAction": "STOP",
+          "activeStimulusGroups": [],
+          "activeStimulusIds": [],
+          "brain": {
+            "DNp09_Hz": 5.0,
+            "DNp09_L_Hz": 0.0,
+            "DNp09_R_Hz": 10.0,
+            "DNa02_R_Hz": 0.0,
+            "DNa02_L_Hz": 0.0,
+            "DNa02Difference_Hz": 0.0
+          },
+          "wholeBrainSpikeCount": 3,
+          "performance": {
+            "windowMs": 100.0,
+            "stepWallTimeMs": 1085.40774974972
+          },
+          "metadata": {
+            "backendId": "malecns_lif_poc",
+            "datasetId": "male-cns:v1.0",
+            "dynamicsModel": "Shiu-style LIF adaptation in persistent NumPy runtime",
+            "recurrentWeightScale": 0.1,
+            "mode": "MALECNS",
+            "ready": false
+          }
+        },
+        {
+          "sequence": 4,
+          "brainSimulationTimeMs": 500.0,
+          "windowMs": 100.0,
+          "requestedAction": "TURN_R",
+          "activeStimulusGroups": [
+            "R"
+          ],
+          "activeStimulusIds": [
+            "13137",
+            "529641",
+            "14784",
+            "10975",
+            "11371",
+            "11625",
+            "14123",
+            "16327",
+            "14766",
+            "519926"
+          ],
+          "brain": {
+            "DNp09_Hz": 0.0,
+            "DNp09_L_Hz": 0.0,
+            "DNp09_R_Hz": 0.0,
+            "DNa02_R_Hz": 90.0,
+            "DNa02_L_Hz": 0.0,
+            "DNa02Difference_Hz": 90.0
+          },
+          "wholeBrainSpikeCount": 110,
+          "performance": {
+            "windowMs": 100.0,
+            "stepWallTimeMs": 1141.1888748407364
+          },
+          "metadata": {
+            "backendId": "malecns_lif_poc",
+            "datasetId": "male-cns:v1.0",
+            "dynamicsModel": "Shiu-style LIF adaptation in persistent NumPy runtime",
+            "recurrentWeightScale": 0.1,
+            "mode": "MALECNS",
+            "ready": false
+          }
+        },
+        {
+          "sequence": 5,
+          "brainSimulationTimeMs": 600.0,
+          "windowMs": 100.0,
+          "requestedAction": "STOP",
+          "activeStimulusGroups": [],
+          "activeStimulusIds": [],
+          "brain": {
+            "DNp09_Hz": 0.0,
+            "DNp09_L_Hz": 0.0,
+            "DNp09_R_Hz": 0.0,
+            "DNa02_R_Hz": 0.0,
+            "DNa02_L_Hz": 0.0,
+            "DNa02Difference_Hz": 0.0
+          },
+          "wholeBrainSpikeCount": 0,
+          "performance": {
+            "windowMs": 100.0,
+            "stepWallTimeMs": 1076.429458335042
+          },
+          "metadata": {
+            "backendId": "malecns_lif_poc",
+            "datasetId": "male-cns:v1.0",
+            "dynamicsModel": "Shiu-style LIF adaptation in persistent NumPy runtime",
+            "recurrentWeightScale": 0.1,
+            "mode": "MALECNS",
+            "ready": false
+          }
+        },
+        {
+          "sequence": 6,
+          "brainSimulationTimeMs": 700.0,
+          "windowMs": 100.0,
+          "requestedAction": "TURN_L",
+          "activeStimulusGroups": [
+            "L"
+          ],
+          "activeStimulusIds": [
+            "13538",
+            "15957",
+            "519228",
+            "11306",
+            "14191",
+            "519624",
+            "519461",
+            "57832",
+            "10971",
+            "47107"
+          ],
+          "brain": {
+            "DNp09_Hz": 0.0,
+            "DNp09_L_Hz": 0.0,
+            "DNp09_R_Hz": 0.0,
+            "DNa02_R_Hz": 0.0,
+            "DNa02_L_Hz": 90.0,
+            "DNa02Difference_Hz": -90.0
+          },
+          "wholeBrainSpikeCount": 107,
+          "performance": {
+            "windowMs": 100.0,
+            "stepWallTimeMs": 1143.8659997656941
+          },
+          "metadata": {
+            "backendId": "malecns_lif_poc",
+            "datasetId": "male-cns:v1.0",
+            "dynamicsModel": "Shiu-style LIF adaptation in persistent NumPy runtime",
+            "recurrentWeightScale": 0.1,
+            "mode": "MALECNS",
+            "ready": false
+          }
+        },
+        {
+          "sequence": 7,
+          "brainSimulationTimeMs": 800.0,
+          "windowMs": 100.0,
+          "requestedAction": "STOP",
+          "activeStimulusGroups": [],
+          "activeStimulusIds": [],
+          "brain": {
+            "DNp09_Hz": 0.0,
+            "DNp09_L_Hz": 0.0,
+            "DNp09_R_Hz": 0.0,
+            "DNa02_R_Hz": 0.0,
+            "DNa02_L_Hz": 10.0,
+            "DNa02Difference_Hz": -10.0
+          },
+          "wholeBrainSpikeCount": 1,
+          "performance": {
+            "windowMs": 100.0,
+            "stepWallTimeMs": 1079.052958637476
+          },
+          "metadata": {
+            "backendId": "malecns_lif_poc",
+            "datasetId": "male-cns:v1.0",
+            "dynamicsModel": "Shiu-style LIF adaptation in persistent NumPy runtime",
+            "recurrentWeightScale": 0.1,
+            "mode": "MALECNS",
+            "ready": false
+          }
+        },
+        {
+          "sequence": 8,
+          "brainSimulationTimeMs": 900.0,
+          "windowMs": 100.0,
+          "requestedAction": "FORWARD_R",
+          "activeStimulusGroups": [
+            "F",
+            "R"
+          ],
+          "activeStimulusIds": [
+            "14033",
+            "11656",
+            "13672",
+            "13968",
+            "521212",
+            "544664",
+            "520401",
+            "14726",
+            "12980",
+            "11592",
+            "12964",
+            "13648",
+            "31440",
+            "11108",
+            "13336",
+            "18905",
+            "12018",
+            "20768",
+            "14789",
+            "526146",
+            "13137",
+            "529641",
+            "14784",
+            "10975",
+            "11371",
+            "11625",
+            "14123",
+            "16327",
+            "14766",
+            "519926"
+          ],
+          "brain": {
+            "DNp09_Hz": 25.0,
+            "DNp09_L_Hz": 30.0,
+            "DNp09_R_Hz": 20.0,
+            "DNa02_R_Hz": 80.0,
+            "DNa02_L_Hz": 0.0,
+            "DNa02Difference_Hz": 80.0
+          },
+          "wholeBrainSpikeCount": 336,
+          "performance": {
+            "windowMs": 100.0,
+            "stepWallTimeMs": 1164.545583538711
+          },
+          "metadata": {
+            "backendId": "malecns_lif_poc",
+            "datasetId": "male-cns:v1.0",
+            "dynamicsModel": "Shiu-style LIF adaptation in persistent NumPy runtime",
+            "recurrentWeightScale": 0.1,
+            "mode": "MALECNS",
+            "ready": false
+          }
+        },
+        {
+          "sequence": 9,
+          "brainSimulationTimeMs": 1000.0,
+          "windowMs": 100.0,
+          "requestedAction": "STOP",
+          "activeStimulusGroups": [],
+          "activeStimulusIds": [],
+          "brain": {
+            "DNp09_Hz": 5.0,
+            "DNp09_L_Hz": 0.0,
+            "DNp09_R_Hz": 10.0,
+            "DNa02_R_Hz": 0.0,
+            "DNa02_L_Hz": 0.0,
+            "DNa02Difference_Hz": 0.0
+          },
+          "wholeBrainSpikeCount": 7,
+          "performance": {
+            "windowMs": 100.0,
+            "stepWallTimeMs": 1092.5142923370004
+          },
+          "metadata": {
+            "backendId": "malecns_lif_poc",
+            "datasetId": "male-cns:v1.0",
+            "dynamicsModel": "Shiu-style LIF adaptation in persistent NumPy runtime",
+            "recurrentWeightScale": 0.1,
+            "mode": "MALECNS",
+            "ready": false
+          }
+        },
+        {
+          "sequence": 10,
+          "brainSimulationTimeMs": 1100.0,
+          "windowMs": 100.0,
+          "requestedAction": "FORWARD_L",
+          "activeStimulusGroups": [
+            "F",
+            "L"
+          ],
+          "activeStimulusIds": [
+            "14033",
+            "11656",
+            "13672",
+            "13968",
+            "521212",
+            "544664",
+            "520401",
+            "14726",
+            "12980",
+            "11592",
+            "12964",
+            "13648",
+            "31440",
+            "11108",
+            "13336",
+            "18905",
+            "12018",
+            "20768",
+            "14789",
+            "526146",
+            "13538",
+            "15957",
+            "519228",
+            "11306",
+            "14191",
+            "519624",
+            "519461",
+            "57832",
+            "10971",
+            "47107"
+          ],
+          "brain": {
+            "DNp09_Hz": 25.0,
+            "DNp09_L_Hz": 30.0,
+            "DNp09_R_Hz": 20.0,
+            "DNa02_R_Hz": 0.0,
+            "DNa02_L_Hz": 90.0,
+            "DNa02Difference_Hz": -90.0
+          },
+          "wholeBrainSpikeCount": 350,
+          "performance": {
+            "windowMs": 100.0,
+            "stepWallTimeMs": 1164.481082931161
+          },
+          "metadata": {
+            "backendId": "malecns_lif_poc",
+            "datasetId": "male-cns:v1.0",
+            "dynamicsModel": "Shiu-style LIF adaptation in persistent NumPy runtime",
+            "recurrentWeightScale": 0.1,
+            "mode": "MALECNS",
+            "ready": false
+          }
+        },
+        {
+          "sequence": 11,
+          "brainSimulationTimeMs": 1200.0,
+          "windowMs": 100.0,
+          "requestedAction": "STOP",
+          "activeStimulusGroups": [],
+          "activeStimulusIds": [],
+          "brain": {
+            "DNp09_Hz": 0.0,
+            "DNp09_L_Hz": 0.0,
+            "DNp09_R_Hz": 0.0,
+            "DNa02_R_Hz": 0.0,
+            "DNa02_L_Hz": 10.0,
+            "DNa02Difference_Hz": -10.0
+          },
+          "wholeBrainSpikeCount": 5,
+          "performance": {
+            "windowMs": 100.0,
+            "stepWallTimeMs": 1083.6600000038743
+          },
+          "metadata": {
+            "backendId": "malecns_lif_poc",
+            "datasetId": "male-cns:v1.0",
+            "dynamicsModel": "Shiu-style LIF adaptation in persistent NumPy runtime",
+            "recurrentWeightScale": 0.1,
+            "mode": "MALECNS",
+            "ready": false
+          }
+        }
+      ],
+      "sampleCount": 11,
+      "meanMs": 1115.3098524294116,
+      "medianMs": 1092.5142923370004,
+      "p95Ms": 1164.513333234936,
+      "maxMs": 1164.545583538711,
+      "simulatedToWallRatio": 0.08966118230030523
+    }
+  ],
+  "acceptanceReady": false
+}
