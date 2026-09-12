@@ -1,97 +1,89 @@
 # Unity 映像配信の運用手順
 
-この機能は、Unity の最終 framebuffer を独立したローカル映像としてブラウザへ表示する。Brain、Bridge、ゲーム入力、motor 制御、session 対応は扱わない。既存 Scene の変更は不要で、設定ファイルを置いた環境だけが配信する。
+経路は `Unity framebuffer → JPEG → HTTP publisher → aiortc → WebRTC video-only → browser` である。これはJPEG pipelineであり、`com.unity.webrtc` へのnative rewrite、音声、Brain操作、公開サーバー、TURNは対象外。Scene変更は不要で、設定が有効な環境だけが配信する。
 
-## 経路と制約
+## 起動
 
-経路は次の通りである。
-
-`Unity 最終 framebuffer → JPEG（既定 960x540 / 15 fps / q75）→ HTTP（localhost または SSH port forward）→ aiortc → WebRTC → browser`
-
-これは pure end-to-end WebRTC ではない。Unity から backend までは HTTP JPEG ingress であり、backend が aiortc で WebRTC の video track に変換する。JPEG の中間生成と CPU encode がある。音声は対象外である。Unity の `UnityWebRequest` module を使い、`com.unity.webrtc` は使わない。
-
-backend、Unity publisher、browser は既定で `127.0.0.1`/`localhost` に限定され、LAN 公開は未実装である。backend の既定 bind/port は `127.0.0.1:8880`。Origin は `http` の `127.0.0.1` / `localhost` と、8771、検証用18771、4173、backend自身のportの組合せだけが許可される。
-
-## backend の起動（Mac / Windows 共通）
-
-Python 3.10 以上を使う。リポジトリルートで次を実行する。Mac:
+リポジトリルートで Python 3.10 以上を使う。
 
 ```sh
 python3 -m venv .venv-video
 .venv-video/bin/python -m pip install -r Runtime/Video/requirements.txt
 .venv-video/bin/python tools/video.py init --stream unity-mac
 .venv-video/bin/python tools/video.py doctor
-.venv-video/bin/python tools/video.py serve
+.venv-video/bin/python tools/video.py up --config Runtime/Video/local/backend.json --metrics-output artifacts/video-up.jsonl
 ```
 
-Windows PowerShell（venvのactivateやExecutionPolicy変更は不要）:
-
-```powershell
-py -3 -m venv .venv-video
-.venv-video\Scripts\python.exe -m pip install -r Runtime/Video/requirements.txt
-.venv-video\Scripts\python.exe tools/video.py init --stream unity-windows
-.venv-video\Scripts\python.exe tools/video.py doctor
-.venv-video\Scripts\python.exe tools/video.py serve
+`up` は backend を foreground で起動し、`--player <実行ファイルまたは.app>` と `--publisher-config <publisher.json>` を同じ supervisor で起動できる。`--ssh-target user@host` は、remote backendが既に起動している場合に同じportのSSH forwardだけを監督し、remote processを起動・停止・制御しない。`status` は読み取り専用、`up` は自分が起動した子だけを追跡する。終了は Ctrl-C または SIGTERM で、所有した process groupだけを停止する。既存portのprocessを採用・killしない。
+```sh
+.venv-video/bin/python tools/video.py status --config Runtime/Video/local/backend.json
 ```
 
-Windows で stream を選ぶ場合は `init --stream unity-windows` とする。`init` は既存の `Runtime/Video/local/backend.json`、`publisher.json`、`publish-token.txt` を上書きしない。`doctor` は設定と依存を検査し、`unityCaptureVerified` と `webRtcVerified` は実映像検証なしでは `false` のままである。`serve` は `http://127.0.0.1:8880` に bind する。
+`status` の結果は `{mode,backendReachable,health,unityPlayerValidated:false}` で、5キー（`service`、`instanceId`、`uptimeSeconds`、`viewers`、`streams`）は nested `health` object にある。`streams` の各status objectで `waiting/live/stale`、sequence、frameAge、publisher/source、metricsを確認する。healthが別instanceIdなら、別backendを見ているためready扱いしない。
 
-既存の local 設定を明示する場合は、両コマンドに `--config /絶対パス/Runtime/Video/local/backend.json` を付ける。backend 設定の `port` を 8880 以外にした場合、bind、Host 検査、allowedOrigins、publisher endpoint、browser endpoint、SSH forward のポートを全て一致させる必要がある。SSH の転送先だけを 18880 に変えて backend が 8880 のままだと、Host 検査で拒否されるため使用しない。まず同じ 8880 番を forward する。
+Mac Playerの実行例は `.venv-video/bin/python tools/video.py up --config Runtime/Video/local/backend.json --player /path/to/Fly.app --publisher-config Runtime/Video/local/publisher.json`。Windowsでは `py -3 -m venv .venv-video` の後、`.venv-video\Scripts\python.exe -m pip install -r Runtime\Video\requirements.txt` で同じ依存関係を用意し、`.venv-video\Scripts\python.exe tools\video.py up --config Runtime\Video\local\backend.json --player C:\Games\Fly.exe --publisher-config Runtime\Video\local\publisher.json` を使用する（Windowsでの実行は未検証）。
 
-## Unity Editor / Player の設定
+Windows PowerShellでも同じ設計だが、今回の作業ではWindows standaloneの実行とWindows→Mac実接続は意図的にout of scopeである。過去のWindowsコマンドを現行の実証とはみなさない。
 
-Unity Editor は、リポジトリの `Runtime/Video/local/publisher.json` が存在し、`enabled: true` のとき、Play 開始後に bootstrap する。現在の雛形は `streamId: unity-mac`、endpoint `http://127.0.0.1:8880`、幅 960、高さ 540、15 fps、JPEG quality 75 である。Mac/Windows は `streamId` を `unity-mac` / `unity-windows` に切り替えて同じ backend の別 stream を選ぶ。Scene に publisher component を配置する必要はない。
+## 設定とsecret
 
-`verticalFlip: "auto"` は `SystemInfo.graphicsUVStartsAtTop` に合わせて画像の上下を補正する。Mac Metalで確認済み。Windowsの描画APIごとの実測は未実施で、必要な場合は設定だけで `"on"` / `"off"` を指定できる。幅・高さは上限で、画面の縦横比を維持して偶数サイズに縮小する。送信中のみ `Application.runInBackground` を有効化し、停止時に元へ戻す。EditorのGameビュー非表示やbatchmodeでは `WaitForEndOfFrame` の制約があるため、実映像確認はGameビューまたは通常Playerで行う。`-nographics` では配信しない。
+backendは `Runtime/Video/local/backend.json`、publisherは `Runtime/Video/local/publisher.json` を使う。`init` は既存設定、token fileを上書きしない。Playerの設定優先順は `-flyVideoConfig`（絶対path）→ `FLY_VIDEO_CONFIG` → Editorのlocal publisher.json → PlayerのpersistentDataPath/fly-video.json。相対path、未存在、`enabled:false` は配信しない。
 
-Player は次の優先順で設定を探す。
+publish secretは `FLY_VIDEO_PUBLISH_TOKEN` → configの `tokenFile`（相対ならconfig同居）の順。backendとpublisherは同じtokenを使う。tokenとlocal JSONはGit管理外。portを変える場合はbackend、publisher、browser endpoint、SSH forwardの映像service portを揃える。`allowedOrigins` はUIの実際のorigin（例 `http://127.0.0.1:18771`）を許可する設定で、service portと同じである必要はない。
+```sh
+ssh -N -o BatchMode=yes -o ExitOnForwardFailure=yes -L 8880:127.0.0.1:8880 user@mac-host
+```
 
-1. `-flyVideoConfig` の次の値（絶対パス）
-2. 環境変数 `FLY_VIDEO_CONFIG`
-3. Editor では `Runtime/Video/local/publisher.json`
-4. Player では `Application.persistentDataPath/fly-video.json`
+これはHTTP ingressだけを転送する。WebRTC UDPやLAN公開をSSHだけで成立させない。
 
-`-flyVideoConfig` が環境変数より優先される。設定が相対パス、存在しない、または `enabled` が false なら配信しない。Scene は変更しない。
+## Unity publisher と telemetry
 
-Player起動例（実際のゲームと設定ファイルのパスへ置換）:
+Sceneにcomponentを配置せず、enabled設定でbootstrapする。標準は960×540、15 fps、q75、`verticalFlip:"auto"`。`Application.runInBackground` は送信中だけ変更して停止時に戻す。`-nographics`、batchmode、非表示Game viewでは `WaitForEndOfFrame` の実映像を保証しない。
+
+各uploadは `X-Publisher-Id`、単調な `X-Frame-Sequence`、source label/OS、任意の `X-Frame-Metadata` を送る。telemetryの `captureMs`、`encodeMs`、`uploadMs`、`gameFps`、`videoFps`、`jpegBytes`、`diagnosticsOverlay` と、BrainMotorSourceから得た `brainIdentity` を送る。game FPSは `Update` の秒区間から計算する。metadataはbase64 JSON decoded最大4096 bytes、identityの文字列は1..128 printable ASCII。serverのFPS上限は10000で、これを設定値15 fpsの保証と混同しない。
+
+diagnostics overlayは既定falseで明示opt-inする。trueかつ実際の出力画像が256×8以上の場合のみencoded JPEGにmarkerを付ける。ゲームのRenderTextureやUIには書き込まない。probeは10秒stickyで、binding変更時にリセットする。markerの構造と測定の意味は [video-v1 protocol](../../Contracts/video-v1/protocol.md) に従う。
+
+## Browser と identity gate
+
+browserは config → video-only recvonly offer → answer → status の順で接続し、約500msでstatusを更新する。publisher切替、identity binding変更、stale、frame停止、peer failureでは旧映像を破棄して再接続する。
+
+再接続は最大6回、待ち時間は500ms、1s、2s、4s、8s、8s。browserの初回frame timeoutは2秒、通常の受信frame timeoutも2秒。headless `video_measure.py` の初回frame timeoutだけは5秒。3秒間の新しい描画frame受信でretry countをリセットする。`FlyVideo` は `state()`、`measurements()`、`setExpectedIdentity()`、`disconnect()` を公開する。measurementsは最大600件でimmutable。期待IDは既存のUI/backend sessionから渡し、実際にactive controllerのBrainMotorSourceとraw status/frame aliveを観測できた場合だけ照合する。
+
+一致条件は instance/session、利用可能なbackend/dataset/config/graph/source hash、`brainConnected=true`、UIが実際に観測したBrainFrame sequenceとの完全一致、identity freshness 750ms以内。recent cacheは最大128件で、同じframeの反復受信だけではfreshnessを延長しない。raw frameのmodeは実値（例 `MALECNS`）を記録し、literal `LIVE` を必須にしない。REPLAY/MOCKは実Brain経路の証拠にしない。欠落や証拠不足は `unknown` のまま、mismatchは `mismatch` とし映像を非表示にする。期待IDを渡していない単なるLIVEは、Brainとの一致を意味しない。
+
+browserの `visualRoundTripMs` は同じperformance clockで「probe request → Unity次frame → display callback」を測る上限値で、request/publisher待ちを含む。片方向capture latencyやPC間時刻差ではない。`tools/video_measure.py` は browser不要のaiortc受信計測で、`visualRoundTripToDecodeMs` は decoded frame到着までの値であり、browser表示値の代替ではない。
+
+## 30分計測と成果物
+
+`tools/video_measure.py` はUnity/Brainを制御せず、status identity bindingを監視し、source変更時にpeerを閉じ、WebRTC `getStats()`、受信FPS、frame gap、process CPU/RSS、reconnect、downtime、probe nonceをJSONLへ記録する。CPU 100%は1 core相当。出力はGit管理外 `artifacts` 配下に置く。
 
 ```sh
-/path/to/Fly.app/Contents/MacOS/Fly -flyVideoConfig /path/to/Flylingual/Runtime/Video/local/publisher.json
+.venv-video/bin/python tools/video_measure.py --endpoint http://127.0.0.1:8880 --stream unity-mac --duration 1800 --output artifacts/video-measure/run.jsonl --reconnect-every 300
 ```
 
-```powershell
-& 'C:\Games\Fly\Fly.exe' -flyVideoConfig 'C:\Dev\Flylingual\Runtime\Video\local\publisher.json'
-```
+`--reconnect-every` は任意で10秒以上。summaryは同名 `.summary.json`。出力が既にある場合は上書きしない。`maxFrameGapMs` は各接続中のdecode frame間隔で、再接続を挟む停止時間は `downtimeSeconds` で確認する。計画した再接続と予期しない失敗を分け、`headlessMetric`、sourceHashes、依存versionも併読する。
 
-secret は `FLY_VIDEO_PUBLISH_TOKEN` が最優先で、未設定なら publisher config の `tokenFile`（相対なら config と同じディレクトリ）から読む。backend も同じく `FLY_VIDEO_PUBLISH_TOKEN` を優先し、未設定なら backend config の `tokenFile` を読む。`init` が生成する token は 32 文字以上の ASCII で、local JSON と token は Git 管理外に置く。Windows から Mac backend へ publish する場合は、Mac 側と同じ token を安全な Git 外の方法でコピーするか、Windows 側で `FLY_VIDEO_PUBLISH_TOKEN` を設定する。
+## 検証結果（2026-09-12）
 
-## browser 接続
+Unity 6000.5.5f1で今回のC#をコンパイルし、compiler error 0・exit 0を確認した（`artifacts/video-ops-validation/compile.log`）。JavaScriptの構文確認とPlayer HTMLの再生成も成功している。
 
-ハエリンガルの設定で endpoint（例 `http://127.0.0.1:8880`）と stream を指定し、「映像をつなぐ」を押す。映像だけの確認なら `python -m http.server 4173 --bind 127.0.0.1 --directory Runtime/Player` でUIを配信して `http://127.0.0.1:4173/` を開く。会話も使う場合は既存Bridgeの同一origin `/player/` を使う。
+外部Chromeでは診断映像640×360・5 fpsを受信し、新frameの描画、publisher停止時の映像非表示、操作なしの自動復旧、明示切断後の停止維持を確認した。Brainとマイクは未接続。証拠は `artifacts/video-ops-validation/chrome-live.txt` / `chrome-live.png`、`chrome-paused.txt`、`chrome-recovered.txt`、`chrome-disconnected.txt` に保存している。
 
-browser は config、video-only recvonly offer、answer の順で接続し、その後 status を約500ms間隔で確認する。frame age が2秒を超える、publisherが切り替わる、または新しいvideo frameを描画できない場合はLIVEを解除し古い映像を非表示にする。再接続は明示操作で行う。ブラウザ側には送信用tokenを渡さない。
+HTTPの認証・Origin・metadata検査、probe応答、二重起動の拒否、SIGTERM時の所有process解放も確認した。Unixの終了済み接続が残る場合の起動判定を修正し、修正後も既存listenerを拒否することを確認している。証拠は同フォルダの `http-summary.json`、`sigterm-summary.json`、`invalid-preflight-summary.json`、`endurance-occupied-summary.json` にある。
 
-## Mac backend と Windows Unity を跨ぐ場合
+診断JPEG（640×360・5 fps）を2受信者で1800秒受信した。継続側は8,998 frame、300秒ごとに再接続する側は8,992 frame・計画再接続5回。予期しない失敗と観測されたRTP packet lossは両側0だった。各受信者のsummaryとraw JSONLは `artifacts/video-ops-validation/endurance-receiver-{steady,reconnect}.*` に保存している。
 
-推奨構成は Mac 上で backend と browser を同じマシンで動かし、Windows publisher から Mac の backend へ送る構成である。Windows 端末から Mac の backend を同じポートへ転送する例は次の通りである（値は置換する）。
+| 計測項目 | 結果 |
+|---|---|
+| backend CPU（1 core = 100%） | 中央値3.0%、最大4.5% |
+| backend RSS | 最初60秒の中央値124.6 MB、最後60秒132.5 MB、最大180.6 MB |
+| probe要求→decoded frame | 両受信者とも中央値約522 ms、p95約626 ms、各357 sample |
 
-```sh
-ssh -N -o ExitOnForwardFailure=yes -L 8880:127.0.0.1:8880 <user>@<mac-host>
-```
+CPU/RSSは両受信者の稼働期間が重なる区間で集計した。RSSは再接続直後に増え、その後下がる区間があり、この30分だけで長期のリーク不存在は保証しない。probe時間は5 fpsのpublisher待ちを含む往復の値で、Unityの片方向E2EやChrome表示遅延ではない。
 
-SSH は HTTP ingress の転送だけを担う。WebRTC の UDP を単純な SSH tunnel 転送として扱わない。backend と browser を別 PC に置く場合は、WebRTC candidate/NAT/TURN とネットワーク gate が別途必要である。現設定の `iceServers: []` は外部 STUN/TURN を使わない。
+原1800秒記録の `downtimeSeconds` は計画再接続の停止時間を含まない。計測終了後にこのカウンタだけを修正し、原記録を保持したまま30秒・10秒ごとの計画再接続で再確認した。144 frame・計画再接続2回・その他の失敗0、停止時間1.102秒を記録した（`artifacts/video-ops-validation/reconnect-downtime-receiver.summary.json`）。各runのsource hashを保存している。Unityのゲーム動作やゲームFPSはこの診断試験に含めない。
 
-## 検証状態
+新runtimeでのUnityゲーム負荷・実Brain照合・実Unity映像の長時間試験は未実施。[AGENTS.md](../../AGENTS.md)のWindows実BrainへLiveTcp接続する試験ルールに従い、MacのBrain未接続映像シーンを使う例外は承認待ちである。Windows単体・Windows→Macの実通信は今回の依頼から除外されている。公開配信、TURN、native Unity WebRTCへの移行も実施していない。
 
-`artifacts/video-protocol-validation.json` では synthetic publisher による 2 viewer、各 39 frame、640x360 decode、wrong origin 403、allowed origin 200、token 欠落 401、old sequence 409、競合 publisher 409、stale、cleanup 0 を確認済みである。`artifacts/video-compile.log` は Unity 6000.5.5f1 の batch compile が exit 0 である。
-
-Mac Unity 6000.5.5f1のPlayer build成功（`artifacts/video-build.log`）。既存 `FlyLocomotionSandbox` の実ゲーム画面を60フレーム、960x540、約12fpsでWebRTC受信（`artifacts/video-unity-validation.json`）。このシーンのmotorは既存MOCKであり、実Brain連携の検証ではない。
-
-初回の実画像で上下反転を発見し、送信側を補正して再buildした。修正版はハエリンガルUIで正しい向きのLIVE表示を目視確認（`artifacts/video/browser-unity-live.png`）。最終Unityコードではブラウザと同時に追加receiverで60frameを受信し、960x540・約10.9fps、Origin18771 HTTP200を確認（`artifacts/video-unity-final-validation.json`、source hashを含む）。Unity停止後にSTALE・旧映像非表示・明示再接続表示となることも確認。ブラウザのJS errorは0。会話・マイクは開始していない。
-
-Windows実機、Mac/Windows跨機、Windowsの描画API別の向き、TURN、遅延・CPU使用率・長時間安定性は未検証。15fpsは設定値で、常時15fpsやE2E遅延を保証する値ではない。映像とBrainのsession対応、身体制御、音声はこの映像gateに含めない。
-
-## 参照した一次資料
-
-- [aiortc API](https://aiortc.readthedocs.io/en/latest/api.html): peer connectionとvideo track。
-- [UnityのUV座標規約](https://docs.unity3d.com/ScriptReference/SystemInfo-graphicsUVStartsAtTop.html): 描画APIによる上下方向。
+以前のMac MOCK sceneによる60 frame・向き補正・LIVE/STALEの記録（`artifacts/video-unity-final-validation.json`、`artifacts/video/browser-unity-live.png`）は当時の証拠として保持し、今回追加した機能の実測証拠とは区別する。

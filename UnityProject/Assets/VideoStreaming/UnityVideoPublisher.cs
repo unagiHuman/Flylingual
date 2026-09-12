@@ -1,9 +1,11 @@
 using System;
 using System.Collections;
 using System.IO;
+using System.Text;
 using System.Text.RegularExpressions;
 using UnityEngine;
 using UnityEngine.Networking;
+using Stopwatch = System.Diagnostics.Stopwatch;
 
 namespace Flylingual.Video
 {
@@ -24,6 +26,7 @@ namespace Flylingual.Video
             public int jpegQuality = 75;
             public int requestTimeoutSeconds = 3;
             public string verticalFlip = "auto";
+            public bool diagnosticsOverlay = false;
         }
 
         Settings settings;
@@ -36,6 +39,17 @@ namespace Flylingual.Video
         RenderTexture fullSize;
         RenderTexture scaled;
         Texture2D pixels;
+        UnityVideoBrainIdentity brainIdentity;
+        Color[] markerColors;
+        uint markerColorsNonce;
+        uint probeNonce;
+        long rateStartTicks;
+        int updateFrames;
+        int acceptedFrames;
+        double gameFps;
+        double videoFps;
+        double previousUploadMs;
+        float publisherBusyRetrySeconds;
         bool previousRunInBackground;
         bool backgroundOwned;
         bool reportedFailure;
@@ -73,9 +87,12 @@ namespace Flylingual.Video
                 Validate(config, secret);
                 var root = new GameObject("Unity Video Publisher (runtime)");
                 DontDestroyOnLoad(root);
+                var identity = root.AddComponent<UnityVideoBrainIdentity>();
                 var component = root.AddComponent<UnityVideoPublisher>();
                 component.settings = config;
                 component.token = secret;
+                component.brainIdentity = identity;
+                identity.Initialize();
             }
             catch (Exception)
             {
@@ -118,6 +135,7 @@ namespace Flylingual.Video
             if (executionOs == "unsupported") { enabled = false; yield break; }
             publisherId = Guid.NewGuid().ToString("N");
             framesUrl = settings.endpoint.TrimEnd('/') + "/api/video/streams/" + settings.streamId + "/frames";
+            rateStartTicks = Stopwatch.GetTimestamp();
             previousRunInBackground = Application.runInBackground;
             Application.runInBackground = true;
             backgroundOwned = true;
@@ -128,8 +146,8 @@ namespace Flylingual.Video
             {
                 yield return endOfFrame;
                 if (Time.realtimeSinceStartupAsDouble < nextCapture || Screen.width < 16 || Screen.height < 16) continue;
-                byte[] jpeg;
-                try { jpeg = Capture(); }
+                CaptureResult capture;
+                try { capture = Capture(); }
                 catch (Exception)
                 {
                     Debug.LogError("VIDEO_CAPTURE_FAILED");
@@ -138,7 +156,7 @@ namespace Flylingual.Video
                 }
                 nextCapture = Time.realtimeSinceStartupAsDouble + 1.0 / settings.framesPerSecond;
                 upload = new UnityWebRequest(framesUrl, "POST");
-                upload.uploadHandler = new UploadHandlerRaw(jpeg);
+                upload.uploadHandler = new UploadHandlerRaw(capture.jpeg);
                 upload.downloadHandler = new DownloadHandlerBuffer();
                 upload.timeout = settings.requestTimeoutSeconds;
                 upload.redirectLimit = 0;
@@ -148,33 +166,77 @@ namespace Flylingual.Video
                 upload.SetRequestHeader("X-Frame-Sequence", (sequence++).ToString(System.Globalization.CultureInfo.InvariantCulture));
                 upload.SetRequestHeader("X-Execution-Os", executionOs);
                 upload.SetRequestHeader("X-Source-Label", settings.label);
+                upload.SetRequestHeader("X-Frame-Metadata", BuildFrameMetadata(capture));
                 // Only one frame in flight. Capture again after completion, never replay this JPEG.
+                long uploadStarted = Stopwatch.GetTimestamp();
                 yield return upload.SendWebRequest();
+                previousUploadMs = Math.Max(0, (Stopwatch.GetTimestamp() - uploadStarted) * 1000.0 / Stopwatch.Frequency);
                 bool success = upload.result == UnityWebRequest.Result.Success;
                 long status = upload.responseCode;
+                string response = upload.downloadHandler == null ? string.Empty : upload.downloadHandler.text;
                 upload.Dispose();
                 upload = null;
                 if (!success)
                 {
+                    string error = ReadErrorCode(response);
+                    if (status == 409 && error == "publisher_slot_in_use")
+                    {
+                        publisherBusyRetrySeconds = Mathf.Min(5f, publisherBusyRetrySeconds <= 0f ? 0.25f : publisherBusyRetrySeconds * 2f);
+                        yield return new WaitForSecondsRealtime(publisherBusyRetrySeconds);
+                        continue;
+                    }
                     if (!reportedFailure) Debug.LogWarning("VIDEO_UPLOAD_FAILED: HTTP " + status);
                     reportedFailure = true;
-                    if (status == 401 || status == 403 || status == 404 || status == 409)
+                    if (status == 401 || status == 403 || status == 404)
                     {
                         Debug.LogError("VIDEO_PUBLISHER_STOPPED: verify endpoint, token and stream ownership before restarting Play.");
                         enabled = false;
                         yield break;
                     }
+                    if (status == 409 && error == "old_frame_sequence")
+                    {
+                        Debug.LogError("VIDEO_PUBLISHER_STOPPED: frame sequence was rejected.");
+                        enabled = false;
+                        yield break;
+                    }
+                    if (status == 409)
+                    {
+                        Debug.LogError("VIDEO_PUBLISHER_STOPPED: stream ownership was rejected.");
+                        enabled = false;
+                        yield break;
+                    }
                     yield return new WaitForSecondsRealtime(1);
                 }
-                else if (reportedFailure)
+                else
                 {
-                    Debug.Log("VIDEO_UPLOAD_RECOVERED");
-                    reportedFailure = false;
+                    publisherBusyRetrySeconds = 0f;
+                    acceptedFrames++;
+                    if (TryReadUploadResponse(response, out uint acceptedNonce)) probeNonce = acceptedNonce;
+                    else if (!reportedFailure) Debug.LogWarning("VIDEO_UPLOAD_RESPONSE_INVALID");
+                    if (reportedFailure)
+                    {
+                        Debug.Log("VIDEO_UPLOAD_RECOVERED");
+                        reportedFailure = false;
+                    }
                 }
             }
         }
 
-        byte[] Capture()
+        void Update()
+        {
+            if (settings == null) return;
+            updateFrames++;
+            long now = Stopwatch.GetTimestamp();
+            double elapsed = (now - rateStartTicks) / (double)Stopwatch.Frequency;
+            if (elapsed < 1.0) return;
+            gameFps = Math.Min(10000.0, updateFrames / elapsed);
+            videoFps = Math.Min(10000.0, acceptedFrames / elapsed);
+            updateFrames = 0;
+            acceptedFrames = 0;
+            rateStartTicks = now;
+        }
+
+        CaptureResult Capture()
         {
             if (fullSize == null || fullSize.width != Screen.width || fullSize.height != Screen.height)
             {
@@ -192,16 +254,84 @@ namespace Flylingual.Video
             var previous = RenderTexture.active;
             try
             {
+                long captureStarted = Stopwatch.GetTimestamp();
                 ScreenCapture.CaptureScreenshotIntoRenderTexture(fullSize);
                 bool flip = settings.verticalFlip == "on" ||
                     (settings.verticalFlip == "auto" && SystemInfo.graphicsUVStartsAtTop);
                 Graphics.Blit(fullSize, scaled, new Vector2(1, flip ? -1 : 1), new Vector2(0, flip ? 1 : 0));
                 RenderTexture.active = scaled;
                 pixels.ReadPixels(new Rect(0, 0, scaled.width, scaled.height), 0, 0, false);
+                bool markerEnabled = settings.diagnosticsOverlay && pixels.width >= 256 && pixels.height >= 8;
+                if (markerEnabled && probeNonce != 0) DrawMarker(probeNonce);
                 pixels.Apply(false, false);
-                return pixels.EncodeToJPG(settings.jpegQuality);
+                double captureMs = Math.Max(0, (Stopwatch.GetTimestamp() - captureStarted) * 1000.0 / Stopwatch.Frequency);
+                long encodeStarted = Stopwatch.GetTimestamp();
+                byte[] jpeg = pixels.EncodeToJPG(settings.jpegQuality);
+                double encodeMs = Math.Max(0, (Stopwatch.GetTimestamp() - encodeStarted) * 1000.0 / Stopwatch.Frequency);
+                return new CaptureResult { jpeg = jpeg, captureMs = captureMs, encodeMs = encodeMs, markerEnabled = markerEnabled };
             }
             finally { RenderTexture.active = previous; }
+        }
+
+        string BuildFrameMetadata(CaptureResult capture)
+        {
+            var metadata = new FrameMetadata
+            {
+                captureMs = capture.captureMs,
+                encodeMs = capture.encodeMs,
+                uploadMs = previousUploadMs,
+                gameFps = gameFps,
+                videoFps = videoFps,
+                jpegBytes = capture.jpeg == null ? 0 : capture.jpeg.Length,
+                diagnosticsOverlay = capture.markerEnabled,
+                brainIdentity = brainIdentity == null ? null : brainIdentity.Snapshot(),
+            };
+            return Convert.ToBase64String(Encoding.UTF8.GetBytes(JsonUtility.ToJson(metadata)));
+        }
+
+        void DrawMarker(uint nonce)
+        {
+            if (markerColors == null || markerColorsNonce != nonce)
+            {
+                markerColors = new Color[256 * 8];
+                markerColorsNonce = nonce;
+                ulong bits = ((ulong)0xD3A5 << 48) | ((ulong)nonce << 16) |
+                    (ushort)(((nonce >> 16) ^ (nonce & 0xffff) ^ 0x6B4D) & 0xffff);
+                for (int bit = 0; bit < 64; bit++)
+                {
+                    bool one = ((bits >> (63 - bit)) & 1UL) != 0;
+                    Color color = one ? Color.white : Color.black;
+                    for (int y = 0; y < 8; y++)
+                        for (int x = 0; x < 4; x++) markerColors[y * 256 + bit * 4 + x] = color;
+                }
+            }
+            pixels.SetPixels(0, 0, 256, 8, markerColors);
+        }
+
+        [Serializable] sealed class FrameMetadata
+        {
+            public double captureMs, encodeMs, uploadMs, gameFps, videoFps;
+            public int jpegBytes;
+            public bool diagnosticsOverlay;
+            public UnityVideoBrainIdentity.SnapshotData brainIdentity;
+        }
+        [Serializable] sealed class UploadResponse { public long acceptedSequence; public uint probeNonce; }
+        [Serializable] sealed class ErrorResponse { public string error; }
+        sealed class CaptureResult { public byte[] jpeg; public double captureMs, encodeMs; public bool markerEnabled; }
+
+        static bool TryReadUploadResponse(string response, out uint nonce)
+        {
+            nonce = 0;
+            if (string.IsNullOrEmpty(response) || response.Length > 256) return false;
+            try { nonce = JsonUtility.FromJson<UploadResponse>(response).probeNonce; return true; }
+            catch (Exception) { return false; }
+        }
+
+        static string ReadErrorCode(string response)
+        {
+            if (string.IsNullOrEmpty(response) || response.Length > 256) return string.Empty;
+            try { return JsonUtility.FromJson<ErrorResponse>(response)?.error ?? string.Empty; }
+            catch (Exception) { return string.Empty; }
         }
 
         void ReleaseTextures()
@@ -215,9 +345,21 @@ namespace Flylingual.Video
         {
             StopAllCoroutines();
             if (upload != null) { upload.Abort(); upload.Dispose(); upload = null; }
+            if (brainIdentity != null) { brainIdentity.enabled = false; Destroy(brainIdentity); brainIdentity = null; }
             ReleaseTextures();
             token = null;
             if (backgroundOwned) { Application.runInBackground = previousRunInBackground; backgroundOwned = false; }
+        }
+
+        void OnEnable()
+        {
+            // Disabled publishers discard credentials and require a fresh Play/Player launch.
+            if (settings != null && string.IsNullOrEmpty(token)) { enabled = false; return; }
+            if (settings != null && brainIdentity == null)
+            {
+                brainIdentity = gameObject.AddComponent<UnityVideoBrainIdentity>();
+                brainIdentity.Initialize();
+            }
         }
     }
 }

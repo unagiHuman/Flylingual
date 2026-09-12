@@ -76,11 +76,13 @@ heartbeatで編集中の内容を上書きしません。別操作によるrevis
 | 接続 | 契約 |
 | --- | --- |
 | GET `/api/video/config` | `iceServers`, `streams`, `staleAfterMs` |
-| GET `/api/video/streams/{id}` | `state`, `sequence`, `frameAgeMs`, `publisherId`, `source`, `width`, `height`, `viewers` |
-| POST `/api/video/streams/{id}/offer` | recvonly videoの `{type: "offer", sdp}` → `{type: "answer", sdp, sessionId}` |
+| GET `/api/video/health` | service、backend instanceId、稼働秒、viewers、stream状態 |
+| GET `/api/video/streams/{id}` | `state`, `sequence`, `frameAgeMs`, `publisherId`, `source`, `width`, `height`, `viewers`, `metrics` |
+| POST `/api/video/streams/{id}/offer` | recvonly videoの `{type: "offer", sdp}` → `{type: "answer", sdp, sessionId, publisherId, source}` |
+| POST `/api/video/streams/{id}/probe` | 診断overlay有効時のnonce要求。片方向E2Eの測定ではない |
 | DELETE `/api/video/sessions/{sessionId}` | 閲覧セッションの終了 |
 
-公開APIは `window.FlyVideo.state()` と `disconnect()`。状態変更は `flyvideochange` で受け取ります。UIの描画は、新しい動画frameと配信元liveの両方を確認した場合だけLIVEとします。2秒超の古い映像、publisher変更、切断時は映像を隠します。rVFCの観測を維持するため、非表示は受信機のinline opacityを使い、CSSでdisplay:noneへ上書きしません。遅延answer、再接続、pagehideでは旧セッションを解放します。
+公開APIは `window.FlyVideo.state()`、`measurements()`、`setExpectedIdentity()`、`disconnect()` です。`setExpectedIdentity()` で現在のBridgeのidentity、frameSequenceと鮮度を渡します。切断・切替中・旧接続の解放不明時はnullに戻します。一致判定は受信機が担当し、UI側でtrueへ昇格しません。状態変更は `flyvideochange` で受け取ります。UIの描画は、新しい動画frameと配信元liveの両方を確認した場合だけLIVEとします。2秒超の古い映像、publisher変更、切断時は映像を隠します。rVFCの観測を維持するため、非表示は受信機のinline opacityを使い、CSSでdisplay:noneへ上書きしません。遅延answer、再接続、pagehideでは旧セッションを解放します。自動再接続は最大6回で、明示的な切断で停止します。
 
 映像サービス側は、この画面の正確なoriginを `allowedOrigins` へ設定してください。通常の8771／4173と、検証用の別ポートは別originです。ブラウザへpublisher tokenを持たせません。異なるマシンではサーバー側で既存のSSHトンネル等を設定し、ブラウザはloopbackへ接続します。映像とBrainが同じ身体sessionであることは、現行契約では未検証です。
 
