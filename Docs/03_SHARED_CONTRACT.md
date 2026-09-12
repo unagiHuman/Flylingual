@@ -15,17 +15,11 @@
 | `Contracts/` | 初版Mac、その後単独の統合担当 | 同時編集しない |
 | `Docs/mac/` / `Docs/windows/` | 各担当 | 実測とhandoffを分離 |
 
-機能別ブランチを使う。2台で同じcheckoutをクラウド同期しない。Codex履歴はソースの同期手段ではない。`AGENTS.md`はCodexの作業指示として利用できる。[S11]
+Git運用と開発agentの役割は[AGENTS.md](../AGENTS.md)を正本とする。2026-09-12のユーザー指示により両OSともmainへ直接commit／pushし、旧機能別ブランチ方針は廃止する。2台で同じcheckoutをクラウド同期しない。Codex履歴はソースの同期手段ではない。委任の詳細は[Astra／サブエージェント運用](Codex-Astra-Workflow.md)を参照する。
 
-### 同期例
+### 同期
 
-```text
-main（両側で通ったものだけ）
-├─ feat/malecns-loader
-├─ feat/malecns-controller
-├─ feat/windows-runtime
-└─ feat/fly-visual
-```
+Mac／Windowsそれぞれのmain checkoutで担当範囲を編集し、push前にorigin/mainを取得して他方の変更を取り込む。衝突は内容を確認して解決し、他方の変更を取り消すforce pushは行わない。コミットの存在を両OSの実機検証完了とみなさず、実施済みgateと未確認を記録する。
 
 Macの神経試験が終わるまでWindowsは待たない。Windowsは既存Shiu版と実測fixtureで進める。
 
@@ -149,7 +143,7 @@ fixtureは短い実測JSONLを使う。GB級の全spike履歴をGitへ入れな�
 ## 7. Gitとファイル
 
 - Unity：Assets/Packages/ProjectSettingsと.metaを管理。Library/Temp/Build/cacheは除外。[S07]
-- ブランチをmergeする前に、自分の担当外の差分がないか確認。
+- commit／pushする前に、自分の担当外の差分が混入していないか確認。
 - 大きなFBX/textureは必要ならGit LFS。LFSなしで100MB級データを通常Gitに詰めない。
 - データは公式URL・version・ローカルSHA-256で再取得可能にする。
 - `.env`、APIキー、PAT、ライセンス認証ファイルをcommitしない。

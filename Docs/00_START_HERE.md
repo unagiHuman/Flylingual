@@ -9,6 +9,7 @@ Brain・GPT Live、Mac／Windowsの実行先切替、脳と言葉の双方向翻
 同文書は合意済みの設計規範であり、実装済みという意味ではない。
 この下の初期検証計画と統合設計が異なる場合は、共通設計ルールを優先する。
 正式リポジトリとGit運用はルートの[AGENTS.md](../AGENTS.md)に従う。
+開発agentの役割分担・委任手順は[Astra／サブエージェント運用](Codex-Astra-Workflow.md)を参照する。これはゲーム内のGPT Live設定とは別である。
 
 ## 今回の決定
 
@@ -28,7 +29,7 @@ MaleCNSとMuJoCo移行を同時には行わない。物理は当面、実証済�
 2. 共同作業の境界：`03_SHARED_CONTRACT.md`。
 3. Macで作業：`01_MAC_MALECNS_TEST.md`。
 4. Windowsで作業：`02_WINDOWS_DEMO_VISUAL.md`。
-5. Codexには各手順書末尾の開始指示を渡す。`templates/AGENTS.md`を新しい共同作業リポジトリのルートへコピーする。
+5. 各手順書末尾の開始指示は初期検証時の記録として扱う。現在のFlylingualではルートの`AGENTS.md`を正本とし、古いテンプレートで上書きしない。
 
 ## 重要な訂正・前提
 
