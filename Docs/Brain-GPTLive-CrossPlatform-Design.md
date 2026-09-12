@@ -1,117 +1,118 @@
-# Brain・GPT LiveのMac／Windows共通設計案
+# Brain・GPT Live の Mac／Windows 共通設計ルール
 
-作成日: 2026-09-12。設計のみ。記載する追加ファイル・設定・CLIは未実装。
+作成日: 2026-09-12。これは合意済みの正本設計であり、追加する Bridge 部品・契約・CLI・配置は未実装である。既存 Brain／Unity の実装と実測は各 checkpoint を参照し、この文書を新しい統合の実測証拠にしない。統合設計について旧手順書と矛盾する場合は本書を優先する。
 
-## 1. 決定案と前提
+## 1. 正本と責務
 
-MacとWindowsで同じソースを使い、実行場所と接続先をプロファイルで切り替える。Brain計算、GPTとの会話、Unityの描画・物理を別の責務とする。
+作業対象は Flylingual リポジトリだけとする。Mac では Brain、共通 Bridge、翻訳、接続切替サービスを開発する。Windows では Unity ゲーム、身体、HUD、音声、出力抑止、UI を開発する。ただし開発担当 OS と実行 OS は分離し、同じ Python ソースを Mac／Windows の双方で使う。
 
-GPT Liveは暫定的にOpenAI Realtime APIを指すと仮定する。別サービスの場合はConversationAdapterを置き換える。GPTが操作する用途を想定するが、会話・解説だけの用途もobserver設定で対応する。
+Bridge はゲーム／クライアント側に配置する。Unity は常に同じホスト上のローカル Bridge へ接続し、Bridge が Windows Brain（localhost）または Mac Brain（TCP）へ接続先を切り替える。Mac で Bridge を開発するときも同じコードで Mac Brain、必要時は Windows Brain に接続する。旧案の「windows-to-mac では Bridge が Mac 側」という配置は廃止する。
 
-正式な作業対象はFlylingualリポジトリ。以下の構成はそのルートを基準とする。隣接するFlytestは作業対象にしない。
+Brain 操作の client は Bridge だけとする。GPT 会話接続は Brain 切替から独立させる。ただし旧 Brain に基づく未完了操作・説明は、切替後に継続せず破棄または過去情報として扱う。
 
-## 2. 現物確認
+責務部品は次のとおりとする。
 
-- 両コピーにBrain、UnityProject、Contractsがある。GPT Liveという名前の接続実装は今回の検索では見つからなかった。
-- FlylingualのBrainTcpClientはTCP/NDJSONを使用し、ConfigureEndpointがある。WindowsReplayDemoには-brainHost/-brainPort/-demoLiveがある。
-- 既存ActionはSTOP、FORWARD、TURN_R、TURN_L、FORWARD_R、FORWARD_L。Action→刺激→神経活動→decoder→motorの経路を維持する。
-- protocol-existing.mdではサーバー側の操作元排他は未実装。GPTを追加の直接操作clientとして接続すると競合する。
-- ConfigureEndpointは接続タスク終了前には使用できない。既存Disconnect直後の即時切り替えを前提にしない。
-- Windows native検証文書にはMaleCNSの起動・TCP確認の追記がある一方、遅延の受入れは未達と記録されている。本設計は現在の性能・Mac実機動作を再検証したものではない。
+- `BrainAdapter`: Brain の接続、既存 protocol、状態、frame、ack、停止を扱う。
+- `BrainTargetManager`: target、transport、session 世代、接続切替と解放確認を管理する。
+- `ControlArbiter`: manual／GPT／解説の排他、期限、重複、緊急停止を管理する。
+- `BrainStateTranslator`: BrainFrame の状態・神経活動を決定的に要約し、会話側がキャラ表現にするための根拠を渡す。
+- `PlayerIntentTranslator`: プレイヤーの言葉・音声から得た意図を、許可された既存 Action の提案へ変換する。
+- `ConversationAdapter`: 選定済みの会話サービスとの接続を隔離する。
+- 共通設定／起動管理: profile 検証、ローカル所有 process の起動停止、診断を行う。
 
-## 3. 構成
-
-```text
-Unity（表示・物理・操作UI・音声入出力）
-  │ Brain互換TCP/NDJSON       │ 会話・音声用WebSocket
-  └──────────────┬──────────┘
-          Bridge Service（共通Python、独立環境）
-            ├─ ControlArbiter：操作権・期限・緊急停止
-            ├─ BrainAdapter ── TCP/NDJSON ── Brainプロセス
-            └─ ConversationAdapter ── WebSocket ── GPT Live
-```
-
-BridgeだけがBrainの操作clientになる。UnityはBridgeのBrain互換ポートへ接続する。Bridgeは既存status/ack/brain_frame/errorを扱い、神経値やmotorを改変しない。追加の会話・操作権情報は別のWebSocketへ流し、既存BrainTcpClientの未知messageエラーを避ける。
-
-GPTの出力は許可されたActionの提案として検証する。motor値・神経ID・刺激強度をGPTから直接設定しない。会話応答では「指示受付」と「Brain適用確認」を区別し、appliedRequestIdの確認前に実行済みと断定しない。
-
-音声デバイスはUnity側のAudioAdapterで扱い、取得形式から合意した通信形式へ変換する。Macのマイク許可、Windowsのデバイス選択、サンプルレート差はここで吸収する。初回PoCはテキストで接続と操作権を確認し、その後音声を追加する。Brainシミュレーションと音声通信は別プロセスのため、脳計算で会話イベントループを塞がない。
-
-Realtime WebSocketの利用は公式SDK資料に記載がある。本案はPythonを採用候補とする設計判断であり、Ruby SDKを導入する提案ではない。モデル名・イベントschema・音声形式・利用可能性は実装開始時に選定APIの公式仕様で固定する。
-参考: https://developers.openai.com/api/reference/ruby
-
-## 4. 切り替え単位
-
-| プロファイル案 | Unity | Bridge＋GPT接続 | Brain |
-|---|---|---|---|
-| mac-local | Mac | Mac | Mac |
-| windows-local | Windows | Windows | Windows |
-| windows-to-mac | Windows | Mac | Mac |
-| offline-replay | 任意のOS | 起動不要 | 実測fixture |
-
-通常は全サービスを127.0.0.1へbindする。windows-to-macのみ、明示した信頼できる接続でBridgeに到達させる。初期案はSSHポート転送とし、BrainはMacのlocalhostに残す。直接LAN公開する場合は別途Bridgeの認証・暗号化・接続元制限を実装する。生TCPを無認証で公開しない。
-
-OS、backend（shiu/malecns）、brain mode（live/replay/mock）、conversation（live/off/mock）、control owner（manual/gpt/observer）は独立設定とする。MacだからMaleCNS、WindowsだからReplay、という分岐は作らない。接続失敗時の自動Replay切り替えも行わない。
+推奨構成は次のとおりである。
 
 ```text
-Runtime/Bridge/                 共通接続・会話・操作権管理
-Runtime/Config/profiles/        Git管理するプロファイル
-Runtime/Config/local.example.json
-tools/dev.py                   共通doctor/up/down入口
-UnityProject/Assets/RuntimeIntegration/  設定読込・状態UI・音声
-Contracts/bridge-v1/            新規契約と小さいfixture
-Docs/integration/              両OSの共通手順
+Unity（ゲーム・身体・HUD・音声・入力・出力抑止）
+  │ localhost の Brain 互換 TCP ＋ 別の会話／切替制御経路
+  ▼
+Bridge（Unity／ゲーム側。共通 Python）
+  ├─ BrainAdapter ── Windows localhost または Mac TCP ── Brain
+  ├─ BrainStateTranslator / PlayerIntentTranslator
+  ├─ BrainTargetManager / ControlArbiter
+  └─ ConversationAdapter ── 選定済み会話サービス
 ```
 
-設定の優先順位はCLI > 許可リスト内の環境変数 > Git除外のlocal.json > 選択プロファイル > 共通既定値。未知キー・不正ポート・欠損パスは起動前にエラーにする。相対パスはcwdではなくリポジトリルートから解決する。
+## 2. 接続、profile、配置
 
-共通プロファイルにはbackend、bind先、ポート、mode、タイムアウトを保存する。local.jsonにはPython/Unityの実行パス、データルート、音声デバイスを保存する。APIキーはBridgeプロセスの環境変数から読み、Unityアセット・Git・起動引数・ログへ入れない。
+profile は OS 分岐ではなく、次の独立設定の組合せとする。
 
-Brainの既存Python環境は維持し、Bridgeの依存環境を分離する。Macのvenv、Cython生成物、Unity LibraryをWindowsへコピーしない。各OSで環境を作り、依存版とデータhashを記録する。大きなデータはGit外に置きmanifestで照合する。
+- `endpoint` と `transport`
+- `backend` と `data` と `calibration`
+- `brainMode`: `LIVE`／`REPLAY`／`MOCK`
+- `conversationMode`: live／off／mock
+- `controlOwner`: manual／gpt／observer（解説のみで操作権なし）
+- Bridge bind、timeout、session／epoch 方針
+- ローカル Python、data、audio のパス
 
-以下は実装後の操作イメージで、現時点では実行できない。
+Mac だから MaleCNS、Windows だから Replay といった暗黙分岐を作らない。同一 commit のまま、ソースや Scene を編集せず、profile と端末固有設定だけで切り替えられることを合格条件とする。
+
+設定優先順位は CLI > 許可リスト内の環境変数 > Git 除外の local.json > 選択 profile > 共通既定値。未知キー、不正ポート、欠損パスは起動前にエラーとする。相対パスは cwd ではなく Flylingual ルートから解決する。backend／data／calibration の期待値が異なる接続は、自動的に同等と扱わない。
+
+配置案は以下とする。提案であり未作成である。
 
 ```text
-python tools/dev.py doctor --profile mac-local
-python tools/dev.py up --profile mac-local
-python tools/dev.py up --profile windows-local
-python tools/dev.py up --profile windows-to-mac
+Runtime/Bridge/                         共通 Bridge、adapter、arbiter
+Runtime/Config/profiles/                endpoint 等の共有 profile
+Runtime/Config/local.example.json       ローカル設定の例
+tools/dev.py                            共通 doctor／起動管理
+UnityProject/Assets/RuntimeIntegration/ Unity 接続、HUD、音声、抑止
+Contracts/bridge-v1/                    追加制御契約と小さい fixture
+Docs/integration/                       両 OS の手順
 ```
 
-doctorは設定・依存・データhash・ポートを確認し、課金API呼び出しはしない。upはローカル所有のBrainを起動してready状態を確認し、Bridgeを起動する。remote設定では外部PCのプロセスを勝手に起動・停止しない。終了処理は自身が起動したPIDだけを対象とする。
+端末固有の IP・絶対パスをコードへ固定せず、Git 除外の local 設定へ置く。localhost やポート、相対パス等の共通既定値は profile で管理する。API key は Bridge ホストの環境変数から読み、Git、Unity、起動引数、ログには保存しない。通常は localhost、遠隔接続は SSH tunnel を優先する。直接 LAN 接続時は認証、暗号化、接続元制限を必須とし、無認証 TCP 公開をしない。local launcher は自己所有 PID だけを停止し、remote process を勝手に起動・停止しない。Python 環境は各 OS で再構成し、NPY 等の大きなデータは Git 外で hash 照合する。
 
-## 5. 操作権と障害処理
+既存契約の `BrainFrame`、motor、status、ack、error は維持する。requestId mapping、epoch、sequence は各 session に対応付ける。新しい status／debug 観測は「設計予定」と明記し、既存 `ready=false` を勝手に変更しない。transport の接続状態（connected／disconnected／release unknown）と Brain の `ready` は別状態として観測・表示する。状態を見るためだけの操作 client は作らない。
 
-- manualとgptの操作権は明示切り替え。非所有者の移動要求は拒否する。緊急停止は常に優先し、解除までラッチする。
-- GPT指示はaction、commandId、controlEpoch、validForMsを持つ新しいBridge内部契約とする。期限はBridgeの単調時計で管理し、上限を設定で制限する。長時間移動の具体的な期限は脳応答の実測で決める。
-- Brainへは既存set_actionだけを送る。Bridgeが上流requestIdを一意に採番し、Unity requestIdまたはGPT commandIdとの対応を保持する。Unity向けack/appliedRequestIdは対応するUnity IDへ戻し、GPT由来のframeはUnity要求と衝突しない未対応ID（0）として扱う。原本IDとraw frameは診断ログへ残す。
-- 操作権変更・再接続でcontrolEpochを更新し、古いGPT応答と期限切れ要求を破棄する。latest action winsで未適用になった要求はsupersededとして区別する。
-- GPT切断・期限切れ時、GPTが操作権を持っていた場合はSTOPを要求し、Unityの出力抑止も有効化する。manual所有中は会話障害だけで操作権を奪わない。
-- 通常STOPは刺激OFFであり、即座にmotor=0になる保証はない。緊急停止・通信障害時のactuatorゼロ化はUnity側で独立に行う。
-- Brainから新規frameが来た時だけ転送する。heartbeatや同じframeの再送で鮮度を更新しない。Unityの既存0.75秒stale判定は維持し、会話制御路の切断にも別の出力抑止を設ける。
-- プロファイル変更は停止状態で実施する。出力抑止→STOP送信を期限付きで試行→接続タスク終了待ち→frame/request状態破棄→設定更新→再接続→新sessionの状態・frame確認→明示再開の順とする。切断時に古い移動要求を自動再送しない。
-- BridgeとUnityの双方でsession世代を持ち、再起動前のsequenceや遅延応答が新sessionへ混入しないようにする。
+Brain 互換 TCP には会話・切替・操作権の未知 message を混ぜず、別の制御用 WebSocket で扱う。Bridge は上流 requestId を一意に採番し、Unity requestId／GPT commandId との対応を保持する。Unity 向け ack／appliedRequestId は対応 ID に戻し、GPT 由来は Unity 要求と衝突しない未対応 ID とする（0 の予約・互換性を契約 gate で検証する）。原本 ID と raw frame を記録し、神経値と motor は改変しない。
 
-## 6. 表示と計測
+通常接続中は各 Brain server の persistent 状態を維持し、通常 Action で reset しない。一方、別 Brain への切替時に脳／decoder 状態を跨機移植してはならない。
 
-HUDには実行先、backend/dataset、LIVE/REPLAY/MOCK、GPT接続状態、操作権、frame age、出力抑止理由を別々に表示する。Brainのready=falseをBridgeがtrueへ書き換えない。GPT接続済みをBrain準備完了と扱わない。
+## 3. Brain 操作と GPT 会話
 
-記録はsource commit/hash、OS・依存版、data/config hash、session、commandIdとrequestId対応、superseded、stale、切断、step時間、E2Eとする。E2Eは送信と受信が同じプロセスの単調時計で測る。異なるPCの時刻を引かない。音声・会話本文の常時保存は既定で無効にする。
+GPT は 6 Action（`STOP`、`FORWARD`、`TURN_R`、`TURN_L`、`FORWARD_R`、`FORWARD_L`）の提案だけを行う。Action は既存刺激、MaleCNS、raw 神経出力、既存 decoder、motor の経路を通る。GPT が神経 ID、強度、weight、motor を直接変更してはならない。
 
-## 7. 実装順と受入れ
+manual と GPT の操作権は明示的に排他切替する。observer は解説のみで操作できない。解説音声は操作入力としてフィードバックしない。緊急停止は Unity で即時に出力抑止し、明示解除までラッチする。刺激 OFF の通常 `STOP` とは区別する。曖昧な意図や未対応動作を勝手な Action へ変換しない。
 
-1. 対象リポジトリとGPT Liveの意味を確定し、共通設定・doctorを追加する。両OSでパス解決と設定検証が一致すること。
-2. GPTなしのBridgeを追加し、Unity→Bridge→Brainの6 Action、requestId対応、排他、切断、再接続を実測fixtureと実Brainで検証する。既存直結経路も残す。
-3. MacでテキストGPT接続を追加する。mock会話で不正Action、重複、期限切れ、旧sessionの応答を検証した後、実APIで指示→適用確認を試す。
-4. Macで音声入出力を追加する。マイク拒否、デバイス欠損、発話中断、音声切断を確認する。
-5. 同一commitをWindowsへ取り込み、windows-localとwindows-to-macを検証する。プロファイル以外のソース・Scene編集なしに切り替えられることを合格条件とする。
+操作提案は action、commandId、controlEpoch、validForMs を持ち、Bridge の単調時計で期限・上限を管理する。重複、期限切れ、旧 session、非所有者の要求を拒否し、切替・再接続で未適用要求を自動再送しない。GPT 操作中に GPT 接続断／期限切れが起きたら STOP を要求し Unity 出力も抑止する。manual 中は会話障害だけで操作権を奪わない。Unity／Bridge 制御路断でも Unity が独立に抑止し、発話中断だけを Brain 停止完了と扱わない。
 
-契約・設定・操作権のテストは両OSで実行可能にする。通常CIは小さいfixtureとmockを使用し、実Brain／実API試験は別Gateで記録する。通信互換の合格と、脳計算の遅延・ゲーム操作性の合格を分ける。
+BrainFrame からの翻訳は、観測 → 決定的な要約／変化検知 → キャラ表現の順とする。要求 Action だけで実応答を断定しない。「気持ち」は神経活動に根拠を置く擬人的表現であり、実際の感情を読み取ったとは主張しない。実移動、崖、接触などは Unity 観測という別入力を根拠として区別する。不明・stale は不明・stale と表示する。frame 要約、変化検知、発話頻度制限を設ける。
 
-Mac担当はBridge/GPT接続、Windows担当はUnityの設定・HUD・音声Adapter、Contractsは統合担当が順次編集する案とする。共有Gitの別checkoutを使い、ユーザー指示により両OSともmainへ直接コミット・プッシュする。プッシュ前にorigin/mainを取得して他方の変更を取り込み、force pushは行わない。既存Brain/decoder/物理の調整を接続開発へ混ぜない。
+「指示受付」「appliedRequestId による Brain 適用確認」「神経応答」「Unity で観測した身体動作」を区別し、受付 ack だけで動作完了と説明しない。Brain 計算と Bridge／会話通信は別プロセスとし、音声デバイスは Unity の AudioAdapter で OS 差を吸収する。GPT Live の API、サービス、モデル、SDK、イベント契約はまだ確定しない。`ConversationAdapter` に隔離し、実装時に公式資料で選定して固定する。GPT-Live と Realtime API を名前だけで同一視しない。
 
-本作業の変更は設計書1ファイル。compile、サーバー起動、API接続、Mac実機試験、性能測定は未実施。次のGateはGPT Liveの意味を確定した後の共通設定実装。
+## 4. 安全な Brain 切替
 
-## 8. Macへの引き継ぎ（2026-09-12）
+切替は次の順序を規範とする。
 
-ユーザー指示により、当面はMac側でBrain・GPT Live接続の開発を継続する。Windows側の実装は保留する。Windowsへ戻せる共通設定・通信境界の方針は維持する。現時点では設計のみで、接続先の変更やサービス起動は行っていない。
+1. 出力抑止を有効化し、新規操作の受付を停止する。
+2. 旧 Brain へ `STOP` を期限付きで試行する。
+3. 旧接続タスクの終了と controller 解放を確認する。
+4. `target`／`session` 世代と `controlEpoch` を更新する。
+5. 旧 frame、pending request、遅延応答、旧 GPT 操作を破棄する。
+6. 新 Brain の backend、data、calibration、source、session、新規 frame を確認する。
+7. 停止状態を確認し、明示的な再開操作だけを受け付ける。
+
+いずれかに失敗したら停止状態を維持する。無断 fallback、未適用操作の再送、旧操作の持越しは禁止する。ネットワーク断などで旧 server の解放が観測できない場合、切替成功としてはならない。
+
+解放の証拠は server の session／controller ID にひも付いた release event・ログまたは既存の読み取り専用管理情報とする。ESTABLISHED がないことだけでは内部 slot 解放の直接証明にならない。観測手段は実装時に契約化し、観測不能時は `release unknown` として停止する。新 Brain に残留活動があれば STOP と新規 frame による確認を期限付きで行い、停止確認ができなければ再開しない。
+
+新規 frame だけが鮮度を更新する。既存の 0.75 秒 stale 判定を無制限に延長しない。heartbeat、同一 frame の再送、会話接続状態で鮮度を更新してはならない。
+
+## 5. 表示、観測、ログ
+
+HUD では execution OS、target、backend／data、calibration、`LIVE`／`REPLAY`／`MOCK`、GPT 接続、control owner、frame age、出力抑止理由を分けて表示する。GPT 接続済みを Brain ready と扱わない。
+
+ログには instance、session、controller の active count、connect／disconnect／release、source・data・calibration hash、last frame、sequence、epoch、requestId／commandId 対応、accepted／applied／superseded／expired、stale、停止理由、切替各段階、step 時間、同一プロセス時計による E2E を記録する。異なる PC の時計を引かない。会話本文と音声の常時保存は既定で無効にする。新規 status／debug 観測は設計予定であり、観測できない状態を成功とみなさない。
+
+## 6. 実装順と合格条件
+
+実装順は、(1) 共通設定と adapter、(2) 両方向の安全な切替、(3) text／mock を先行した双方向翻訳、(4) GPT 接続と音声、(5) Windows Unity 受入れ、とする。
+
+各段階で、同一 commit の profile 切替、6 Action、再接続、遅延応答、解放、不正指示、stale、manual／GPT 競合、API 断、切替中入力を確認する。Windows ゲームから Windows Brain → Mac Brain → Windows Brain を往復し、Mac 側でも同じ実装のローカル接続を検証する。Mac から Windows Brain への接続は必要時に明示して検証する。実 Brain、実 API、Unity は別々の gate とし、新しい統合の性能・操作感は新規実測で判定する。既存 checkpoint の成果は保持するが、mock／fixture の合格を実 Brain の合格に読み替えず、ready を自動昇格しない。
+
+## 7. 運用と未実施事項
+
+doctor は設定、依存、data hash、port、自己所有 process の状態を確認し、課金 API 呼び出しをしない。launcher はローカル所有 Brain の初期化と transport 利用可能状態を確認して Bridge を起動する。利用可能状態と製品の ready は区別する。両 OS の Python 環境、依存版、source hash、data hash、測定母数、RSS、計算時間、E2E を gate ごとに記録する。
+
+Flylingual の既存運用ルールに従い、main へ直接 commit／push し、push 前に origin/main を取得して差分を確認する。force push は行わない。本改訂は設計書と参照ルールだけであり、compile、サーバー起動、API 接続、Mac 実機、Windows Unity、性能測定は未実施である。API 選定、実装、契約 fixture、観測 schema は未決／未実装の次 Gate とする。

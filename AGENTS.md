@@ -4,10 +4,13 @@
 MaleCNSの独立検証と、Windows上のUnityデモ／リアルVisualを並列で進める。
 正式な作業対象リポジトリはこのFlylingualのみとする。隣接するFlytestは参照・実行・編集・コミット・プッシュの対象にしない。
 まずDocs/00_START_HERE.md、Docs/03_SHARED_CONTRACT.md、自分のOS担当手順書を読む。
+Brain・GPT Live・接続先切替・双方向翻訳の作業前には、設計ルールの正本 `Docs/Brain-GPTLive-CrossPlatform-Design.md` を読む。同文書を統合設計について旧手順書より優先し、規範の確定と実装・実測の完了を区別する。
 
 ## Ownership
 - Mac: Brain/MaleCNS、Docs/mac。
+- Mac: 共通Bridge・脳と言葉の双方向翻訳・Brain接続先切替・共通設定／起動管理も担当する。開発OSと実行OSを分離し、同じ実装をMac／Windowsで使用する。
 - Windows: UnityProjectのVisualDemo/HUD/デモ、VisualSource、Docs/windows。
+- Windows: Unity側の接続先選択UI・音声Adapter・出力抑止を担当する。Bridge配置、切替手順、操作権、安全境界は上記正本に従い、担当外の同時編集を避ける。
 - Brain/ShiuBaselineは成功baseline。Windowsのpath/compile互換以外を変更しない。
 - Contractsは初版Mac。以後、単独の統合担当が変更する。
 - 既存PhysicsRig、CPG、joint、FootPad、摩擦、Brain MotorDecoderを無断変更しない。
