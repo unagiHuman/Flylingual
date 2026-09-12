@@ -108,7 +108,7 @@ HUDには実行先、backend/dataset、LIVE/REPLAY/MOCK、GPT接続状態、操�
 
 契約・設定・操作権のテストは両OSで実行可能にする。通常CIは小さいfixtureとmockを使用し、実Brain／実API試験は別Gateで記録する。通信互換の合格と、脳計算の遅延・ゲーム操作性の合格を分ける。
 
-Mac担当はBridge/GPT接続、Windows担当はUnityの設定・HUD・音声Adapter、Contractsは統合担当が順次編集する案とする。共有Gitの別checkoutと機能ブランチを使い、OS専用の長期分岐を作らない。既存Brain/decoder/物理の調整を接続開発へ混ぜない。
+Mac担当はBridge/GPT接続、Windows担当はUnityの設定・HUD・音声Adapter、Contractsは統合担当が順次編集する案とする。共有Gitの別checkoutを使い、ユーザー指示により両OSともmainへ直接コミット・プッシュする。プッシュ前にorigin/mainを取得して他方の変更を取り込み、force pushは行わない。既存Brain/decoder/物理の調整を接続開発へ混ぜない。
 
 本作業の変更は設計書1ファイル。compile、サーバー起動、API接続、Mac実機試験、性能測定は未実施。次のGateはGPT Liveの意味を確定した後の共通設定実装。
 

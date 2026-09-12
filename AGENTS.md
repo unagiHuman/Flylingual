@@ -22,6 +22,7 @@ MaleCNSの独立検証と、Windows上のUnityデモ／リアルVisualを並列�
 - 全CNS、動的に有効なedge、subgraphを区別する。
 
 ## Engineering
+- ユーザー指示（2026-09-12）：今後は作業ブランチを分けず、mainへ直接コミット・プッシュする。既存文書の機能別ブランチ方針よりこの指示を優先する。プッシュ前にorigin/mainを取得して差分を確認し、他の変更を取り消すforce pushは行わない。
 - 手順書の例CLIが既存実装にあると仮定しない。--helpとソースを読む。
 - Mac原本 /Users/isaoohta/UnityGame/FlyBrain/Work は保護する。
 - 巨大なdense行列やPython edgeオブジェクト配列を作らない。
