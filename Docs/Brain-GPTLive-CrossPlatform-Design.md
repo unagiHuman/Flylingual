@@ -1,6 +1,6 @@
 # Brain・GPT Live の Mac／Windows 共通設計ルール
 
-作成日: 2026-09-12。これは合意済みの正本設計であり、追加する Bridge 部品・契約・CLI・配置は未実装である。既存 Brain／Unity の実装と実測は各 checkpoint を参照し、この文書を新しい統合の実測証拠にしない。統合設計について旧手順書と矛盾する場合は本書を優先する。
+作成日: 2026-09-12。これは合意済みの正本設計であり、実装・実測の進捗は別紙 [Brain-GPTLive-Bridge 統合手順](integration/Brain-GPTLive-Bridge.md) に記録する。本書を新しい統合の実測証拠にしない。統合設計について旧手順書と矛盾する場合は本書を優先する。
 
 ## 1. 正本と責務
 
@@ -49,7 +49,7 @@ Mac だから MaleCNS、Windows だから Replay といった暗黙分岐を作�
 
 設定優先順位は CLI > 許可リスト内の環境変数 > Git 除外の local.json > 選択 profile > 共通既定値。未知キー、不正ポート、欠損パスは起動前にエラーとする。相対パスは cwd ではなく Flylingual ルートから解決する。backend／data／calibration の期待値が異なる接続は、自動的に同等と扱わない。
 
-配置案は以下とする。提案であり未作成である。
+配置は以下を正本とする。共通Bridge側は実装済み、Unity側は別gate。詳細な実装・実測状況は統合手順を参照する。
 
 ```text
 Runtime/Bridge/                         共通 Bridge、adapter、arbiter
@@ -63,7 +63,7 @@ Docs/integration/                       両 OS の手順
 
 端末固有の IP・絶対パスをコードへ固定せず、Git 除外の local 設定へ置く。localhost やポート、相対パス等の共通既定値は profile で管理する。API key は Bridge ホストの環境変数から読み、Git、Unity、起動引数、ログには保存しない。通常は localhost、遠隔接続は SSH tunnel を優先する。直接 LAN 接続時は認証、暗号化、接続元制限を必須とし、無認証 TCP 公開をしない。local launcher は自己所有 PID だけを停止し、remote process を勝手に起動・停止しない。Python 環境は各 OS で再構成し、NPY 等の大きなデータは Git 外で hash 照合する。
 
-既存契約の `BrainFrame`、motor、status、ack、error は維持する。requestId mapping、epoch、sequence は各 session に対応付ける。新しい status／debug 観測は「設計予定」と明記し、既存 `ready=false` を勝手に変更しない。transport の接続状態（connected／disconnected／release unknown）と Brain の `ready` は別状態として観測・表示する。状態を見るためだけの操作 client は作らない。
+既存契約の `BrainFrame`、motor、status、ack、error は維持する。requestId mapping、epoch、sequence は各 session に対応付ける。追加のidentity／release観測は `Contracts/bridge-v1/protocol.md` に定義する。未実装の観測を実装済みと表示せず、既存 `ready=false` を勝手に変更しない。transport の接続状態（connected／disconnected／release unknown）と Brain の `ready` は別状態として観測・表示する。状態を見るためだけの操作 client は作らない。
 
 Brain 互換 TCP には会話・切替・操作権の未知 message を混ぜず、別の制御用 WebSocket で扱う。Bridge は上流 requestId を一意に採番し、Unity requestId／GPT commandId との対応を保持する。Unity 向け ack／appliedRequestId は対応 ID に戻し、GPT 由来は Unity 要求と衝突しない未対応 ID とする（0 の予約・互換性を契約 gate で検証する）。原本 ID と raw frame を記録し、神経値と motor は改変しない。
 
@@ -79,7 +79,7 @@ manual と GPT の操作権は明示的に排他切替する。observer は解�
 
 BrainFrame からの翻訳は、観測 → 決定的な要約／変化検知 → キャラ表現の順とする。要求 Action だけで実応答を断定しない。「気持ち」は神経活動に根拠を置く擬人的表現であり、実際の感情を読み取ったとは主張しない。実移動、崖、接触などは Unity 観測という別入力を根拠として区別する。不明・stale は不明・stale と表示する。frame 要約、変化検知、発話頻度制限を設ける。
 
-「指示受付」「appliedRequestId による Brain 適用確認」「神経応答」「Unity で観測した身体動作」を区別し、受付 ack だけで動作完了と説明しない。Brain 計算と Bridge／会話通信は別プロセスとし、音声デバイスは Unity の AudioAdapter で OS 差を吸収する。GPT Live の API、サービス、モデル、SDK、イベント契約はまだ確定しない。`ConversationAdapter` に隔離し、実装時に公式資料で選定して固定する。GPT-Live と Realtime API を名前だけで同一視しない。
+「指示受付」「appliedRequestId による Brain 適用確認」「神経応答」「Unity で観測した身体動作」を区別し、受付 ack だけで動作完了と説明しない。Brain 計算と Bridge／会話通信は別プロセスとし、音声デバイスは Unity の AudioAdapter で OS 差を吸収する。会話実装は公式資料に基づきGPT-Live primary WebSocket／client delegationとResponsesによる意図翻訳を選定し、`ConversationAdapter` に隔離した。モデル・依存・イベントは統合手順を参照する。選定・実装と実API受入れは区別する。GPT-Live と Realtime API を名前だけで同一視しない。
 
 ## 4. 安全な Brain 切替
 
@@ -103,7 +103,7 @@ BrainFrame からの翻訳は、観測 → 決定的な要約／変化検知 →
 
 HUD では execution OS、target、backend／data、calibration、`LIVE`／`REPLAY`／`MOCK`、GPT 接続、control owner、frame age、出力抑止理由を分けて表示する。GPT 接続済みを Brain ready と扱わない。
 
-ログには instance、session、controller の active count、connect／disconnect／release、source・data・calibration hash、last frame、sequence、epoch、requestId／commandId 対応、accepted／applied／superseded／expired、stale、停止理由、切替各段階、step 時間、同一プロセス時計による E2E を記録する。異なる PC の時計を引かない。会話本文と音声の常時保存は既定で無効にする。新規 status／debug 観測は設計予定であり、観測できない状態を成功とみなさない。
+ログには instance、session、controller の active count、connect／disconnect／release、source・data・calibration hash、last frame、sequence、epoch、requestId／commandId 対応、accepted／applied／superseded／expired、stale、停止理由、切替各段階、step 時間、同一プロセス時計による E2E を記録する。異なる PC の時計を引かない。会話本文と音声の常時保存は既定で無効にする。実装済み観測は追加契約に記載し、観測できない状態を成功とみなさない。
 
 ## 6. 実装順と合格条件
 
@@ -115,4 +115,4 @@ HUD では execution OS、target、backend／data、calibration、`LIVE`／`REPL
 
 doctor は設定、依存、data hash、port、自己所有 process の状態を確認し、課金 API 呼び出しをしない。launcher はローカル所有 Brain の初期化と transport 利用可能状態を確認して Bridge を起動する。利用可能状態と製品の ready は区別する。両 OS の Python 環境、依存版、source hash、data hash、測定母数、RSS、計算時間、E2E を gate ごとに記録する。
 
-Flylingual の既存運用ルールに従い、main へ直接 commit／push し、push 前に origin/main を取得して差分を確認する。force push は行わない。本改訂は設計書と参照ルールだけであり、compile、サーバー起動、API 接続、Mac 実機、Windows Unity、性能測定は未実施である。API 選定、実装、契約 fixture、観測 schema は未決／未実装の次 Gate とする。
+Flylingual の既存運用ルールに従い、main へ直接 commit／push し、push 前に origin/main を取得して差分を確認する。force push は行わない。共通Bridgeの実装・Mac実Brain＋会話MOCKの実測は統合手順へ記録した。実API接続、実音声、Windows Unity、跨OS往復・操作感は未検証であり、`ready=false` を維持する。

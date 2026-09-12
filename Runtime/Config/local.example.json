@@ -1,0 +1,9 @@
+{
+  "brain": {
+    "python": "/absolute/path/to/python",
+    "graph": "/absolute/path/to/neuron_checkpoint"
+  },
+  "conversation": {
+    "mode": "off"
+  }
+}

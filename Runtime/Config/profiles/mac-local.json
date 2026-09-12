@@ -1,0 +1,8 @@
+{
+  "brain": {
+    "host": "127.0.0.1",
+    "port": 8766,
+    "expectedBackend": "MALECNS_EXPERIMENTAL",
+    "expectedDataset": "male-cns:v1.0"
+  }
+}

@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Flylingual Brain Player Console</title>
+  <style>
+    :root { color-scheme: dark; --bg:#11151b; --panel:#1b222c; --line:#334152; --text:#e8edf4; --muted:#9aa8ba; --good:#6fe0a1; --warn:#f4c96b; --bad:#ff7d7d; --accent:#83b8ff; }
+    * { box-sizing:border-box; }
+    body { margin:0; padding:20px; background:var(--bg); color:var(--text); font:14px/1.45 -apple-system,BlinkMacSystemFont,"Hiragino Kaku Gothic ProN","Yu Gothic",sans-serif; }
+    main { max-width:1100px; margin:auto; }
+    h1 { margin:0 0 4px; font-size:21px; } h2 { margin:0 0 12px; font-size:16px; }
+    .note { color:var(--muted); margin:0 0 16px; font-size:12px; }
+    .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:12px; }
+    section { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:15px; margin-bottom:12px; }
+    .status { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:9px; }
+    .kv { border:1px solid #293442; border-radius:5px; padding:8px; min-height:51px; }
+    .kv label { display:block; color:var(--muted); font-size:11px; } .kv span { display:block; overflow-wrap:anywhere; }
+    .good { color:var(--good); } .warn { color:var(--warn); } .bad { color:var(--bad); }
+    button, select, input, textarea { color:var(--text); background:#202a36; border:1px solid #4b5d71; border-radius:5px; padding:8px 10px; font:inherit; }
+    button { cursor:pointer; } button:disabled { opacity:.4; cursor:not-allowed; } button.danger { border-color:#a65353; }
+    .row { display:flex; flex-wrap:wrap; gap:8px; align-items:center; } .row + .row { margin-top:10px; }
+    .actions { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
+    .actions button { min-height:40px; } .wide { width:100%; } textarea { width:100%; min-height:58px; resize:vertical; }
+    .subtle { color:var(--muted); font-size:12px; } .safety { color:var(--warn); font-size:11px; margin-top:11px; }
+    pre { white-space:pre-wrap; overflow-wrap:anywhere; max-height:180px; overflow:auto; margin:0; color:#cdd8e7; font:12px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace; }
+    #log { max-height:220px; overflow:auto; border:1px solid #293442; border-radius:5px; padding:7px; }
+    .logline { padding:2px 0; border-bottom:1px solid #27313d; font:12px ui-monospace,SFMono-Regular,monospace; }
+    @media (max-width:520px) { body { padding:12px; } .actions { grid-template-columns:repeat(2,1fr); } }
+  </style>
+</head>
+<body>
+<main>
+  <h1>Flylingual Brain Player Console</h1>
+  <p class="note">実身体は未接続です。この画面は実測脳の状態表示と操作を行います。<br>「気持ち」は擬人化表現であり、感情測定ではありません。half-duplex/echo抑止は実マイク未検証です。</p>
+  <section><h2>接続・状態</h2>
+    <div class="row"><button id="connect">接続</button><button id="disconnect" disabled>切断</button><label>接続先 <select id="profile"><option>mac-local</option><option>windows-local</option><option>windows-to-mac</option><option>mac-to-windows</option></select></label></div>
+    <div class="status" style="margin-top:12px">
+      <div class="kv"><label>Bridge接続</label><span id="connection">disconnected</span></div><div class="kv"><label>ready</label><span id="ready">false</span></div>
+      <div class="kv"><label>target / backend</label><span id="target">—</span></div><div class="kv"><label>control owner</label><span id="owner">observer</span></div>
+      <div class="kv"><label>output inhibited</label><span id="inhibited">true</span></div><div class="kv"><label>frame age</label><span id="age">—</span></div>
+      <div class="kv"><label>forward / turn</label><span id="motor">— / —</span></div><div class="kv"><label>conversation</label><span id="conversation">off</span></div>
+    </div>
+    <p class="subtle" id="reason">初期状態: 出力抑止中</p>
+    <p class="safety" id="voiceState">音声操作は gpt owner → 会話開始 → 明示再開 → 音声開始の順で行います。</p>
+  </section>
+  <div class="grid">
+    <section><h2>制御権・安全</h2>
+      <div class="row"><label>所有者 <select id="ownerSelect"><option value="observer">observer（解説のみ）</option><option value="manual">manual</option><option value="gpt">gpt</option></select></label><button id="setOwner" disabled>所有者を適用</button></div>
+      <div class="row"><button id="resume" disabled>明示再開</button><button id="emergency" class="danger" disabled>ラッチ緊急停止</button></div>
+      <p class="safety">緊急停止は明示的な「再開」までラッチされます。切替・切断時は自動的に停止状態を維持します。</p>
+    </section>
+    <section><h2>6 Action（manual）</h2><div class="actions" id="actions">
+      <button data-action="STOP" disabled>STOP</button><button data-action="FORWARD" disabled>FORWARD</button><button data-action="TURN_R" disabled>TURN_R</button><button data-action="TURN_L" disabled>TURN_L</button><button data-action="FORWARD_R" disabled>FORWARD_R</button><button data-action="FORWARD_L" disabled>FORWARD_L</button>
+    </div><p class="subtle">有効期限: 4000 ms / 最新 control epoch を使用</p></section>
+  </div>
+  <section><h2>会話・音声</h2><div class="row"><button id="conversationStart" disabled>会話開始（課金注意）</button><button id="conversationStop" disabled>会話停止</button><button id="audioStart" disabled>音声開始</button><button id="audioStop" disabled>音声停止</button></div>
+    <div class="row" style="margin-top:12px"><textarea id="text" placeholder="送信するテキスト"></textarea><button id="sendText" disabled>テキスト送信</button></div>
+    <div id="captions" class="subtle" style="margin-top:10px;max-height:150px;overflow:auto"></div>
+  </section>
+  <div class="grid"><section><h2>脳要約</h2><pre id="summary">—</pre></section><section><h2>最新 BrainFrame</h2><pre id="frame">—</pre></section></div>
+  <section><h2>ログ（最新100件）</h2><div id="log" aria-live="polite"></div></section>
+</main>
+<script>
+(() => {
+  'use strict';
+  const $ = id => document.getElementById(id);
+  const state = { socket:null, epoch:0, owner:'observer', outputInhibited:true, connected:false, frame:null, audioContext:null, stream:null, processor:null, source:null, micActive:false, micStarting:false, playing:0, audioNodes:new Set(), nextAudioTime:0, micSuppressedUntil:0, queuedAudioSeconds:0 };
+  const log = (message, kind='') => { const row=document.createElement('div'); row.className='logline '+kind; row.textContent=new Date().toLocaleTimeString()+' '+message; $('log').prepend(row); while($('log').children.length>100) $('log').lastChild.remove(); };
+  const safe = value => value == null ? '—' : String(value);
+  function render() {
+    $('connection').textContent=state.connected?'connected':'disconnected'; $('connection').className=state.connected?'good':'bad';
+    $('ready').textContent=safe(state.brainReady===true?'true':'false'); $('ready').className=state.brainReady===true?'good':'warn';
+    $('owner').textContent=safe(state.owner); $('inhibited').textContent=state.outputInhibited?'true':'false'; $('inhibited').className=state.outputInhibited?'warn':'good';
+    $('reason').textContent=safe(state.reason || (state.outputInhibited?'出力抑止中':'抑止理由なし'));
+    const t=state.target||{}; $('target').textContent=(t.host||'—')+':'+(t.port==null?'—':t.port)+(t.backend?' / '+t.backend:'');
+    $('conversation').textContent=safe(state.conversationState||'off');
+    const age=state.frameAgeMs==null?'—':Math.max(0,Math.round(Number(state.frameAgeMs)))+' ms'; $('age').textContent=age; $('age').className=state.frameAgeMs!=null&&Number(state.frameAgeMs)>750?'bad':'';
+    const m=state.frame&& (state.frame.motor||state.frame.rawMotor||state.frame); $('motor').textContent=m ? safe(m.forward ?? m.forwardturn ?? m.forwardTurn)+' / '+safe(m.turn ?? m.turnRate) : '— / —';
+    const can=state.connected, manual=state.owner==='manual' && !state.outputInhibited;
+    $('connect').disabled=!!(state.socket && state.socket.readyState<2);
+    $('disconnect').disabled=!can; $('setOwner').disabled=!can; $('resume').disabled=!can || !state.outputInhibited; $('emergency').disabled=!can;
+    document.querySelectorAll('#actions button').forEach(b=>b.disabled=!manual);
+    const liveConversation=state.conversationState==='live';
+    $('voiceState').textContent=liveConversation && state.voiceControlAvailable===false ? '音声操作の再開には会話停止→会話開始が必要です（旧epoch音声のActionは拒否されます）。' : '音声操作は gpt owner → 会話開始 → 明示再開 → 音声開始の順で行います。';
+    $('sendText').disabled=!can; $('conversationStart').disabled=!can; $('conversationStop').disabled=!can; $('audioStart').disabled=!can || !liveConversation || state.micActive; $('audioStop').disabled=!state.micActive;
+  }
+  function send(obj) { if(!state.socket || state.socket.readyState!==WebSocket.OPEN){ log('未接続のため送信できません','bad'); return false; } state.socket.send(JSON.stringify(obj)); return true; }
+  function connect() {
+    if(state.socket && state.socket.readyState<2) return; const url=(location.protocol==='https:'?'wss://':'ws://')+location.host+'/ws';
+    try { state.socket=new WebSocket(url); } catch(e) { log('接続失敗: '+e.message,'bad'); render(); return; }
+    $('connect').disabled=true; state.socket.onopen=()=>{state.connected=true;log('WebSocket接続: '+url,'good');render();};
+    state.socket.onclose=()=>{state.connected=false;state.socket=null;state.frame=null;state.brainReady=false;state.outputInhibited=true;stopAudio();$('frame').textContent='—';log('WebSocket切断。frameを破棄し音声を停止しました','warn');render();};
+    state.socket.onerror=()=>log('WebSocketエラー','bad'); state.socket.onmessage=event=>{ try { handle(JSON.parse(event.data)); } catch(e){log('不正なJSON: '+e.message,'bad');} };
+  }
+  function handle(msg) {
+    if(!msg || typeof msg.type!=='string'){log('unknown message: '+safe(msg),'warn');return;}
+    if(msg.type==='bridge_state'){ const oldEpoch=state.epoch; Object.assign(state,msg); state.connected=true; if(oldEpoch!==state.epoch){discardAudio('control epoch changed');state.frame=null;$('frame').textContent='—';} if(state.conversationState!=='live' && state.micActive)stopAudio(); render(); return; }
+    if(msg.type==='brain_frame'){ state.frame=msg; $('frame').textContent=JSON.stringify(msg,null,2); render(); return; }
+    if(msg.type==='brain_summary'){ $('summary').textContent=JSON.stringify(msg.summary||msg,null,2); return; }
+    if(msg.type==='conversation_text'){ const box=$('captions'), prefix=msg.role==='assistant'?'脳: ':'あなた: '; if(msg.append && box.lastElementChild && box.lastElementChild.dataset.role===msg.role) box.lastElementChild.textContent += msg.text||''; else { const p=document.createElement('div'); p.dataset.role=msg.role||'unknown'; p.textContent=prefix+(msg.text||''); box.append(p); } while(box.children.length>100)box.firstChild.remove(); return; }
+    if(msg.type==='audio'){ playAudio(msg.audio); return; }
+    if(msg.type==='discard_audio'){ discardAudio('server discard_audio'); state.frame=null; $('frame').textContent='—'; return; }
+    if(msg.type==='command_result'){log('command_result: '+JSON.stringify(msg));return;}
+    if(msg.type==='error'){log('error '+safe(msg.error)+': '+safe(msg.message),'bad');return;}
+    log('unknown message type: '+msg.type,'warn');
+  }
+  function command(type, extra={}) { send(Object.assign({type},extra)); }
+  $('connect').onclick=connect; $('disconnect').onclick=()=>{if(state.socket)state.socket.close();};
+  $('profile').onchange=e=>command('switch_target',{profile:e.target.value});
+  $('setOwner').onclick=()=>{state.owner=$('ownerSelect').value;state.outputInhibited=true;render();command('set_owner',{owner:state.owner});};
+  $('resume').onclick=()=>command('resume'); $('emergency').onclick=()=>{state.outputInhibited=true;render();command('emergency_stop');};
+  document.querySelectorAll('#actions button').forEach(b=>b.onclick=()=>command('set_action',{action:b.dataset.action,commandId:crypto.randomUUID(),controlEpoch:state.epoch,validForMs:4000}));
+  $('sendText').onclick=()=>{const text=$('text').value.trim();if(text){command('player_text',{text,commandId:crypto.randomUUID(),controlEpoch:state.epoch});$('text').value='';}};
+  $('conversationStart').onclick=()=>{if(confirm('会話サービスの利用により課金が発生する可能性があります。開始しますか？'))command('conversation_start');}; $('conversationStop').onclick=()=>command('conversation_stop');
+  function b64(bytes){let s='';for(let i=0;i<bytes.length;i+=0x8000)s+=String.fromCharCode(...bytes.subarray(i,i+0x8000));return btoa(s);}
+  function pcm16(samples){const out=new Int16Array(samples.length);for(let i=0;i<samples.length;i++)out[i]=Math.max(-1,Math.min(1,samples[i]))*0x7fff;return out;}
+  function resample(input,from,to){if(from===to)return input;const n=Math.max(1,Math.round(input.length*to/from)),out=new Float32Array(n),ratio=from/to;for(let i=0;i<n;i++){const x=i*ratio,j=Math.floor(x),f=x-j;out[i]=(input[j]||0)*(1-f)+(input[j+1]||input[j]||0)*f;}return out;}
+  async function startAudio(){if(state.micActive||state.micStarting||state.conversationState!=='live'){log('live会話中だけマイクを開始できます','warn');return;}state.micStarting=true;try{const stream=await navigator.mediaDevices.getUserMedia({audio:{channelCount:1,echoCancellation:true,noiseSuppression:true,autoGainControl:false}});if(!state.connected||!state.socket||state.socket.readyState!==WebSocket.OPEN||state.conversationState!=='live'){stream.getTracks().forEach(t=>t.stop());log('マイク許可後に接続またはlive会話が終了したため開始しません','warn');return;}state.stream=stream;const ctx=state.audioContext||new (window.AudioContext||window.webkitAudioContext)();state.audioContext=ctx;await ctx.resume();if(!state.connected||!state.socket||state.socket.readyState!==WebSocket.OPEN||state.conversationState!=='live'||state.stream!==stream||state.audioContext!==ctx){stream.getTracks().forEach(t=>t.stop());if(state.stream===stream)state.stream=null;log('AudioContext復帰後に接続世代が変わったためマイクを開始しません','warn');return;}state.source=ctx.createMediaStreamSource(stream);state.processor=ctx.createScriptProcessor(2048,1,1);state.processor.onaudioprocess=e=>{if(state.playing||!state.micActive||ctx.currentTime<state.micSuppressedUntil)return;const pcm=pcm16(resample(e.inputBuffer.getChannelData(0),ctx.sampleRate,24000));send({type:'audio',audio:b64(new Uint8Array(pcm.buffer)),controlEpoch:state.epoch});};state.source.connect(state.processor);state.processor.connect(ctx.destination);state.micActive=true;log('マイク音声開始（PCM16 mono 24kHz、再生中+echo guard 200msは送信抑止）','good');}catch(e){log('マイク開始失敗: '+e.message,'bad');stopAudio();}finally{state.micStarting=false;render();}}
+  function stopPlayback(){ for(const node of state.audioNodes){try{node.onended=null;node.stop();}catch(e){}try{node.disconnect();}catch(e){}} state.audioNodes.clear();state.playing=0;state.nextAudioTime=0;state.queuedAudioSeconds=0;state.micSuppressedUntil=0; }
+  function stopAudio(){state.micActive=false;stopPlayback();if(state.processor){state.processor.disconnect();state.processor=null;}if(state.source){state.source.disconnect();state.source=null;}if(state.stream){state.stream.getTracks().forEach(t=>t.stop());state.stream=null;}if(state.audioContext){state.audioContext.close();state.audioContext=null;}render();}
+  function discardAudio(reason){stopPlayback();if(state.audioContext)state.micSuppressedUntil=state.audioContext.currentTime+0.2;$('captions').textContent='';log('音声キュー・字幕・旧frameを破棄: '+reason,'warn');render();}
+  function playAudio(encoded){try{if(typeof encoded!=='string')throw new Error('audio payload is not base64');const bin=atob(encoded),buf=new ArrayBuffer(bin.length);const u=new Uint8Array(buf);for(let i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i);if(buf.byteLength%2)throw new Error('PCM16 byte length is odd');const pcm=new Int16Array(buf),duration=pcm.length/24000,ctx=state.audioContext||(state.audioContext=new (window.AudioContext||window.webkitAudioContext)());state.queuedAudioSeconds=Math.max(0,state.nextAudioTime-ctx.currentTime);if(state.queuedAudioSeconds+duration>5){discardAudio('音声キューが5秒を超えたため安全停止');return;}const ab=ctx.createBuffer(1,pcm.length,24000),ch=ab.getChannelData(0);for(let i=0;i<pcm.length;i++)ch[i]=pcm[i]/32768;const src=ctx.createBufferSource();src.buffer=ab;src.connect(ctx.destination);const startAt=Math.max(ctx.currentTime,state.nextAudioTime);state.nextAudioTime=startAt+duration;state.queuedAudioSeconds=state.nextAudioTime-ctx.currentTime;state.micSuppressedUntil=state.nextAudioTime+0.2;state.audioNodes.add(src);state.playing=state.audioNodes.size;src.onended=()=>{state.audioNodes.delete(src);state.playing=state.audioNodes.size;state.queuedAudioSeconds=Math.max(0,state.nextAudioTime-ctx.currentTime);};src.start(startAt);}catch(e){log('音声再生失敗: '+e.message,'bad');}}
+  $('audioStart').onclick=startAudio; $('audioStop').onclick=stopAudio; window.addEventListener('beforeunload',stopAudio); render();
+})();
+</script>
+</body>
+</html>
