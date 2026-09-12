@@ -31,6 +31,7 @@ _SOURCE_FILES = (
     "analog_motor_decoder.py",
     "game_controller.py",
     "shiu_compatible.py",
+    "lif_kernels.py",
     "temporal_motor_decoder.py",
 )
 

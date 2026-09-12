@@ -1,2 +1,4 @@
 numpy==1.24.3
+numba==0.61.2
+llvmlite==0.44.0
 psutil==7.2.2

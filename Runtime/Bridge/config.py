@@ -27,9 +27,11 @@ _SOURCE_FILES = (
     "brain_server_analog.py",
     "brain_server_malecns.py",
     "analog_controller.py",
+    "neural_visualization.py",
     "analog_motor_decoder.py",
     "game_controller.py",
     "shiu_compatible.py",
+    "lif_kernels.py",
     "temporal_motor_decoder.py",
 )
 _TOP_LEVEL = {"profile", "bridge", "brain", "conversation", "control", "logPath"}

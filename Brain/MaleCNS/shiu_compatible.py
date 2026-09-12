@@ -6,6 +6,11 @@ events are applied during synapses, hence affect thresholds on the next tick.
 """
 import numpy as np
 
+if __package__:
+    from .lif_kernels import update_state_and_extract_fired
+else:
+    from lif_kernels import update_state_and_extract_fired
+
 
 class MaleCNSShiuCompatibleLIF:
     def __init__(self, n, indptr, post, weights_mv, stimulated=(), dt=0.1):
@@ -18,8 +23,8 @@ class MaleCNSShiuCompatibleLIF:
         self.last = np.full(n, -1000000, dtype=np.int64)
         self.rfc = np.full(n, 22, dtype=np.int64)
         self.rfc[list(stimulated)] = 0
-        self._scratch_v = np.empty(n, dtype=np.float64)
-        self._scratch_g = np.empty(n, dtype=np.float64)
+        self._active = np.empty(n, dtype=np.bool_)
+        self._fired = np.empty(n, dtype=np.int64)
         self.tick = 0
         self.pending = [[] for _ in range(19)]
 
@@ -31,16 +36,11 @@ class MaleCNSShiuCompatibleLIF:
         c = (a-b)/3
         for _ in range(ticks):
             k = self.tick
-            active = (k-self.last) >= self.rfc
-            # Reuse float64 buffers; retain the original arithmetic order and active mask.
-            np.add(self.v, 52, out=self._scratch_v)
-            np.multiply(self._scratch_v, a, out=self._scratch_v)
-            np.add(-52, self._scratch_v, out=self._scratch_v)
-            np.multiply(self.g, c, out=self._scratch_g)
-            np.add(self._scratch_v, self._scratch_g, out=self._scratch_v)
-            np.copyto(self.v, self._scratch_v, where=active)
-            np.multiply(self.g, b, out=self.g, where=active)
-            fired = np.flatnonzero(active & (self.v > -45))
+            fired_count = update_state_and_extract_fired(
+                self.v, self.g, self.last, self.rfc, k, a, b, c,
+                self._active, self._fired)
+            active = self._active
+            fired = self._fired[:fired_count]
             self.last[fired] = k
             count[fired] += 1
             if record:

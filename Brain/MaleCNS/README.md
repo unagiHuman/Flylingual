@@ -1,5 +1,11 @@
 # MaleCNS backend audit (M2-M3)
 
+## Current Windows compiled runtime (2026-09-13)
+
+The Windows runtime now requires `pip install -r Brain/MaleCNS/requirements-runtime.txt` with Python 3.10 recommended. It uses the serial float64 Numba LIF kernel with `fastmath=False`; the first JIT compile occurs before READY. Numba is required and there is no silent fallback. Numerical equivalence and direct timings are recorded in [M1 compiled-kernel validation](../../Docs/windows/M1-malecns-compiled-kernel-validation.md). The compiled 168-window result is not a Unity/TCP acceptance result; `ready=false` remains.
+
+The 2026-09-13 existing Native Player trial reached 18/18 Brain action applications with no 750 ms compute or frame-gap stop, but it did not demonstrate walking; microphone, 15-minute continuity, and a new Unity build remain untested.
+
 Current experimental entrypoint: `python Brain/MaleCNS/brain_server_analog.py` from Parallel (50ms only). It uses the validated neuron-only graph and Action-blind EMA100ms plus symmetric turn hysteresis. See [temporal checkpoint](../../Docs/mac/temporal-decoder-checkpoint.md). Five independent seeds, controller equivalence, localhost TCP, and wire Replay passed. `ready=false`: Windows Replay/Live and gameplay latency acceptance remain open. The legacy server below is not the accepted temporal backend. No production synaptic gain or LIF change was made.
 
 New validation-only variant: **Shiu-compatible LIF dynamics applied to the MaleCNS connectome** (`shiu_compatible.py`). This is not official MaleCNS neural dynamics. See [neuron checkpoint audit](../../Docs/mac/neuron-shiu-checkpoint.md). The TCP runtime is not switched to this candidate; `ready=false` remains mandatory.
