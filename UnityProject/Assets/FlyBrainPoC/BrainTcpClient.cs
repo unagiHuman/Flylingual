@@ -35,11 +35,20 @@ namespace FlyBrainPoC
         private string requestedAction = "STOP";
         private double latestLatencyMs = -1;
         private int nextRequestId = 1;
+        private bool receiveOnly;
+        private bool reportedBlockedSend;
 
         public string Host => host;
         public int Port => port;
         public event Action<string> ReceivedLine;
         public event Action<string> SentLine;
+        public void EnableReceiveOnly()
+        {
+            if (connectionTask != null && !connectionTask.IsCompleted)
+                throw new InvalidOperationException("Enable receive-only before connecting");
+            lock (dataLock) receiveOnly = true;
+        }
+
         public void ConfigureEndpoint(string address, int serverPort, bool reconnect)
         {
             if (connectionTask != null && !connectionTask.IsCompleted) throw new InvalidOperationException("Disconnect before configuring endpoint");
@@ -142,6 +151,15 @@ namespace FlyBrainPoC
 
         public void SetAction(string action, bool force = false)
         {
+            lock (dataLock)
+            {
+                if (receiveOnly)
+                {
+                    if (!reportedBlockedSend) UnityEngine.Debug.LogWarning("BRAIN_RECEIVE_ONLY_ACTION_BLOCKED");
+                    reportedBlockedSend = true;
+                    return;
+                }
+            }
             if (!IsAllowedAction(action))
             {
                 SetError("Unity rejected unknown action: " + action);

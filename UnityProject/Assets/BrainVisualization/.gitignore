@@ -1,0 +1,5 @@
+# Regenerate anatomy from the local versioned connectome; do not publish derived datasets.
+/Resources/BrainVisualization/malecns-atlas.json
+/Resources/BrainVisualization/malecns-atlas.json.meta
+/Generated/
+/Generated.meta

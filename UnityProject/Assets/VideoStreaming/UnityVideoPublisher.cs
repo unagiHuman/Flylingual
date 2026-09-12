@@ -286,16 +286,14 @@ namespace Flylingual.Video
                 jpegBytes = capture.jpeg == null ? 0 : capture.jpeg.Length,
                 diagnosticsOverlay = capture.markerEnabled,
             };
+            // Unity's inline class serializer cannot preserve a null identity.
+            // Keep unavailable identity explicitly null, while emitting only a
+            // complete provenance record when one is available.
+            string metadataJson = JsonUtility.ToJson(metadata);
             UnityVideoBrainIdentity.SnapshotData identity = brainIdentity == null ? null : brainIdentity.Snapshot();
-            // The receiver accepts brainIdentity only as a complete provenance
-            // record.  While the passive observer has no verified binding, omit
-            // the optional key instead of serializing an empty identity object.
-            string json = identity == null ? JsonUtility.ToJson(metadata) : JsonUtility.ToJson(new FrameMetadataWithIdentity
-            {
-                captureMs = metadata.captureMs, encodeMs = metadata.encodeMs, uploadMs = metadata.uploadMs,
-                gameFps = metadata.gameFps, videoFps = metadata.videoFps, jpegBytes = metadata.jpegBytes,
-                diagnosticsOverlay = metadata.diagnosticsOverlay, brainIdentity = identity,
-            });
+            string identityJson = identity == null ? "null" : JsonUtility.ToJson(identity);
+            string json = metadataJson.Substring(0, metadataJson.Length - 1) +
+                ",\"brainIdentity\":" + identityJson + "}";
             return Convert.ToBase64String(Encoding.UTF8.GetBytes(json));
         }
 
@@ -323,13 +321,6 @@ namespace Flylingual.Video
             public double captureMs, encodeMs, uploadMs, gameFps, videoFps;
             public int jpegBytes;
             public bool diagnosticsOverlay;
-        }
-        [Serializable] sealed class FrameMetadataWithIdentity
-        {
-            public double captureMs, encodeMs, uploadMs, gameFps, videoFps;
-            public int jpegBytes;
-            public bool diagnosticsOverlay;
-            public UnityVideoBrainIdentity.SnapshotData brainIdentity;
         }
         [Serializable] sealed class UploadResponse { public long acceptedSequence; public uint probeNonce; }
         [Serializable] sealed class ErrorResponse { public string error; }

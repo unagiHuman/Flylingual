@@ -343,10 +343,15 @@ class Bridge:
                         'Conversation only. No action was executed. Current Brain observations are unavailable. '
                         'Continue the conversation; explain that body control is disabled if requested.', delegation_id)
                 return
+            command_id = 'voice-' + str(uuid.uuid4())
             try:
-                self.start_intent(text, 'voice-' + str(uuid.uuid4()), self.arbiter.epoch, delegation_id)
+                self.start_intent(text, command_id, self.arbiter.epoch, delegation_id)
+                self.log('voice_intent_dispatch', outcome='started', commandId=command_id)
             except ControlError as exc:
+                self.log('voice_intent_dispatch', outcome='rejected', reason=str(exc))
                 self.emit({'type': 'error', 'error': str(exc)})
+        else:
+            self.log('voice_intent_dispatch', outcome='stale_context')
 
     def start_intent(self, text, command_id, epoch, delegation_id=None):
         if self.conversation_interaction == 'chat_only':
@@ -372,6 +377,10 @@ class Bridge:
         try:
             proposal = await self.conversation.interpret(text, self.summary(),
                 self.config['control']['defaultActionMs'], self.config['control']['maxActionMs'])
+            self.log('intent_classified', commandId=command_id,
+                     source='voice' if delegation_id is not None else 'text',
+                     kind=proposal['kind'],
+                     action=proposal['action'] if proposal['kind'] == 'action' else None)
             if epoch != self.arbiter.epoch or revision != self.intent_revision:
                 raise ControlError('stale_intent')
             if (time.monotonic()-started)*1000 > self.config['control']['maxActionMs']:

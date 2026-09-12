@@ -15,7 +15,8 @@ class AnalogWorker(Worker):
 
     def run(self):
         try:
-            c=MaleCNSAnalogController(self.args.graph,self.args.config,self.args.seed,self.args.window_ms).initialize()
+            c=MaleCNSAnalogController(self.args.graph,self.args.config,self.args.seed,self.args.window_ms,
+                                      getattr(self.args,'visualization_atlas',None)).initialize()
             if not c.config.get('sixActionValidationPassed') or not c.temporal:
                 raise RuntimeError('Validated temporal config required')
             self.controller=c; self.ready_event.set()
@@ -64,6 +65,8 @@ def parse_args():
     p.add_argument('--host',default='127.0.0.1'); p.add_argument('--port',type=int,default=8766)
     p.add_argument('--seed',type=int,default=20270101)
     p.add_argument('--window-ms',type=float,choices=[50],default=50)
+    p.add_argument('--visualization-atlas',type=Path,default=None,
+                   help='optional validated MaleCNS soma atlas; emits window spike counts in atlas order')
     return p.parse_args()
 
 

@@ -160,6 +160,37 @@ current bounded queue size, high-water is the maximum observed depth for the
 session, and `audioBackpressureCount` counts queue-full rejections.
 `lastErrorCode` is a stable safe code or `null`, never an API error message.
 
+The additional delegation/transcript diagnostic set has these ten counters:
+`delegationEventsSeen` (raw delegation events),
+`delegationRejectedShape`, `delegationRejectedTarget`,
+`delegationRejectedId`, `delegationRejectedDuplicate`,
+`delegationRejectedOffset` (the five rejection classes),
+`timedInputTranscriptDeltas`, `untimedInputTranscriptDeltas`,
+`delegationWithTranscript`, and `delegationWithoutTranscript`.
+The existing `delegationCount` and `inputTranscriptDeltas` counters remain
+separate. Their accounting identities are strict:
+
+```text
+delegationEventsSeen = delegationCount
+  + delegationRejectedShape + delegationRejectedTarget
+  + delegationRejectedId + delegationRejectedDuplicate
+  + delegationRejectedOffset
+delegationCount = delegationWithTranscript + delegationWithoutTranscript
+inputTranscriptDeltas = timedInputTranscriptDeltas + untimedInputTranscriptDeltas
+```
+
+`delegationCount` is incremented only after the client-target, bounded ID,
+duplicate, and finite-offset checks pass. The timing counters classify input
+transcript deltas and do not imply that a delegation was accepted. Counters
+reset at live session start; context clearing and conversation stop drain
+queued audio while retaining the current session counters. A later session
+start creates a new set. No transcript body, PCM, or delegation ID is put in
+diagnostics or durable ordinary logs. Bridge-generated voice command IDs may
+appear in the server's `voice_intent_dispatch` and `intent_classified`
+correlation logs; they are not delegation IDs or transcript content. Any
+bounded in-memory delegation ID used solely for duplicate rejection is not
+exposed as evidence.
+
 All counters reset when a new live session starts. A context invalidation or
 conversation stop drains and discards queued audio but does not retroactively
 erase the counters for the session; subsequent session start creates a fresh

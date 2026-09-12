@@ -106,6 +106,16 @@ class ConversationAdapter:
             'outputZeroChunks': 0,
             'outputNonzeroChunks': 0,
             'delegationCount': 0,
+            'delegationEventsSeen': 0,
+            'delegationRejectedShape': 0,
+            'delegationRejectedTarget': 0,
+            'delegationRejectedId': 0,
+            'delegationRejectedDuplicate': 0,
+            'delegationRejectedOffset': 0,
+            'timedInputTranscriptDeltas': 0,
+            'untimedInputTranscriptDeltas': 0,
+            'delegationWithTranscript': 0,
+            'delegationWithoutTranscript': 0,
             'audioQueueDepth': 0,
             'audioQueueHighWater': 0,
             'audioBackpressureCount': 0,
@@ -244,15 +254,33 @@ class ConversationAdapter:
                     if role == 'user':
                         start, end = event.get('start_ms'), event.get('end_ms')
                         if (type(start) in (int, float) and type(end) in (int, float)
-                                and 0 <= start <= end < 10**12 and math.isfinite(end)):
+                                and 0 <= start <= end < 10**12
+                                and math.isfinite(start) and math.isfinite(end)):
+                            self._diagnostics['timedInputTranscriptDeltas'] += 1
                             self.fragments.append((start, end, text[:2000]))
                             self.max_offset = max(self.max_offset, end)
+                        else:
+                            self._diagnostics['untimedInputTranscriptDeltas'] += 1
                 elif kind == 'session.delegation.created':
-                    delegation = event.get('delegation', {})
-                    did, offset = delegation.get('id'), event.get('offset_ms')
-                    if (delegation.get('target') != 'client' or not isinstance(did, str)
-                            or len(did) > 256 or did in self.delegations
-                            or type(offset) not in (int, float) or not 0 <= offset < 10**12):
+                    self._diagnostics['delegationEventsSeen'] += 1
+                    delegation = event.get('delegation')
+                    if not isinstance(delegation, dict):
+                        self._diagnostics['delegationRejectedShape'] += 1
+                        continue
+                    if delegation.get('target') != 'client':
+                        self._diagnostics['delegationRejectedTarget'] += 1
+                        continue
+                    did = delegation.get('id')
+                    if not isinstance(did, str) or not 1 <= len(did) <= 256:
+                        self._diagnostics['delegationRejectedId'] += 1
+                        continue
+                    if did in self.delegations:
+                        self._diagnostics['delegationRejectedDuplicate'] += 1
+                        continue
+                    offset = event.get('offset_ms')
+                    if (type(offset) not in (int, float) or not 0 <= offset < 10**12
+                            or not math.isfinite(offset)):
+                        self._diagnostics['delegationRejectedOffset'] += 1
                         continue
                     self.delegations.append(did)
                     self._diagnostics['delegationCount'] += 1
@@ -262,8 +290,10 @@ class ConversationAdapter:
                     # An event has no task text. Never invent one from its ID.
                     # The callback schedules interpretation; audio reading stays live.
                     if text:
+                        self._diagnostics['delegationWithTranscript'] += 1
                         await self.on_utterance(text, did, self.context_generation)
                     else:
+                        self._diagnostics['delegationWithoutTranscript'] += 1
                         await self.append('commentary', message_text('incomplete_utterance', self.settings['language']), did)
         except asyncio.CancelledError:
             raise

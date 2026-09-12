@@ -150,12 +150,22 @@ public static class FlyGroundedRealismBuilder
         BuildScene(ScenePath, "FlyGroundedRealism.app");
     }
 
-    static void BuildScene(string scenePath, string appName)
+    [MenuItem("FlyBrain/Visual Realism/Build Browser Controlled Body OSX")]
+    public static void BuildBrowserControlled()
     {
-        Directory.CreateDirectory(Output);
+        // Build the existing flat candidate without regenerating or saving a scene.
+        string output = Path.Combine(Output, "brain-integration", "build-" + DateTime.UtcNow.ToString("yyyyMMdd-HHmmss-fff"));
+        BuildScene(ReviewScenePath, "FlyBrowserControlled.app", output);
+        Debug.Log("BROWSER_BODY_BUILD_PASS output=" + Path.Combine(output, "FlyBrowserControlled.app"));
+    }
+
+    static void BuildScene(string scenePath, string appName, string output = null)
+    {
+        output = output ?? Output;
+        Directory.CreateDirectory(output);
         var result = BuildPipeline.BuildPlayer(new BuildPlayerOptions
         {
-            scenes = new[] { scenePath }, locationPathName = Path.Combine(Output, appName),
+            scenes = new[] { scenePath }, locationPathName = Path.Combine(output, appName),
             target = BuildTarget.StandaloneOSX, options = BuildOptions.Development
         });
         if (result.summary.result != BuildResult.Succeeded) throw new InvalidOperationException("Grounded candidate build failed.");

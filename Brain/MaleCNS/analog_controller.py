@@ -7,6 +7,7 @@ import numpy as np
 from shiu_compatible import MaleCNSShiuCompatibleLIF
 from analog_motor_decoder import AnalogMotorDecoder
 from temporal_motor_decoder import TemporalMotorDecoder
+from neural_visualization import load_visualization_atlas
 
 ROOT=Path(__file__).resolve().parents[2]
 ACTIONS={'STOP':(), 'FORWARD':('F',), 'TURN_R':('R',), 'TURN_L':('L',),
@@ -14,10 +15,11 @@ ACTIONS={'STOP':(), 'FORWARD':('F',), 'TURN_R':('R',), 'TURN_L':('L',),
 
 
 class MaleCNSAnalogController:
-    def __init__(self,graph,config,seed=20261101,window_ms=100):
+    def __init__(self,graph,config,seed=20261101,window_ms=100,visualization_atlas=None):
         self.graph=Path(graph); self.config=json.loads(Path(config).read_text()) if isinstance(config,(str,Path)) else config
         self.seed=seed; self.window_ms=float(window_ms); self.sequence=0; self.action='STOP'
         self.network_rebuild_count=0; self.state_reset_count=0; self.frame=None
+        self.visualization_atlas=visualization_atlas; self.visualization=None
         self.decoder=AnalogMotorDecoder(self.config['decoder']) if self.config.get('decoder') else None
         self.temporal=bool(self.config.get('temporalDecoder'))
         if self.temporal: self.decoder=TemporalMotorDecoder(self.config['temporalDecoder'])
@@ -43,6 +45,8 @@ class MaleCNSAnalogController:
         stim=np.unique(np.concatenate(list(self.inputs.values())))
         if np.intersect1d(stim,self.observed).size: raise ValueError('Input/readout overlap')
         self.sim=MaleCNSShiuCompatibleLIF(len(self.ids),ptr,post,w,stim)
+        if self.visualization_atlas is not None:
+            self.visualization=load_visualization_atlas(self.visualization_atlas,self.graph,self.ids)
         self.rng=np.random.default_rng(self.seed)
         # Explicit initial no-input baseline; no subsequent resets.
         self.sim.step(1000)
@@ -84,6 +88,15 @@ class MaleCNSAnalogController:
             'metadata':{'backendId':'MALECNS_EXPERIMENTAL','datasetId':'male-cns:v1.0',
                         'model':'MaleCNS + Shiu-compatible LIF','motor_readout':'VNC_ANALOG_POPULATION',
                         'mode':'LIVE','ready':False,'calibrationApplied':self.decoder is not None}}
+        if self.visualization is not None:
+            # Counts are whole-window totals, not spike event timings.  Reading
+            # the existing count buffer does not alter LIF state or RNG use.
+            self.frame['visualization']={
+                'schemaVersion':1,'atlasId':self.visualization.atlas_id,
+                'metric':'window_spike_count','windowMs':self.window_ms,
+                'bodyIds':self.visualization.body_ids,
+                'spikeCounts':counts[self.visualization.graph_indices].astype(int).tolist(),
+            }
         self.frame['metadata']['sixActionValidationPassed']=bool(self.config.get('sixActionValidationPassed',False))
         if self.temporal:
             self.frame['raw']['filteredRaw']=decoded['filteredRaw']

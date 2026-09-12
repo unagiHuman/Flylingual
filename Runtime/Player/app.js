@@ -258,12 +258,14 @@
     text('brain-identity',JSON.stringify({target:state.target,sessionId:state.sessionId,instanceId:state.instanceId,configHash:state.configHash,graphHash:state.graphHash,sourceHash:state.sourceHash,voiceControlAvailable:state.voiceControlAvailable},null,2));
   }
   function renderVideo(detail){
-    const live=detail.live,busyVideo=['connecting','signalling','connected'].includes(detail.connection);
+    detail=detail||{};const live=detail.live===true,busyVideo=['connecting','signalling','connected'].includes(detail.connection);
+    const identity=detail.identityState==='matched'&&detail.bodyBrainSessionMatched===true&&live?'Brain一致':detail.identityState==='mismatch'?'Brain不一致':'Brain一致 未確認';
     $('video-placeholder').hidden=live;$('video-dot').classList.toggle('live',live);$('video-live-state').classList.toggle('live',live);$('video-view-button').disabled=busyVideo;
     text('video-view-button',busyVideo?'映像を接続中…':detail.connection==='idle'?'映像をつなぐ':'映像を再接続');
     text('video-placeholder-title',detail.connection==='idle'?'小さな世界を、のぞいてみよう。':detail.connection==='stale'?'映像が途切れました。':detail.connection==='error'?'映像につながりませんでした。':busyVideo?'ハエの世界につないでいます…':'Unityからの映像を待っています。');
     text('video-placeholder-note',detail.error||'Unityの映像をここに映します。');
     text('video-brief',live?(detail.source?.kind==='diagnostic'?'診断用の映像を受信中':detail.sourceLabel+' の映像を受信中'):detail.error?'接続設定を確認して、もう一度お試しください。':'映像の接続を待っています');
+    text('video-brain-identity',identity);text('video-brain-identity-detail',identity);
   }
   window.addEventListener('flyvideochange',event=>renderVideo(event.detail));if(window.FlyVideo)renderVideo(FlyVideo.state());
   $('video-view-button').onclick=()=>$('video-connect-form').requestSubmit();

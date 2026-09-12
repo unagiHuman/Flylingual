@@ -58,6 +58,7 @@ namespace FlyVisualDemo
         bool delayingLiveConnection;
         string reportedLiveConnectionState;
         string reportedLiveError;
+        bool browserControlled;
         int warmupFrames;
         readonly List<float> renderTimes = new List<float>();
         GUIStyle titleStyle, textStyle, smallStyle, buttonStyle;
@@ -73,6 +74,12 @@ namespace FlyVisualDemo
             Application.runInBackground = true;
             startedAt = Time.realtimeSinceStartup;
             game = GetComponent<AscentGameSession>();
+            browserControlled = Flag("-demoBrowserControlled");
+            if (browserControlled)
+            {
+                client.EnableReceiveOnly();
+                if (game != null) game.enabled = false;
+            }
             if(Flag("-demoLoop")) loop=true;
             client.enabled = false;
             client.Disconnect();
@@ -85,7 +92,7 @@ namespace FlyVisualDemo
             output = Argument("-demoOutput");
             if (string.IsNullOrEmpty(output)) output = Path.Combine(Application.persistentDataPath, "WindowsReplay");
             Directory.CreateDirectory(output);
-            samples = new StreamWriter(Path.Combine(output, "replay_samples_" + DateTime.UtcNow.ToString("yyyyMMdd_HHmmss_fff") + ".csv"));
+            samples = new StreamWriter(Path.Combine(output, (browserControlled ? "browser_body_samples_" : "replay_samples_") + DateTime.UtcNow.ToString("yyyyMMdd_HHmmss_fff") + ".csv"));
             samples.WriteLine("time,mode,index,sequence,action,forward,turn,DNp09,DNa02_R,DNa02_L,dx,dy,dz,yaw,attached,grip,detach");
             samples.AutoFlush = true;
             float.TryParse(Argument("-demoQuitAfter"), NumberStyles.Float, CultureInfo.InvariantCulture, out quitAfter);
@@ -101,40 +108,85 @@ namespace FlyVisualDemo
                 emergency = true;
                 return;
             }
-            try
+            if (browserControlled)
             {
-                string path = Path.Combine(Application.streamingAssetsPath, fixtureName);
-                if (!string.IsNullOrEmpty(Argument("-demoReplay"))) path = Path.GetFullPath(Argument("-demoReplay"));
-                originalLines = File.ReadAllLines(path).Where(s => !string.IsNullOrWhiteSpace(s)).ToArray();
-                if (originalLines.Length == 0) throw new InvalidDataException("Replay is empty");
-                foreach (string line in originalLines)
-                    foreach (string key in new[] { "sequence", "forward", "turn" })
-                        if (!Regex.IsMatch(line, "\"" + key + "\"\\s*:\\s*-?[0-9]")) throw new InvalidDataException("Replay missing numeric " + key);
-                SelectReplay(string.IsNullOrEmpty(Argument("-demoAction")) ? "ALL" : Argument("-demoAction"));
+                if (!ConfigureBrowserControl()) return;
             }
-            catch (Exception e) { error = e.Message; Debug.LogError("REPLAY_LOAD_FAILED " + e); controller.SetMotorSource(null); }
+            else
+            {
+                try
+                {
+                    string path = Path.Combine(Application.streamingAssetsPath, fixtureName);
+                    if (!string.IsNullOrEmpty(Argument("-demoReplay"))) path = Path.GetFullPath(Argument("-demoReplay"));
+                    originalLines = File.ReadAllLines(path).Where(s => !string.IsNullOrWhiteSpace(s)).ToArray();
+                    if (originalLines.Length == 0) throw new InvalidDataException("Replay is empty");
+                    foreach (string line in originalLines)
+                        foreach (string key in new[] { "sequence", "forward", "turn" })
+                            if (!Regex.IsMatch(line, "\"" + key + "\"\\s*:\\s*-?[0-9]")) throw new InvalidDataException("Replay missing numeric " + key);
+                    SelectReplay(string.IsNullOrEmpty(Argument("-demoAction")) ? "ALL" : Argument("-demoAction"));
+                }
+                catch (Exception e) { error = e.Message; Debug.LogError("REPLAY_LOAD_FAILED " + e); controller.SetMotorSource(null); }
+            }
             if (Flag("-demoHideVisual") && visualRig != null) foreach (var r in visualRig.GetComponentsInChildren<Renderer>()) r.enabled = false;
-            if (Flag("-demoLive"))
+            if (browserControlled || Flag("-demoLive"))
             {
                 string host=Argument("-brainHost");
-                if(!string.IsNullOrEmpty(host)) client.ConfigureEndpoint(host,int.Parse(Argument("-brainPort"),CultureInfo.InvariantCulture),false);
-                if (float.TryParse(Argument("-demoLiveConnectDelay"), NumberStyles.Float, CultureInfo.InvariantCulture, out float delay) && delay > 0f)
+                if(!browserControlled && !string.IsNullOrEmpty(host)) client.ConfigureEndpoint(host,int.Parse(Argument("-brainPort"),CultureInfo.InvariantCulture),false);
+                float.TryParse(Argument("-demoLiveConnectDelay"), NumberStyles.Float, CultureInfo.InvariantCulture, out float delay);
+                if (browserControlled || delay > 0f)
                 {
                     // Allow local Brain/Bridge startup to remain inhibited
                     // during Player loading. No replay motor runs in this gap.
                     mode = BrainSourceMode.LiveTcp;
                     delayingLiveConnection = true;
                     controller.SetMotorSource(null);
-                    Debug.Log("LIVE_TCP_DELAY_REALTIME seconds=" + Mathf.Min(delay, 30f).ToString("R", CultureInfo.InvariantCulture) + " endpoint=" + client.Host + ":" + client.Port);
+                    float delaySeconds = browserControlled ? Mathf.Clamp(delay, .05f, 30f) : Mathf.Min(delay, 30f);
+                    Debug.Log("LIVE_TCP_DELAY_REALTIME seconds=" + delaySeconds.ToString("R", CultureInfo.InvariantCulture) + " endpoint=" + client.Host + ":" + client.Port);
+                    // AfterSceneLoad publishers must subscribe to ReceivedLine before
+                    // the Bridge sends its initial identity status on connection.
                     // The session intro intentionally pauses scaled game time.  Live
                     // transport startup must remain a realtime wait so the paused
                     // safe-stop state cannot prevent a requested TCP connection.
-                    StartCoroutine(StartLiveConnectionAfterDelay(Mathf.Min(delay, 30f)));
+                    StartCoroutine(StartLiveConnectionAfterDelay(delaySeconds));
                 }
                 else StartLiveConnection();
             }
             playbackStarting = Flag("-demoWarmup") && mode == BrainSourceMode.Replay;
             if (playbackStarting) controller.SetMotorSource(null);
+        }
+        bool ConfigureBrowserControl()
+        {
+            mode = BrainSourceMode.LiveTcp;
+            controller.SetMotorSource(null);
+            replay.enabled = false;
+            loop = false;
+            foreach (string flag in new[] { "-liveTrial", "-demoExerciseControls", "-steeringTrial", "-physicsDiagnostic", "-demoReplay", "-demoAction", "-demoLoop", "-demoWarmup" })
+                if (Flag(flag)) return RejectBrowserControl("incompatible option " + flag);
+            string host = Argument("-brainHost");
+            if ((host != "127.0.0.1" && host != "localhost" && host != "::1") ||
+                !int.TryParse(Argument("-brainPort"), NumberStyles.None, CultureInfo.InvariantCulture, out int port) || port < 1 || port > 65535)
+                return RejectBrowserControl("explicit loopback -brainHost and Bridge -brainPort are required");
+            string delayText = Argument("-demoLiveConnectDelay");
+            if (delayText.Length > 0 && (!float.TryParse(delayText, NumberStyles.Float, CultureInfo.InvariantCulture, out float delay) ||
+                float.IsNaN(delay) || float.IsInfinity(delay) || delay < 0f))
+                return RejectBrowserControl("invalid -demoLiveConnectDelay");
+            client.ConfigureEndpoint(host, port, false);
+            live.enabled = true;
+            client.enabled = true;
+            Debug.Log("BROWSER_BODY_CONFIGURED receiveOnly=true source=LIVE endpoint=" + host + ":" + port);
+            return true;
+        }
+        bool RejectBrowserControl(string reason)
+        {
+            error = reason;
+            controller.SetMotorSource(null);
+            controller.enabled = false;
+            client.Disconnect();
+            enabled = false;
+            Time.timeScale = 0f;
+            Debug.LogError("BROWSER_BODY_CONFIG_INVALID " + reason);
+            Application.Quit(2);
+            return false;
         }
         void StartLiveConnection()
         {
@@ -150,7 +202,7 @@ namespace FlyVisualDemo
         }
         public void SelectReplay(string action)
         {
-            if (Flylingual.Conversation.NativeConversationRuntime.Enabled) return;
+            if (Flylingual.Conversation.NativeConversationRuntime.Enabled || browserControlled) return;
             if (originalLines == null) return;
             selectedLines = action == "ALL" ? originalLines : originalLines.Where(s => JsonUtility.FromJson<BrainFrame>(s).requestedAction == action).ToArray();
             if (selectedLines.Length == 0) { error = "No recorded frames for " + action; return; }
@@ -162,7 +214,8 @@ namespace FlyVisualDemo
         }
         void SetMode(BrainSourceMode next)
         {
-            if (Flylingual.Conversation.NativeConversationRuntime.Enabled) return;
+            if (Flylingual.Conversation.NativeConversationRuntime.Enabled ||
+                (browserControlled && next != BrainSourceMode.LiveTcp)) return;
             emergency = false; mode = next; lastIndex = -1; Time.timeScale=1;
             if (next == BrainSourceMode.Replay) SelectReplay(selected);
             else { previousLiveFrame=client.LatestBrainFrame; waitingForLiveFrame=true; client.enabled = true; client.Connect(); controller.SetMotorSource(null); }
@@ -297,7 +350,7 @@ namespace FlyVisualDemo
             bool maleCns = identityFrame?.metadata?.backendId == "MALECNS_EXPERIMENTAL";
             GUILayout.Label(maleCns ? (mode == BrainSourceMode.Replay ? "Backend: MALECNS REPLAY" : "Backend: MALECNS EXPERIMENTAL / " + client.ConnectionState) : mode == BrainSourceMode.Replay ? "Backend: REPLAY\nShiu Brain Recording" : "Backend: LIVE / " + client.ConnectionState, textStyle);
             if (maleCns) GUILayout.Label(identityFrame.metadata.model + "\n" + identityFrame.metadata.motor_readout + " / ready=" + identityFrame.metadata.ready.ToString().ToLowerInvariant(), smallStyle);
-            GUILayout.Label("A small body. A recorded brain.", smallStyle); GUILayout.Space(13);
+            GUILayout.Label(browserControlled ? "Controlled from the browser" : "A small body. A recorded brain.", smallStyle); GUILayout.Space(13);
             var f = mode == BrainSourceMode.Replay ? replay.LatestFrame : client.LatestBrainFrame;
             client.TryGetLatestFrame(out _,out double liveAge);
             GUILayout.Label("ACTION  " + (f?.requestedAction ?? "N/A"), textStyle);
@@ -332,6 +385,12 @@ namespace FlyVisualDemo
             GUILayout.Label(state, textStyle);
             GUILayout.Label(mode == BrainSourceMode.Replay ? "Playback frame age " + N((float)(Time.realtimeSinceStartupAsDouble-frameAt)) + " s / E2E N/A" : "Frame age " + (double.IsInfinity(liveAge)?"N/A":N((float)liveAge)+" s") + " / E2E " + (client.LatestLatencyMs<0?"N/A":client.LatestLatencyMs.ToString("0")+" ms"), smallStyle);
             if (!string.IsNullOrEmpty(error)) GUILayout.Label(error, smallStyle);
+            if (browserControlled)
+            {
+                GUILayout.EndArea();
+                GUI.matrix = previousMatrix;
+                return;
+            }
             GUILayout.Space(8); GUILayout.Label(mode == BrainSourceMode.Replay ? "STIMULATE / RECORDED CIRCUITS" : "SEND BRAIN STIMULUS", smallStyle);
             bool gameAllows=game==null || !game.enabled || game.Current==AscentGameSession.Phase.Running;
             GUI.enabled=gameAllows && (mode==BrainSourceMode.Replay || (!waitingForLiveFrame && !emergency && client.ConnectionState=="CONNECTED"));
@@ -352,7 +411,7 @@ namespace FlyVisualDemo
             GUI.matrix=previousMatrix;
         }
         public void RestartDemo() {Time.timeScale=1;SceneManager.LoadScene(SceneManager.GetActiveScene().path);}
-        public void PauseDemo() {emergency=true;controller.SetMotorSource(null);Time.timeScale=0;if(mode==BrainSourceMode.LiveTcp && client.ConnectionState=="CONNECTED") client.SetAction("STOP");}
+        public void PauseDemo() {emergency=true;controller.SetMotorSource(null);Time.timeScale=0;if(!browserControlled && mode==BrainSourceMode.LiveTcp && client.ConnectionState=="CONNECTED") client.SetAction("STOP");}
         [Serializable] class Validation
         {
             public string backend, unityVersion;
@@ -367,8 +426,10 @@ namespace FlyVisualDemo
                 physicsJoints=jointCount,footPads=footCount,
                 visualPhysicsComponents=visualPhysicsCount,
                 frameTimeP95Ms=renderTimes.Count==0?0:renderTimes[Mathf.Min(renderTimes.Count-1,Mathf.CeilToInt(renderTimes.Count*.95f)-1)],fixedDeltaTime=Time.fixedDeltaTime,maxVisualEndpointError=ReferenceEquals(mapper,null)?0:mapper.MaximumEndpointError };
+            if (browserControlled) report.e2e = "N/A: receive-only BrainFrame observer";
             if(!string.IsNullOrEmpty(output)) File.WriteAllText(Path.Combine(output,"validation_"+DateTime.UtcNow.ToString("yyyyMMdd_HHmmss_fff")+".json"),JsonUtility.ToJson(report,true));
-            if (!Flylingual.Conversation.NativeConversationRuntime.Enabled) Debug.Log("REPLAY_VALIDATION skippedFrames="+skippedFrames);
+            if (!Flylingual.Conversation.NativeConversationRuntime.Enabled)
+                Debug.Log(browserControlled ? "BROWSER_BODY_VALIDATION observedFrames=" + observedFrames : "REPLAY_VALIDATION skippedFrames="+skippedFrames);
             samples?.Dispose(); if(client!=null) client.Disconnect(); Time.timeScale=1;
         }
     }

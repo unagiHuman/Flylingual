@@ -1,0 +1,9 @@
+Use case: stylized-concept
+Asset type: Transparent hero specimen asset for Flylingual, a polished dark fly communication web application.
+Primary request: Create a single high-quality 3D macro render of one Drosophila fruit fly, anatomically inspired and natural, with a friendly visual presence but no cartoon facial features.
+Scene/backdrop: Truly transparent background with real alpha, no backdrop or ground plane, no environment, no cast shadow on a surface.
+Subject: One complete fruit fly with exactly six fine articulated legs, arranged so each leg can be read clearly. Golden brown thorax and striped golden brown abdomen with darker brown segment bands. Two ruby red compound eyes with finely resolved facets, short natural antennae and fine body bristles. Exactly two delicate translucent iridescent wings with fine natural veins, held slightly open.
+Style/medium: Premium detailed scientific specimen 3D render with elegant soft studio lighting, tactile organic materials and crisp silhouette; richly rendered, not a cartoon character.
+Composition/framing: Square 1024 by 1024 image. Full body centered with generous clear margin around all antennae, legs and wing tips. Three-quarter view from above, head toward left foreground and abdomen diagonally toward upper right. All appendages contained within the frame.
+Lighting/mood: Soft warm key light and subtle cool edge light designed to read beautifully on a dark navy application background. Gentle highlights, dimensional form, calm scientific character.
+Constraints: No text, no labels, no interface, no border, no watermark. One fly only. Do not add clothing, facial expressions, props, scenery, or a platform. Preserve genuine alpha transparency.
