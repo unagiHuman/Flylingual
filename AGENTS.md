@@ -2,6 +2,7 @@
 
 ## Goal
 MaleCNSの独立検証と、Windows上のUnityデモ／リアルVisualを並列で進める。
+正式な作業対象リポジトリはこのFlylingualのみとする。隣接するFlytestは参照・実行・編集・コミット・プッシュの対象にしない。
 まずDocs/00_START_HERE.md、Docs/03_SHARED_CONTRACT.md、自分のOS担当手順書を読む。
 
 ## Ownership
