@@ -51,6 +51,9 @@ class MaleCNSAnalogController:
         # Explicit initial no-input baseline; no subsequent resets.
         self.sim.step(1000)
         self.baseline=self.sim.v[self.observed].copy()
+        # Compile the normal window signature before the server can become READY
+        # without changing LIF state, pending entries, or Generator state.
+        self.sim.step_window(0, np.zeros(1,dtype=np.int64), np.empty(0,dtype=np.int64), self.observed)
         self.network_rebuild_count=1
         self.initialization_ms=(time.perf_counter()-t)*1000
         return self
@@ -65,11 +68,14 @@ class MaleCNSAnalogController:
         t=time.perf_counter(); ticks=round(self.window_ms/.1)
         groups= ACTIONS[self.action]
         stim=np.unique(np.concatenate([self.inputs[g] for g in groups])) if groups else np.array([],dtype=int)
-        sums=np.zeros((2,len(self.observed))); counts=np.zeros(len(self.ids),dtype=np.int64)
-        for _ in range(ticks):
-            events={self.sim.tick:list(stim[self.rng.random(len(stim))<.01])} if len(stim) else {}
-            self.sim.step(1,events,count_buffer=counts)
-            sums[0]+=self.sim.v[self.observed]; sums[1]+=self.sim.g[self.observed]
+        offsets=np.zeros(ticks+1,dtype=np.int64); batches=[]
+        if len(stim):
+            for local_tick in range(ticks):
+                selected=stim[self.rng.random(len(stim))<.01]
+                batches.append(selected)
+                offsets[local_tick+1]=offsets[local_tick]+len(selected)
+        event_indices=np.concatenate(batches).astype(np.int64,copy=False) if offsets[-1] else np.empty(0,dtype=np.int64)
+        counts,sums=self.sim.step_window(ticks,offsets,event_indices,self.observed)
         mean=sums/ticks; delta=mean[0]-self.baseline
         response={axis:{s:float(np.mean([delta[ix].mean() for ix in g.values()])) for s,g in p.items()} for axis,p in self.groups.items()}
         raw=[(response['forward']['R']+response['forward']['L'])/2,response['turn']['R']-response['turn']['L']]

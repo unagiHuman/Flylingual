@@ -2,6 +2,8 @@
 
 Run only with an exclusive measurement slot. Numerical comparisons occur outside
 the timed controller calls. Importing this module does not load the full graph.
+For the compiled-window change, prefer validate_malecns_window_compiled.py: it
+adds the pre-window baseline and LLVM inspection of all executed window kernels.
 """
 from __future__ import annotations
 
@@ -110,15 +112,15 @@ def state_digest(controller):
 
 
 def attach_count_capture(controller):
-    """Keep a reference only; identical wrapper overhead applies to both arms."""
-    original = controller.sim.step
-
-    def capture(*args, **kwargs):
-        result = original(*args, **kwargs)
-        controller.validation_counts = result[0]
-        return result
-
-    controller.sim.step = capture
+    """Observe either API; wrapper frequency follows each controller's path."""
+    for name in ("step", "step_window"):
+        if not hasattr(controller.sim, name):
+            continue
+        def capture(*args, _original=getattr(controller.sim, name), **kwargs):
+            result = _original(*args, **kwargs)
+            controller.validation_counts = result[0]
+            return result
+        setattr(controller.sim, name, capture)
 
 
 def timed_call(call, process):
@@ -165,11 +167,12 @@ def main(argv=None):
               "python": sys.version, "platform": platform.platform(), "versions": {},
               "rows": [], "initialization": [], "stopRecovery": [],
               "measurementNotes": ["AB/BA alternates globally across paired windows.",
-                  "Both timed controller calls include the same count-reference capture wrapper.",
+                  "Count-reference wrapper frequency follows the controller: 500 old step entries or one new step_window entry.",
                   "Array/decoder/RNG/frame comparisons, hashes and JSON saves are outside timed calls.",
                   "RSS is process RSS with both controllers resident; samples are not peak RSS.",
                   "Cold first constructor/JIT is measured separately from warm full-graph initialization.",
                   "Numba disk cache may be populated; first call is cold in this process, not guaranteed cache-cold.",
+                  "This legacy validator inspects only the neuron-update kernel; use validate_malecns_window_compiled.py for all window kernels and pre-window baseline.",
                   "All BrainFrame fields except performance must match unless explicitly classified below.",
                   "Final STOP convergence: abs(forward), abs(turn) <= .02 for three consecutive windows.",
                   "Exact-zero motor and whole-network silence are recorded separately, not acceptance requirements."],
@@ -287,7 +290,9 @@ def main(argv=None):
                 print(f"seed={seed} segment={segment} action={action} windows={index} exact", flush=True)
             # Drop closures as well as controller references before the next seed.
             for controller in controllers.values():
-                del controller.sim.step
+                for name in ("step", "step_window"):
+                    if name in vars(controller.sim):
+                        delattr(controller.sim, name)
             del controllers, a, b, c, controller
         report["complete"] = True
         report["numericGate"] = "pass"

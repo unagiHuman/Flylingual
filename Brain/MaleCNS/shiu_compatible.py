@@ -7,9 +7,9 @@ events are applied during synapses, hence affect thresholds on the next tick.
 import numpy as np
 
 if __package__:
-    from .lif_kernels import update_state_and_extract_fired
+    from .lif_kernels import run_window, update_state_and_extract_fired
 else:
-    from lif_kernels import update_state_and_extract_fired
+    from lif_kernels import run_window, update_state_and_extract_fired
 
 
 class MaleCNSShiuCompatibleLIF:
@@ -25,8 +25,83 @@ class MaleCNSShiuCompatibleLIF:
         self.rfc[list(stimulated)] = 0
         self._active = np.empty(n, dtype=np.bool_)
         self._fired = np.empty(n, dtype=np.int64)
+        self._pending_indices = np.empty((19, n), dtype=np.int64)
+        self._pending_counts = np.zeros(19, dtype=np.int64)
         self.tick = 0
         self.pending = [[] for _ in range(19)]
+
+    def _load_pending_ring(self):
+        matches_ring = True
+        maximum = 0
+        for slot, values in enumerate(self.pending):
+            size = len(values)
+            maximum = max(maximum, size)
+            if size != self._pending_counts[slot]:
+                matches_ring = False
+            for offset, value in enumerate(values):
+                if (not isinstance(value, (int, np.integer)) or isinstance(value, (bool, np.bool_))
+                        or value < 0 or value >= len(self.v)):
+                    raise ValueError('pending indices must be in-range integers')
+                if matches_ring and value != self._pending_indices[slot, offset]:
+                    matches_ring = False
+        if matches_ring:
+            return
+        required = maximum + len(self.v)
+        capacity = self._pending_indices.shape[1]
+        if required > capacity:
+            self._pending_indices = np.empty((19, max(required, capacity * 2)), dtype=np.int64)
+        self._pending_counts.fill(0)
+        for slot, values in enumerate(self.pending):
+            size = len(values)
+            if size:
+                self._pending_indices[slot, :size] = values
+            self._pending_counts[slot] = size
+
+    def _store_pending_ring(self):
+        for slot in range(19):
+            size = int(self._pending_counts[slot])
+            self.pending[slot] = self._pending_indices[slot, :size].tolist()
+
+    def step_window(self, ticks, event_offsets, event_indices, observed, count_buffer=None):
+        """Run a non-recording window with Python-generated flattened events.
+
+        ``event_offsets`` has one entry per local tick plus the endpoint.  The
+        public pending lists remain observable and settable between calls.
+        """
+        if not isinstance(ticks, (int, np.integer)) or isinstance(ticks, (bool, np.bool_)) or ticks < 0:
+            raise ValueError('ticks must be a non-negative integer')
+        ticks = int(ticks)
+        for name, value in (('event_offsets', event_offsets), ('event_indices', event_indices), ('observed', observed)):
+            if not isinstance(value, np.ndarray) or value.ndim != 1 or not np.issubdtype(value.dtype, np.integer):
+                raise ValueError(f'{name} must be a one-dimensional integer ndarray')
+        if len(event_offsets) != ticks + 1:
+            raise ValueError('event offsets must cover exactly the requested ticks')
+        if event_offsets[0] != 0 or event_offsets[-1] != len(event_indices):
+            raise ValueError('event offsets do not match event indices')
+        if (np.any(event_offsets < 0) or np.any(event_offsets > len(event_indices))
+                or np.any(event_offsets[1:] < event_offsets[:-1])):
+            raise ValueError('event offsets must be monotonic in range')
+        if np.any(event_indices < 0) or np.any(event_indices >= len(self.v)):
+            raise ValueError('event indices must be in range')
+        if np.any(observed < 0) or np.any(observed >= len(self.v)):
+            raise ValueError('observed indices must be in range')
+        if count_buffer is not None and (not isinstance(count_buffer, np.ndarray)
+                                         or count_buffer.dtype != np.int64
+                                         or count_buffer.ndim != 1
+                                         or len(count_buffer) != len(self.v)):
+            raise ValueError('count_buffer must be an int64 vector matching neuron count')
+        count = np.zeros(len(self.v), dtype=np.int64) if count_buffer is None else count_buffer
+        sums = np.empty((2, len(observed)), dtype=np.float64)
+        self._load_pending_ring()
+        a, b = np.exp(-self.dt / 20), np.exp(-self.dt / 5)
+        c = (a-b)/3
+        run_window(self.v, self.g, self.last, self.rfc, self.indptr, self.post, self.weights,
+                   self.tick, ticks, a, b, c, self._active, self._fired,
+                   self._pending_indices, self._pending_counts, event_offsets, event_indices,
+                   observed, count, sums)
+        self.tick += ticks
+        self._store_pending_ring()
+        return count, sums
 
     def step(self, ticks, events=None, record=False, count_buffer=None):
         events = events or {}

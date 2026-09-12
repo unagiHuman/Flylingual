@@ -120,7 +120,7 @@ compiled kernelの168窓結果と98秒の実機結果は今回の採用根拠で
 Flylingualルートから、固定依存を導入済みのWindows環境で実行した。
 
 ```powershell
-artifacts/windows-malecns/.venv/Scripts/python.exe -m unittest tools.test_malecns_compiled
+artifacts/windows-malecns/.venv/Scripts/python.exe tools/test_malecns_compiled.py
 artifacts/windows-malecns/.venv/Scripts/python.exe tools/validate_malecns_compiled.py --output artifacts/windows-malecns/compiled/equivalence.json
 .venv-bridge/Scripts/python.exe tools/verify_native_player.py --cycles 1 --no-microphone --actions
 ```

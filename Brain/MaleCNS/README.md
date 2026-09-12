@@ -2,9 +2,15 @@
 
 ## Current Windows compiled runtime (2026-09-13)
 
-The Windows runtime now requires `pip install -r Brain/MaleCNS/requirements-runtime.txt` with Python 3.10 recommended. It uses the serial float64 Numba LIF kernel with `fastmath=False`; the first JIT compile occurs before READY. Numba is required and there is no silent fallback. Numerical equivalence and direct timings are recorded in [M1 compiled-kernel validation](../../Docs/windows/M1-malecns-compiled-kernel-validation.md). The compiled 168-window result is not a Unity/TCP acceptance result; `ready=false` remains.
+The Windows runtime requires `pip install -r Brain/MaleCNS/requirements-runtime.txt` with Python 3.10 recommended. The serial float64 Numba kernel compiles the 500-tick window and ordered CSR delivery with `fastmath=False`; initialization prepares the kernel before READY. Numba is required, with no silent fallback. Use the [Windows-local stack](../../Docs/windows/Windows-Local-Stack.md) for normal startup. `ready=false` remains.
 
-The 2026-09-13 existing Native Player trial reached 18/18 Brain action applications with no 750 ms compute or frame-gap stop, but it did not demonstrate walking; microphone, 15-minute continuity, and a new Unity build remain untested.
+The [window-kernel validation](../../Docs/windows/M1-malecns-window-kernel-validation.md) records 168/168 exact windows and 19 passing small tests. Direct mean/p95/max were 101.305/134.074/169.748 ms, reducing the previous implementation's paired mean by 9.934%. Two alternative loop structures were slower and were not adopted. Package/standalone disk-cache restoration also passed in both directions after fixing an import-path startup failure.
+
+The existing Native Player applied 18/18 actions and stopped on TCP disconnection. However, the latest 528-frame trial measured compute p95 323.755 ms/max 671.105 ms, worse than the earlier separate trial; improvement under Unity load is unconfirmed. Compute/frame gaps stayed below 750 ms. A connection-reset background error was logged at shutdown. Walking, microphone input, 15-minute continuity, Mac, and a new Unity build remain unverified.
+
+Earlier neuron-update-only results are retained in [M1 compiled-kernel validation](../../Docs/windows/M1-malecns-compiled-kernel-validation.md).
+
+## Earlier checkpoint history
 
 Current experimental entrypoint: `python Brain/MaleCNS/brain_server_analog.py` from Parallel (50ms only). It uses the validated neuron-only graph and Action-blind EMA100ms plus symmetric turn hysteresis. See [temporal checkpoint](../../Docs/mac/temporal-decoder-checkpoint.md). Five independent seeds, controller equivalence, localhost TCP, and wire Replay passed. `ready=false`: Windows Replay/Live and gameplay latency acceptance remain open. The legacy server below is not the accepted temporal backend. No production synaptic gain or LIF change was made.
 

@@ -73,12 +73,12 @@
   "repoFiles": {
     "Brain/MaleCNS/config/analog_temporal_v1.json": "4a2a785741f58ba07022618dcb91b8f99b5e5d2a1cc515017015b60119dfad96",
     "Contracts/fixtures/malecns_game_brain_controller_frames_wire_v1.jsonl": "d7638ff329e02b9d050570a69e67ce5678a01604bce06c3882a90ce5cfcb6e57",
-    "Brain/MaleCNS/shiu_compatible.py": "323b968fe5bfd692d0deee80031d1a728367163760446a1b0763fccd9a3758c0",
-    "Brain/MaleCNS/analog_controller.py": "f3362d6b66c14c64415b9e021f4ef57839df7de9852f86c4cd73ecd8e4752745",
+    "Brain/MaleCNS/shiu_compatible.py": "af90d268450945169d63692e13d0260b5e9ff478be9780dea425a777114afa49",
+    "Brain/MaleCNS/analog_controller.py": "eeca5dfbc4e5bbece94158befc1736091b34be667a095cec375ebced26768bde",
     "Brain/MaleCNS/temporal_motor_decoder.py": "eba1bd6c807d7b50191b533401554eec3867999507e2d8f71455b6f71bc3e409",
     "Brain/MaleCNS/brain_server_analog.py": "a776f03718175ab1c7ac254837e3aca7666d737fb3197e28f61c84b72b482518",
     "Brain/MaleCNS/brain_server_malecns.py": "702d272d390082cf83abdf75d556e7ebad88bc44ba21f1157ef462b37bf60996",
-    "Brain/MaleCNS/lif_kernels.py": "0cec8979a0147743a478403260211d83400cd6ba7f90e0e475e6288de441b7d8",
+    "Brain/MaleCNS/lif_kernels.py": "adfb3ab1f18e82a9b4cc2c3883f95e789e583fd094df19a1afa1128d68f3cbce",
     "Brain/MaleCNS/neural_visualization.py": "284c7a773a409c69148d1fcccaadca7457db30c73c01a47bf53e59dee924c344",
     "Brain/MaleCNS/requirements-runtime.txt": "1958099dc29d2e8a11503d2e4bc029639114bbd653e64b812c7dacfef564b56b"
   },
@@ -93,5 +93,10 @@
     "Brain/MaleCNS/shiu_compatible.py": "65b874655bf8c817adfe9ffa8a90e83a713d36d4e01f0c2e5cfc4606ab5efb9c",
     "Brain/MaleCNS/analog_controller.py": "a8cc72d9395a843a022ead1f28687d3e230a98208bd111626e1e0fbf47a1a2e6",
     "Brain/MaleCNS/brain_server_analog.py": "5d3cd435d4b0be4d9c7da666563fc34171b92dff74ca8ea5212d54eef5aa464c"
+  },
+  "preWindowCompiledRepoFileHashes": {
+    "Brain/MaleCNS/shiu_compatible.py": "323b968fe5bfd692d0deee80031d1a728367163760446a1b0763fccd9a3758c0",
+    "Brain/MaleCNS/lif_kernels.py": "0cec8979a0147743a478403260211d83400cd6ba7f90e0e475e6288de441b7d8",
+    "Brain/MaleCNS/analog_controller.py": "f3362d6b66c14c64415b9e021f4ef57839df7de9852f86c4cd73ecd8e4752745"
   }
 }

@@ -198,10 +198,15 @@ class CompiledLIFTest(unittest.TestCase):
                                       for axis in ("forward", "turn")}}
             controllers = []
             for lif in (self.reference, self.candidate):
-                namespace = dict(controller_module.__dict__)
+                template = controller_module.MaleCNSAnalogController
+                if not hasattr(lif, "step_window") and hasattr(self.candidate, "step_window"):
+                    # The historical LIF must retain the old controller loop.
+                    from validate_malecns_window_compiled import load_snapshot
+                    _, template, _, _ = load_snapshot()
+                namespace = dict(template.initialize.__globals__)
                 namespace["MaleCNSShiuCompatibleLIF"] = lif
-                initializer = types.FunctionType(controller_module.MaleCNSAnalogController.initialize.__code__, namespace)
-                controller_type = type("IsolatedController", (controller_module.MaleCNSAnalogController,), {"initialize": initializer})
+                initializer = types.FunctionType(template.initialize.__code__, namespace)
+                controller_type = type("IsolatedController", (template,), {"initialize": initializer})
                 controllers.append(controller_type(graph, config, 20270101, 2., visualization_atlas=atlas_path).initialize())
             try:
                 for action in ("STOP", "FORWARD", "TURN_R", "TURN_L", "FORWARD_R", "FORWARD_L", "STOP"):
