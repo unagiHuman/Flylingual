@@ -94,6 +94,7 @@ class Bridge:
                 'target': {'host': self.target['host'], 'port': self.target['port']},
                 'brainConnected': bool(self.adapter and self.adapter.connected), 'brainReady': False,
                 'conversationState': self.conversation.state, 'conversationMode': self.conversation.mode,
+                'audioDiagnostics': self.conversation.diagnostics(),
                 'conversationSettings': dict(self.conversation.settings),
                 'conversationSettingsRevision': self.conversation_settings_revision,
                 'resumeReady': self.resume_ready(),
@@ -286,6 +287,10 @@ class Bridge:
             self.emit(self.state())
 
     async def conversation_event(self, event):
+        if event['type'] == 'error':
+            # Only our bounded numeric counters and allowlisted error codes;
+            # never persist API messages, transcripts, or audio payloads.
+            self.log('conversation_error', audioDiagnostics=self.conversation.diagnostics())
         if event['type'] == 'conversation_state':
             self.last_spoken_state = None
             self.conversation_announced = False
@@ -295,6 +300,8 @@ class Bridge:
             if event['state'] not in ('live', 'mock') and self.arbiter.owner == 'gpt':
                 await self.inhibit('conversation_disconnected')
             self.emit(self.state())
+            self.log('conversation_state', state=event['state'],
+                     audioDiagnostics=self.conversation.diagnostics())
         self.emit(event)
 
     async def voice_utterance(self, text, delegation_id, generation):

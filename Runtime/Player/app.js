@@ -6,10 +6,12 @@
   document.querySelectorAll('[data-icon]').forEach(el=>{el.innerHTML='<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'+(paths[el.dataset.icon]||paths.mic)+'</svg>';});
   let state=C.initial('bridge'), socket=null, socketGeneration=0, flowGeneration=0, phase='idle', stageText='', firstState=false, everConnected=false, toastTimer=null, lastReply='', lastReplyAt=0, lastSummaryAt=0, lastReceivedRole=null, speechEpoch=null, lastMood='curious', serviceError=null;
   let settingsUI=null, settingsBusy=false, pendingSettings=null, conversationOffSequence=0;
+  let playerText='', playerTextAt=null, playerTextEpoch=null, playerTextEvents=0, audioIssue='';
+  let bridgeAudio=null, bridgeAudioAt=null;
   const waiters=new Set(), busy=()=>['connecting','preparing','microphone'].includes(phase);
   const captureAllowed=()=>state.transport==='connected' && state.conversationState==='live' && state.voiceControlAvailable && state.owner==='gpt' && C.controls(state);
   const playbackAllowed=()=>state.transport==='connected' && state.conversationState==='live' && !state.switching && !state.releaseUnknown;
-  const audio=new FlyAudio(data=>send({...data,controlEpoch:state.epoch}),captureAllowed,playbackAllowed,(message)=>{if(message)toast(message);renderVoice();});
+  const audio=new FlyAudio(data=>send({...data,controlEpoch:state.epoch}),captureAllowed,playbackAllowed,(message)=>{if(message){audioIssue=message;toast(message);}renderVoice();});
   function text(id,value){const el=$(id),next=String(value??'—');if(el.textContent!==next)el.textContent=next;}
   function toast(message){text('toast',message);$('toast').hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').hidden=true,7000);}
   function log(message){text('last-event',new Date().toLocaleTimeString('ja-JP')+' '+message);}
@@ -28,7 +30,7 @@
     try{socket.send(JSON.stringify(data));return true;}catch(error){log('transport_send_failed '+String(error?.name||'Error'));disconnect('Bridgeへの送信が中断されました。');return false;}
   }
   function requireSend(data){if(!send(data))throw new Error('Bridgeとの接続を確認してください。');}
-  function clearSpeech(){lastReply='';lastReplyAt=0;lastSummaryAt=0;lastReceivedRole=null;speechEpoch=null;}
+  function clearSpeech(){lastReply='';lastReplyAt=0;lastSummaryAt=0;lastReceivedRole=null;speechEpoch=null;playerText='';playerTextAt=null;playerTextEpoch=null;playerTextEvents=0;}
   function stopVoice(reason='会話を終了しました。',emergency=true){
     ++flowGeneration;phase='stopped';stageText=reason;state.localInhibited=true;state.resumePending=false;audio.dispose();clearSpeech();
     if(emergency)send({type:'emergency_stop'});
@@ -40,13 +42,13 @@
     ++socketGeneration;const old=socket;socket=null;
     // Detach first: a saturated socket must not recurse through stop -> send.
     stopVoice(reason);if(old){old.onmessage=old.onopen=old.onclose=old.onerror=null;old.close();}
-    state=C.initial('bridge');firstState=false;settingsUI?.disconnect();checkWaiters();render();
+    state=C.initial('bridge');bridgeAudio=null;bridgeAudioAt=null;firstState=false;settingsUI?.disconnect();checkWaiters();render();
   }
   async function connectBridge(url,token){
     if(token!==flowGeneration)throw new Error('cancelled');
     if(state.transport==='connected' && firstState && socket?.url===url)return;
     if(socket){const old=socket;socket=null;old.onmessage=old.onopen=old.onclose=old.onerror=null;old.close();}
-    settingsUI?.disconnect();const generation=++socketGeneration;state=C.initial('bridge');state.transport='connecting';firstState=false;const ws=new WebSocket(url);socket=ws;render();
+    settingsUI?.disconnect();const generation=++socketGeneration;state=C.initial('bridge');bridgeAudio=null;bridgeAudioAt=null;state.transport='connecting';firstState=false;const ws=new WebSocket(url);socket=ws;render();
     ws.onopen=()=>{if(generation!==socketGeneration)return;state.transport='connected';render();};
     ws.onmessage=event=>{if(generation!==socketGeneration || typeof event.data!=='string')return;if(event.data.length>2*1024*1024){log('message_too_large');return;}try{receive(JSON.parse(event.data));}catch{log('invalid_message');}};
     ws.onerror=()=>{if(generation===socketGeneration)log('transport_error');};
@@ -55,7 +57,7 @@
   }
   async function startVoice(){
     if(busy()||settingsBusy)return;
-    const token=++flowGeneration;serviceError=null;phase='connecting';stageText='声の接続を準備しています…';render();
+    const token=++flowGeneration;serviceError=null;audioIssue='';clearSpeech();audio.resetDiagnostics();phase='connecting';stageText='声の接続を準備しています…';render();
     // The user's explicit button press enables reply audio without requiring a mic first.
     try{
       const url=C.endpoint($('bridge-url').value.trim(),location.href);await audio.contextReady();
@@ -88,7 +90,7 @@
       phase='listening';stageText='声を聞いています。自然に話しかけてください。';render();
     }catch(error){
       if(token!==flowGeneration)return;
-      stopVoice(error.message);toast(error.message);
+      audioIssue=error.message;stopVoice(error.message);toast(error.message);
       if(state.transport!=='connected'){if(!$('settings-dialog').open)$('settings-dialog').showModal();text('settings-error',error.message);}
     }
   }
@@ -126,6 +128,7 @@
     if(!msg || typeof msg.type!=='string'){log('unknown_message');return;}
     if(msg.type==='bridge_state'){
       const result=C.bridgeState(state,msg);if(!result.accepted){log('invalid_bridge_state');return;}
+      bridgeAudio=readAudioDiagnostics(msg.audioDiagnostics);bridgeAudioAt=bridgeAudio?performance.now():null;
       firstState=true;everConnected=true;
       settingsUI?.receive(msg);
       if(result.changed){audio.stop();clearSpeech();}
@@ -145,11 +148,20 @@
     }
     if(msg.type==='conversation_text'){
       if(typeof msg.text!=='string'||state.conversationState!=='live'||!['assistant','user'].includes(msg.role))return;
+      // Text is scoped to this socket's current live conversation. No history,
+      // browser speech-recognition fallback, or transcript logging is created.
+      if(msg.controlEpoch!=null&&msg.controlEpoch!==state.epoch)return;
       if(msg.role==='assistant'){
         if(msg.append!==true||lastReceivedRole!=='assistant'||speechEpoch!==state.epoch)lastReply='';
         lastReply=(lastReply+msg.text).slice(-1000);lastReplyAt=performance.now();speechEpoch=state.epoch;
+      }else if(msg.text.length){
+        if(msg.append!==true||playerTextEpoch!==state.epoch)playerText='';
+        playerText=Array.from(playerText+msg.text).slice(-1000).join('');playerTextAt=new Date();playerTextEpoch=state.epoch;++playerTextEvents;
+        // The service sends deltas without a final-utterance marker. Keep them
+        // independent from assistant replies and never label a delta as final.
+        text('user-transcript',playerText);$('user-transcript').scrollTop=$('user-transcript').scrollHeight;
       }
-      lastReceivedRole=msg.role;renderMood();return;
+      lastReceivedRole=msg.role;renderMood();renderVoiceDiagnostics();return;
     }
     if(msg.type==='audio'){void audio.play(msg.audio);return;}
     if(msg.type==='discard_audio'){
@@ -158,6 +170,8 @@
     }
     if(msg.type==='error'){
       if(msg.requestId!=null){if(pendingSettings?.requestId===msg.requestId){serviceError=C.settingsReason(msg.error);checkWaiters();}return;}
+      const audioErrors={audio_backpressure:'バックエンドの音声処理が追いついていません。',invalid_audio:'バックエンドが音声データを受け付けませんでした。',old_audio_epoch:'古い会話の音声として、バックエンドが送信を拒否しました。',live_audio_not_connected:'会話サービスへの音声接続がありません。',live_stream_failed:'会話サービスとの音声通信が中断されました。',live_connect_failed:'会話サービスに接続できませんでした。'};
+      if(Object.hasOwn(audioErrors,msg.error))audioIssue=audioErrors[msg.error]+' ('+msg.error+')';
       const explanation=C.reason(msg.error||'接続エラー');log(explanation);if(busy()||settingsBusy)serviceError=explanation;else toast(explanation);checkWaiters();render();return;
     }
     if(msg.type==='conversation_options'){settingsUI?.receive(msg);return;}
@@ -196,6 +210,43 @@
     text('voice-status',stageText||'開始するまでマイクはオフです。');
     $('emergency-button').disabled=state.transport!=='connected';$('bridge-disconnect').disabled=state.transport!=='connected';
     text('session-label',listening?'声でつながっています':busy()?'接続を準備中':state.transport==='connected'?'会話は停止中':'接続前');$('session-label').classList.toggle('active',listening);
+    renderVoiceDiagnostics();
+  }
+  function renderVoiceDiagnostics(){
+    const d=audio.diagnostics(),hasText=!!playerText&&playerTextEpoch===state.epoch,level=d.inputDbfs===null?0:Math.round(Math.max(0,Math.min(1,(d.inputDbfs+60)/60))*100),inputFresh=d.lastInputAgeMs!==null&&d.lastInputAgeMs<1000;
+    const inputState=!d.active?(d.starting?'準備中':'オフ'):d.trackMuted?'入力がミュート中':d.contextState!=='running'?'入力処理が停止中':!inputFresh?'入力を待っています':d.inputDbfs===null||d.inputDbfs< -55?'入力レベルが小さい':'入力あり';
+    text('mic-input-state',inputState);$('mic-input-fill').style.width=level+'%';$('mic-input-meter').setAttribute('aria-valuenow',String(level));$('mic-input-meter').setAttribute('aria-valuetext',inputState);
+    const sendState=!d.active?'音声送信 待機中':d.suppression==='playback'?'返答再生中・送信を一時停止':d.suppression==='gate'?'接続待ち・送信を一時停止':d.sentChunks===0?'音声送信 準備中':d.lastSentAgeMs>1000?'音声送信が止まっています':'ブラウザー送信 '+d.sentChunks+' 回';
+    text('audio-send-state',sendState);
+    text('transcript-state',hasText?'認識結果を受信 · '+playerTextAt.toLocaleTimeString('ja-JP'):d.active?'認識テキストを待っています':'まだ受信していません');
+    text('user-transcript',hasText?playerText:d.active?'声の認識結果はまだ届いていません。話しかけると、届いた言葉がここに表示されます。':phase==='stopped'?'会話を終了しました。次に「もう一度話す」で開始すると、認識された言葉を表示します。':'「話しかける」から会話を始めると、認識された言葉がここに表示されます。');
+    const issue=audioIssue||bridgeAudio?.lastErrorCode||'';
+    $('user-transcript').classList.toggle('empty',!hasText);$('user-transcript').closest('.voice-debug').dataset.received=String(hasText);$('user-transcript').closest('.voice-debug').dataset.issue=String(!!issue);
+    let diagnostic='マイクを開始すると、入力・送信・文字起こしの状況を確認できます。';
+    if(d.active){
+      if(d.trackMuted)diagnostic='マイクのトラックがミュートされています。ブラウザーとOSのマイク設定を確認してください。';
+      else if(d.contextState!=='running')diagnostic='ブラウザーの音声処理が停止しています。会話を終了してから、もう一度開始してください。';
+      else if(!inputFresh)diagnostic='マイクはONですが、入力データを確認できていません。';
+      else if(d.suppression==='playback')diagnostic='ハエの返答を拾い直さないよう、再生中はマイク送信を止めています。返答が終わってから話しかけてください。';
+      else if(d.suppression==='gate')diagnostic='接続・会話・操作の許可を待っているため、音声送信を止めています。';
+      else if(d.sentChunks&&d.lastSentAgeMs>1000)diagnostic='マイク入力はありますが、最後の音声送信から1秒以上経過しています。送信数と音声エラーを確認してください。';
+      else if(d.inputDbfs===null||d.inputDbfs< -55)diagnostic='マイク入力はありますが、現在のレベルは小さめです。話してもバーが動かない場合は、使用するマイクや入力音量を確認してください。';
+      else if(!d.sentChunks)diagnostic='マイク入力を確認しました。音声の送信開始を待っています。';
+      else diagnostic='ブラウザーから音声を送信しています。'+(hasText?'受け取った認識文を上に表示しています。':'認識テキストはまだ届いていません。送信数だけではバックエンドでの受信・認識成功は確認できません。');
+    }else if(d.sentChunks)diagnostic='マイクはオフです。以下の送信数は最後の会話の値です。';
+    text('audio-diagnostic-status',diagnostic);text('audio-input-level',d.inputDbfs===null?'—':d.inputDbfs.toFixed(1)+' dBFS');text('audio-sent-count',d.sentChunks+' 回 / '+(d.sentBytes/48000).toFixed(1)+' 秒分');text('audio-last-sent',d.lastSentAgeMs===null?'未送信':(d.lastSentAgeMs/1000).toFixed(1)+' 秒前');text('audio-transcript-count',playerTextEvents+' 回（現在の会話）');text('audio-diagnostic-error',issue||'なし');
+    const absent=state.transport!=='connected'?'未接続':'このBridgeは診断未対応',valid=state.transport==='connected'&&bridgeAudio!==null;
+    const count=(key)=>valid&&bridgeAudio[key]!==null?bridgeAudio[key]+' 回':absent;
+    const amount=(chunks,bytes)=>valid&&bridgeAudio[chunks]!==null&&bridgeAudio[bytes]!==null?bridgeAudio[chunks]+' 回 / '+(bridgeAudio[bytes]/48000).toFixed(1)+' 秒分':absent;
+    text('bridge-audio-input',amount('inputChunks','inputBytes'));text('bridge-audio-sent',amount('sentInputChunks','sentInputBytes'));text('bridge-audio-silence',count('clockSilenceChunks'));text('bridge-audio-transcripts',count('inputTranscriptDeltas'));text('bridge-audio-output',valid&&bridgeAudio.outputZeroChunks!==null&&bridgeAudio.outputNonzeroChunks!==null?'全ゼロ '+bridgeAudio.outputZeroChunks+' 回 / 非ゼロ '+bridgeAudio.outputNonzeroChunks+' 回':absent);text('bridge-audio-age',valid?((performance.now()-bridgeAudioAt)/1000).toFixed(1)+' 秒前の値'+(state.conversationState==='live'?'':'（会話停止中）'):'未受信');
+  }
+  function readAudioDiagnostics(value){
+    if(!value||typeof value!=='object'||Array.isArray(value))return null;
+    const result={};
+    for(const key of ['inputChunks','inputBytes','sentInputChunks','sentInputBytes','clockSilenceChunks','inputTranscriptDeltas','outputZeroChunks','outputNonzeroChunks'])result[key]=Number.isSafeInteger(value[key])&&value[key]>=0?value[key]:null;
+    if(Object.values(result).every(number=>number===null))return null;
+    result.lastErrorCode=typeof value.lastErrorCode==='string'&&/^[a-zA-Z0-9_.-]{1,100}$/.test(value.lastErrorCode)?value.lastErrorCode:null;
+    return result;
   }
   function render(){
     renderVoice();renderMood();const age=C.age(state);

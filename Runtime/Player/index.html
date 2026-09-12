@@ -55,6 +55,12 @@
         <div class="voice-controls"><button class="voice-button" id="voice-button" aria-pressed="false"><span class="mic-orb"><span data-icon="mic"></span></span><span id="voice-button-label">話しかける</span><span class="voice-bars" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span></button><button class="emergency-button" id="emergency-button" disabled title="出力を直ちに抑止し、音声を終了します"><span data-icon="stop"></span>緊急停止</button></div>
       </section>
       <p class="voice-status" id="voice-status" role="status">開始するまでマイクはオフです。</p>
+      <section class="voice-debug" aria-labelledby="transcript-title">
+        <div class="transcript-heading"><h2 id="transcript-title">聞き取ったあなたの声</h2><span id="transcript-state">まだ受信していません</span></div>
+        <p class="user-transcript empty" id="user-transcript" aria-live="polite" aria-atomic="true">「話しかける」から会話を始めると、認識された言葉がここに表示されます。</p>
+        <div class="voice-input-status"><span class="input-meter-label">マイク入力</span><div class="input-meter" id="mic-input-meter" role="meter" aria-label="マイク入力レベル" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-valuetext="マイクはオフです"><span id="mic-input-fill"></span></div><span id="mic-input-state">オフ</span><span class="audio-send-state" id="audio-send-state">音声送信 待機中</span></div>
+        <details class="audio-debug-details"><summary>音声の診断</summary><p id="audio-diagnostic-status">マイクを開始すると、入力・送信・文字起こしの状況を確認できます。</p><dl><dt>入力レベル</dt><dd id="audio-input-level">—</dd><dt>ブラウザー送信</dt><dd id="audio-sent-count">0 回 / 0.0 秒分</dd><dt>最後の送信</dt><dd id="audio-last-sent">未送信</dd><dt>Bridge受信</dt><dd id="bridge-audio-input">未接続</dd><dt>APIへ入力送信</dt><dd id="bridge-audio-sent">未接続</dd><dt>APIへ無音補充</dt><dd id="bridge-audio-silence">未接続</dd><dt>APIでの認識</dt><dd id="bridge-audio-transcripts">未接続</dd><dt>返答の音声データ</dt><dd id="bridge-audio-output">未接続</dd><dt>Bridge診断の鮮度</dt><dd id="bridge-audio-age">未受信</dd><dt>認識テキスト受信</dt><dd id="audio-transcript-count">0 回</dd><dt>音声エラー</dt><dd id="audio-diagnostic-error">なし</dd></dl><p class="diagnostic-note">ブラウザー送信数とBridge受信・API送信は別の段階です。APIへの無音補充はプレイヤーの声が届いた証拠になりません。聞き取りの結果は上の認識テキストで確認できます。認識文はこの会話中だけ表示し、画面から保存しません。</p></details>
+      </section>
     </main>
     <footer><span>小さな声に、大きな好奇心。</span><span>flylingual <span class="footer-dot">·</span> VOICE & VISION</span></footer>
   </div>

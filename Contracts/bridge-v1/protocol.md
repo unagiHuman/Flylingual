@@ -117,6 +117,57 @@ only after a fresh voice session starts in the current epoch. An epoch change in
 until explicit conversation stop/start; transcription of old audio must never
 operate a new target. Text proposals remain independent of this audio barrier.
 
+`bridge_state.audioDiagnostics` is an optional, counter-only diagnostic object.
+The current `ConversationAdapter.diagnostics()` dictionary is the source of
+truth for its names and meanings; an older Bridge that does not emit this
+field remains protocol-compatible. A current implementation may emit:
+
+```json
+{
+  "inputChunks": 0,
+  "inputBytes": 0,
+  "sentInputChunks": 0,
+  "sentInputBytes": 0,
+  "clockSilenceChunks": 0,
+  "inputTranscriptDeltas": 0,
+  "outputTranscriptDeltas": 0,
+  "outputAudioChunks": 0,
+  "outputAudioBytes": 0,
+  "outputZeroChunks": 0,
+  "outputNonzeroChunks": 0,
+  "delegationCount": 0,
+  "audioQueueDepth": 0,
+  "audioQueueHighWater": 0,
+  "audioBackpressureCount": 0,
+  "lastErrorCode": null
+}
+```
+
+`inputChunks`/`inputBytes` count valid PCM input received from the player,
+including input rejected because the bounded queue is full; queue rejection is
+also counted by `audioBackpressureCount`. `sentInputChunks`/`sentInputBytes`
+count successfully sent player-origin PCM, which may itself be silence.
+Bridge-generated clock-only silence is separate in `clockSilenceChunks` and is
+not player input. Transcript counters
+count input and output transcript deltas independently. `outputAudioChunks` /
+`outputAudioBytes` count string output-audio deltas and successfully decoded
+output bytes respectively; an invalid or empty string delta still increments
+`outputAudioChunks`, while it contributes zero decoded bytes. For each nonempty
+decoded chunk exactly one of `outputZeroChunks` or `outputNonzeroChunks` is
+incremented, with zero/nonzero determined strictly from all decoded PCM bytes.
+`delegationCount` counts accepted client-delegation events. Queue depth is the
+current bounded queue size, high-water is the maximum observed depth for the
+session, and `audioBackpressureCount` counts queue-full rejections.
+`lastErrorCode` is a stable safe code or `null`, never an API error message.
+
+All counters reset when a new live session starts. A context invalidation or
+conversation stop drains and discards queued audio but does not retroactively
+erase the counters for the session; subsequent session start creates a fresh
+counter set. These values are transport/adapter observations only: they do not
+prove ASR correctness, Brain application, neural response, or physical body
+movement. Conversation text, PCM/audio payloads, and `error.message` are not
+stored in this diagnostic object or written to ordinary logs.
+
 Client `audio` messages contain `{type:"audio", audio:"base64 PCM16 mono 24kHz",
 controlEpoch:3}`. Stale-epoch audio is rejected before it reaches GPT-Live.
 The bounded audio queue is drained separately from control reception, so API
