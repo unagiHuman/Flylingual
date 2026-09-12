@@ -115,4 +115,4 @@ HUD では execution OS、target、backend／data、calibration、`LIVE`／`REPL
 
 doctor は設定、依存、data hash、port、自己所有 process の状態を確認し、課金 API 呼び出しをしない。launcher はローカル所有 Brain の初期化と transport 利用可能状態を確認して Bridge を起動する。利用可能状態と製品の ready は区別する。両 OS の Python 環境、依存版、source hash、data hash、測定母数、RSS、計算時間、E2E を gate ごとに記録する。
 
-Flylingual の既存運用ルールに従い、main へ直接 commit／push し、push 前に origin/main を取得して差分を確認する。force push は行わない。共通Bridgeの実装・Mac実Brain＋会話MOCKの実測は統合手順へ記録した。実API接続、実音声、Windows Unity、跨OS往復・操作感は未検証であり、`ready=false` を維持する。
+Flylingual の既存運用ルールに従い、main へ直接 commit／push し、push 前に origin/main を取得して差分を確認する。force push は行わない。共通Bridgeの実装・Mac実Brain＋会話MOCKの実測に加え、実GPT-Live／Responsesと実Brainの文字・合成音声往復を[実API統合記録](integration/Live-Browser-Validation-2026-09-12.md)へ記録した。キーはlauncherで明示指定した外部1行ファイルからプロセス環境へ読み込むこともでき、Brain子プロセスへは継承しない。ブラウザにはキーを渡さず同一originのBridgeへ接続する。実マイク／スピーカー、新UI最終操作、Windows Unity、跨OS往復・操作感は未検証であり、`ready=false` を維持する。

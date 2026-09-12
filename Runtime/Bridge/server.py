@@ -425,6 +425,25 @@ class Bridge:
                             content_type='text/html', headers={'Cache-Control': 'no-store',
                             'X-Frame-Options': 'DENY', 'Referrer-Policy': 'no-referrer'})
 
+    async def player_page(self, request):
+        """Serve the separately owned browser UI on the control WS origin.
+
+        No directory listings, build scripts, notes, secret files, symlink
+        escapes, arbitrary filesystem paths, or cross-origin API access.
+        """
+        self.check_origin(request)
+        if request.path == '/player':
+            raise web.HTTPFound('/player/')
+        runtime = Path(__file__).resolve().parents[1]
+        root = (runtime / 'Player').resolve()
+        path = (root / (request.match_info.get('asset') or 'index.html')).resolve()
+        if (not root.is_relative_to(runtime) or not path.is_relative_to(root)
+                or path.suffix.lower() not in {'.html', '.js', '.css', '.png', '.jpg', '.jpeg', '.webp', '.svg', '.ico', '.woff2'}
+                or not path.is_file()):
+            raise web.HTTPNotFound(text='player_asset_not_found')
+        return web.FileResponse(path, headers={'Cache-Control': 'no-store',
+            'X-Frame-Options': 'DENY', 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer'})
+
     async def websocket(self, request):
         self.check_origin(request)
         if self.control_ws is not None:
@@ -558,6 +577,9 @@ async def run(config):
     app = web.Application(client_max_size=128*1024)
     app.router.add_get('/', bridge.page)
     app.router.add_get('/ws', bridge.websocket)
+    app.router.add_get('/player', bridge.player_page)
+    app.router.add_get('/player/', bridge.player_page)
+    app.router.add_get('/player/{asset:.*}', bridge.player_page)
     runner = web.AppRunner(app, access_log=None)
     tcp = None
     stopped = asyncio.Event()

@@ -191,6 +191,8 @@ class ConversationAdapter:
         self.context_generation += 1
         self.last_offset = self.max_offset
         self.fragments.clear()
+        while not self.audio_queue.empty():
+            self.audio_queue.get_nowait()
 
     async def append(self, channel, content, delegation_id=None):
         if self.mode != 'live' or self.ws is None or self.ws.closed:
@@ -212,7 +214,7 @@ class ConversationAdapter:
         if not raw or len(raw) % 2:
             raise ConversationError('invalid_audio')
         try:
-            self.audio_queue.put_nowait(encoded)
+            self.audio_queue.put_nowait(raw)
         except asyncio.QueueFull:
             raise ConversationError('audio_backpressure') from None
 
@@ -225,10 +227,23 @@ class ConversationAdapter:
             raise ConversationError('live_send_failed') from None
 
     async def _send_audio(self):
+        # GPT-Live advances on continuous input audio, including when a player
+        # types or echo suppression pauses the microphone. Silence is transport
+        # clocking only: it is never a fabricated transcript or a Brain input.
+        silence = bytes(4800)  # 100 ms, PCM16 mono / 24 kHz.
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + .1
         try:
             while True:
-                encoded = await self.audio_queue.get()
-                await self._send_event({'type': 'session.input_audio.append', 'audio': encoded})
+                await asyncio.sleep(max(0, deadline - loop.time()))
+                try:
+                    raw = self.audio_queue.get_nowait()
+                except asyncio.QueueEmpty:
+                    raw = silence
+                await self._send_event({'type': 'session.input_audio.append',
+                                        'audio': base64.b64encode(raw).decode('ascii')})
+                # Never send a catch-up burst after backpressure or suspension.
+                deadline = loop.time() + len(raw) / 48000
         except ConversationError:
             pass  # _send_event already reported the disconnect to the arbiter.
 

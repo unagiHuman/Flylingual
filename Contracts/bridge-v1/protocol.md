@@ -12,7 +12,12 @@ to **8770** and accepts UTF-8 NDJSON for the Unity motor client. The client may
 connect only while exactly one local control WebSocket is connected and Bridge
 is resumed; otherwise it receives `bridge_control_required_or_inhibited` and is
 closed. `bridge.controlPort` defaults to **8771**: `GET /` is the local player
-page and `GET /ws` is the single control/audio WebSocket. A second control WS
+debug page, `GET /player/` serves the separately developed `Runtime/Player`
+browser UI, and `GET /ws` is the single control/audio WebSocket. The UI uses
+this same origin; a standalone preview on a different port is not authorized
+by weakening the origin check. `/player/` serves only public web asset types,
+not build scripts, documentation, directory listings, or paths outside Player.
+A second control WS
 is rejected. Control, conversation text and audio events never enter the Brain
 compatible TCP stream.
 
@@ -110,6 +115,11 @@ Client `audio` messages contain `{type:"audio", audio:"base64 PCM16 mono 24kHz",
 controlEpoch:3}`. Stale-epoch audio is rejected before it reaches GPT-Live.
 The bounded audio queue is drained separately from control reception, so API
 backpressure cannot block receipt of an emergency stop.
+While a live conversation is explicitly open, the Bridge supplies paced
+100 ms silence when no microphone audio is queued. This keeps the GPT-Live
+audio timeline running for typed requests and during echo suppression; it
+does not create player speech or neural input. Context invalidation discards
+queued microphone audio. Conversation stop cancels the writer entirely.
 
 ```json
 {"type":"set_action","action":"FORWARD","commandId":"ui-42","controlEpoch":3,"validForMs":1000}
@@ -131,4 +141,7 @@ reserved zero, stale handling, release/switching, and actual body observation.
 That Windows gate is not implemented or measured by this contract. Mac real
 Brain + conversation MOCK results are recorded in
 [the integration checkpoint](../../Docs/integration/Bridge-Validation-2026-09-12.md).
-Real API, audio hardware, cross-OS switching, and Unity behaviour remain unverified.
+Real API text/voice delegation and output with the real Mac Brain are recorded
+in [the live checkpoint](../../Docs/integration/Live-Browser-Validation-2026-09-12.md).
+Audio hardware, the latest browser UI flow, cross-OS switching, and Unity
+behaviour remain separate, unverified gates; `ready=false`.

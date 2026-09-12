@@ -20,6 +20,7 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 from Runtime.Bridge.config import ConfigError, ROOT, load_config
+from Runtime.Bridge.credentials import CredentialError, load_requested_api_key
 
 
 LOCAL_PROFILES = {"mac-local", "windows-local"}
@@ -231,6 +232,12 @@ async def _up(config: dict[str, Any], launch_brain: bool) -> None:
             process = subprocess.Popen(
                 command, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                 text=True, encoding="utf-8", errors="replace",
+                # The Brain does not use conversation credentials.  Do not
+                # propagate either the key or its local-file locator to it.
+                env={
+                    name: value for name, value in os.environ.items()
+                    if name not in {"OPENAI_API_KEY", "OPENAI_API_KEY_FILE"}
+                },
             )
             await _wait_ready(process, "127.0.0.1", config["brain"]["port"])
             print(json.dumps({'event': 'brain_launch_ready', 'pid': process.pid,
@@ -265,6 +272,10 @@ def _parser() -> argparse.ArgumentParser:
         child.add_argument("--brain-port", type=int)
         child.add_argument("--graph")
         child.add_argument("--brain-python")
+        child.add_argument(
+            "--key-file",
+            help="local single-line API-key file; overrides OPENAI_API_KEY_FILE and is never stored",
+        )
         if command == "up":
             child.add_argument("--launch-brain", action="store_true")
     return parser
@@ -273,6 +284,11 @@ def _parser() -> argparse.ArgumentParser:
 def main() -> int:
     args = _parser().parse_args()
     try:
+        # This is launcher-only process state, deliberately outside the JSON
+        # config schema.  Without a requested file, retain any inherited key.
+        api_key = load_requested_api_key(args.key_file)
+        if api_key is not None:
+            os.environ["OPENAI_API_KEY"] = api_key
         config = load_config(profile=args.profile, local=args.local, overrides=_cli_overrides(args))
         if args.command == "doctor":
             report, errors = _doctor(config)
@@ -284,7 +300,7 @@ def main() -> int:
         config["_localPath"] = _resolved_local_path(args.local)
         asyncio.run(_up(config, args.launch_brain))
         return 0
-    except (ConfigError, RuntimeError, OSError) as exc:
+    except (ConfigError, CredentialError, RuntimeError, OSError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
     except KeyboardInterrupt:

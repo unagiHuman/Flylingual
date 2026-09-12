@@ -6,9 +6,9 @@
 
 共通 Python Bridge はゲーム側の localhost に bind する。Brain 互換 TCP は `127.0.0.1:8770`、player と制御 client 用 HTTP/WS は `http://127.0.0.1:8771/` と `ws://127.0.0.1:8771/ws` である。HTTPS 配下では player が同じ origin の `wss` を選ぶ。
 
-`Runtime/Bridge/player.html` は Mac 検証用の状態表示・操作画面である。Bridge の接続状態、Brain `ready`、target/backend、control owner、出力抑止、frame age、forward/turn、Brain 要約、会話字幕を表示する。未知 message はログへ表示して処理を継続する。ブラウザから Brain TCP へ直接接続しない。
+`Runtime/Bridge/player.html` は `/` に残す Mac 検証用の診断・操作画面である。プレイヤー向け UI の原本は別担当の `Runtime/Player/` にあり、Bridge は同じ loopback origin の `GET /player/` と `ws://127.0.0.1:8771/ws` で提供する。`Runtime/Player/dist/player.html` は生成した場合だけの配布物であり、起動時に生成しない。どちらの画面もブラウザから Brain TCP へ直接接続しない。
 
-GPT Live は Realtime API とは別の会話経路として扱う。live の接続先・モデルは `wss://api.openai.com/v1/live/sessions` / `gpt-live-1`、意図翻訳は `gpt-5.6-luna` とし、`OPENAI_API_KEY` は Bridge ホストの環境変数だけから読む。公式の接続仕様は [Live delegation](https://developers.openai.com/api/docs/guides/live-delegation) と [Voice WebSockets](https://developers.openai.com/api/docs/guides/voice-websockets) を参照する。API key を player、Unity、設定ファイル、ログへ入力・保存しない。
+GPT Live は Realtime API とは別の会話経路として扱う。live の接続先・モデルは `wss://api.openai.com/v1/live/sessions` / `gpt-live-1`、意図翻訳は `gpt-5.6-luna` とする。公式の接続仕様は [Live delegation](https://developers.openai.com/api/docs/guides/live-delegation) と [Voice WebSockets](https://developers.openai.com/api/docs/guides/voice-websockets) を参照する。API key を player、Unity、設定ファイル、ログへ入力・保存しない。
 
 会話モードは `off` / `mock` / `live`。`mock` は厳密な辞書による意図変換で、外部 API を使用しない。`conversation_start` は player の明示操作だけで発行し、live 会話の利用には課金が発生し得ることを画面で確認する。
 
@@ -25,9 +25,9 @@ python3 -m venv .venv-bridge
 
 `/path/to/brain-python` は `Brain/MaleCNS/requirements-runtime.txt` を導入した各端末のPythonへ置き換える。Bridge専用venvにはNumPy等のBrain依存を入れていないため、既存Brain環境を指定するか、別のBrain用venvを構築する。BridgeのPythonは3.10以上。Windowsでは `.venv-bridge\Scripts\python.exe` とその端末のBrain Pythonを使う（Windowsでの実行は未検証）。既存8766サーバーを勝手に停止しない。旧serverには拡張identity/releaseがないため、新しい `brain_server_bridge.py` が必要。
 
-liveへ進む場合は、Bridgeを起動する端末の環境に `OPENAI_API_KEY` を安全に設定し、doctor/upの `--conversation mock` を `--conversation live` へ変更する。ブラウザの「会話開始」で初めてGPT-Liveのsessionを開始する。音声はlive接続後の「音声開始」でマイク権限を与える。ヘッドホンを推奨する。音声とテキストはOpenAIへ送信されるが、Bridgeでは本文・音声を既定で保存しない。実APIが使えない場合にmockへ自動切替はしない。
+liveへ進む場合は、`doctor` または `up` の `--key-file PATH` でローカルの単一行 ASCII key file を指定する。file は 8192 bytes 以下、`sk-` prefix、非空白でなければ安全に失敗する。明示指定が優先され、未指定なら `OPENAI_API_KEY_FILE` を任意の fallback として使う。読み込んだ値は launcher/Bridge の `OPENAI_API_KEY` だけに保持し、Brain 子 process の環境からは `OPENAI_API_KEY` と `OPENAI_API_KEY_FILE` を除外する。値は UI、設定、ログ、引数には出さない（file path 引数は可）。file を使わない場合は、既存の `OPENAI_API_KEY` 環境値を維持する。ブラウザの「会話開始」で初めてGPT-Liveのsessionを開始する。音声はlive接続後の「音声開始」でマイク権限を与える。ヘッドホンを推奨する。音声とテキストはOpenAIへ送信されるが、Bridgeでは本文・音声を既定で保存しない。実APIが使えない場合にmockへ自動切替はしない。
 
-実際の引数は `tools/dev.py --help`、`tools/dev.py doctor --help`、`tools/dev.py up --help` とソースを正本として確認する。`doctor` は設定・依存・graph metadata の診断だけで、TCP 接続や課金 API を実行しない。`--launch-brain` は local profile の自己所有 Brain だけを起動・終了し、remote process は管理しない。
+実際の引数は `tools/dev.py --help`、`tools/dev.py doctor --help`、`tools/dev.py up --help` とソースを正本として確認する。`doctor` は設定・依存・graph metadata とローカル credential の検査だけで、TCP 接続や課金 API を実行しない。`--launch-brain` は local profile の自己所有 Brain だけを起動・終了し、remote process は管理しない。標準 port は Bridge TCP `8770`、HTTP/WS `8771` である。実検証時だけは Bridge HTTP/WS `18771`、TCP `18770`、Brain `18767` を使い、通常設定を置換しない。
 
 ブラウザで `http://127.0.0.1:8771/` を開き、接続先 profile を選択して「接続」を押す。接続後も初期状態は `output inhibited=true` のままである。操作確認は次の順序に限定する。
 
@@ -40,6 +40,14 @@ liveへ進む場合は、Bridgeを起動する端末の環境に `OPENAI_API_KEY
 音声操作は **gpt owner選択 → 会話開始 → 明示再開 → 音声開始** の順。epoch変更後に古い未文字起こし音声が操作へ混入するのを避けるため、`voiceControlAvailable=false` では音声由来Actionを拒否する。抑止や接続先切替後は「会話停止 → 会話開始」で音声sessionを新しくしてから明示再開する。会話は接続先切替中も継続できるが、旧音声からの操作は復活しない。文字操作はこの音声session制限とは独立している。
 
 既定 TTL は 4 秒、上限 8 秒、fresh 判定は 750 ms。期限切れ、旧 epoch、非所有者、重複 command は fail-closed で拒否する。profile 切替は出力抑止 → 旧 Brain STOP 試行 → release 確認 → session/epoch 更新 → 旧 frame/request 破棄 → 新 target 確認 → 明示 resume の順序を守る。
+
+実API起動例（既存環境・端末固有のpathへ置換）:
+
+```sh
+.venv-bridge/bin/python tools/dev.py up --profile mac-local --conversation live --key-file /path/to/private-key.txt --launch-brain --brain-python /path/to/brain-python
+```
+
+独立開発のUIは `http://127.0.0.1:8771/player/` を使用する。同一portの `/ws` へ接続し、別portの静的プレビュー用にorigin制限を緩めない。UIは声中心へ改修中のため、最終的な操作名はUI担当の手順を参照する。明示会話中はマイクoff・echo抑止中もBridgeが100ms無音を補い、返答の音声時間を進める。会話終了で補完も止まり、マイクを勝手に有効化しない。
 
 ## remote profile と禁止事項
 
@@ -67,10 +75,10 @@ liveへ進む場合は、Bridgeを起動する端末の環境に `OPENAI_API_KEY
 - Unity互換TCPのrequestId写像と、同一sequenceを待ったTCP/WS間のmotor・raw・brain完全一致。Unityそのものの試験ではない。
 - [実測記録](Bridge-Validation-2026-09-12.md)に測定母数・hash・未検証gateを記載する。
 
-### 実 API 未検証
+### 実 API 検証済み（Mac、限定 gate）
 
-- `gpt-live-1` live session、client delegation、音声往復、`gpt-5.6-luna` 意図翻訳。
-- 実 API key は未提供であり、課金 API は本手順では呼び出していない。mock の合格を live の合格に読み替えない。
+- ユーザー提供のローカル credential file を launcher だけで読み、`gpt-live-1` session、client delegation、`gpt-5.6-luna` の意図翻訳、実 MaleCNS への適用を確認した。詳細と失敗を含む測定は [Live Browser/API 検証記録](Live-Browser-Validation-2026-09-12.md) を参照する。
+- この gate は実マイク録音・スピーカー聴感・Windows Unity・跨 OS 切替・操作感の合格を意味しない。`ready=false` を維持する。
 
 ### Windows 未検証
 
