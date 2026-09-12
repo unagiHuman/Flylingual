@@ -17,6 +17,8 @@ Brain・GPT Live・接続先切替・双方向翻訳の作業前には、設計�
 
 ## Ownership
 
+- ユーザー指示（2026-09-12）：このWindows checkoutの通常実行はWindows内で完結させる。Windows Brain、同居Bridge、Unity、Web UI、WebRTCをlocalhostで起動し、MacやSSH tunnelを必須にしない。GPT Live／ResponsesはWindowsから外部APIへ接続する。共有リポジトリのMac profileと切替機能は維持し、この端末の通常起動ではwindows-localを明示する。
+
 - Mac: Brain/MaleCNS、Docs/mac、共通Bridge・双方向翻訳・接続先切替・共通設定／起動管理。開発OSと実行OSを分離し、同じ実装を両OSで使用する。
 - Windows: Unityゲーム／Visual／HUD、音声Adapter、接続先選択UI、出力抑止、VisualSource、Docs/windows。担当外の同時編集を避ける。
 - Brain/ShiuBaselineは成功baseline。Windowsのpath/compile互換以外を変更しない。

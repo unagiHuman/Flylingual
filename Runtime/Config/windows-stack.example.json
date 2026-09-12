@@ -1,0 +1,9 @@
+{
+  "bridgePython": ".venv-bridge/Scripts/python.exe",
+  "bridgeLocalConfig": "Runtime/Config/local.json",
+  "keyFile": "C:/secure/flylingual-openai-key.txt",
+  "unityPlayer": "artifacts/windows-runtime-validation/unity/FlyGroundedRealismDemo.exe",
+  "videoBackendConfig": "Runtime/Video/local/backend.json",
+  "videoPublisherConfig": "Runtime/Video/local/publisher.json",
+  "runRoot": "artifacts/windows-local-runs"
+}

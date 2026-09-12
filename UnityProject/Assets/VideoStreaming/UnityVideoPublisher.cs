@@ -284,9 +284,18 @@ namespace Flylingual.Video
                 videoFps = videoFps,
                 jpegBytes = capture.jpeg == null ? 0 : capture.jpeg.Length,
                 diagnosticsOverlay = capture.markerEnabled,
-                brainIdentity = brainIdentity == null ? null : brainIdentity.Snapshot(),
             };
-            return Convert.ToBase64String(Encoding.UTF8.GetBytes(JsonUtility.ToJson(metadata)));
+            UnityVideoBrainIdentity.SnapshotData identity = brainIdentity == null ? null : brainIdentity.Snapshot();
+            // The receiver accepts brainIdentity only as a complete provenance
+            // record.  While the passive observer has no verified binding, omit
+            // the optional key instead of serializing an empty identity object.
+            string json = identity == null ? JsonUtility.ToJson(metadata) : JsonUtility.ToJson(new FrameMetadataWithIdentity
+            {
+                captureMs = metadata.captureMs, encodeMs = metadata.encodeMs, uploadMs = metadata.uploadMs,
+                gameFps = metadata.gameFps, videoFps = metadata.videoFps, jpegBytes = metadata.jpegBytes,
+                diagnosticsOverlay = metadata.diagnosticsOverlay, brainIdentity = identity,
+            });
+            return Convert.ToBase64String(Encoding.UTF8.GetBytes(json));
         }
 
         void DrawMarker(uint nonce)
@@ -309,6 +318,12 @@ namespace Flylingual.Video
         }
 
         [Serializable] sealed class FrameMetadata
+        {
+            public double captureMs, encodeMs, uploadMs, gameFps, videoFps;
+            public int jpegBytes;
+            public bool diagnosticsOverlay;
+        }
+        [Serializable] sealed class FrameMetadataWithIdentity
         {
             public double captureMs, encodeMs, uploadMs, gameFps, videoFps;
             public int jpegBytes;

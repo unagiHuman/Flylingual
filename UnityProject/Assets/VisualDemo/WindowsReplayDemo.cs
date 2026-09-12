@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.IO;
 using System.Linq;
 using System.Collections.Generic;
@@ -55,6 +56,8 @@ namespace FlyVisualDemo
         int videoFrame;
         bool playbackStarting;
         bool delayingLiveConnection;
+        string reportedLiveConnectionState;
+        string reportedLiveError;
         int warmupFrames;
         readonly List<float> renderTimes = new List<float>();
         GUIStyle titleStyle, textStyle, smallStyle, buttonStyle;
@@ -110,7 +113,11 @@ namespace FlyVisualDemo
                     mode = BrainSourceMode.LiveTcp;
                     delayingLiveConnection = true;
                     controller.SetMotorSource(null);
-                    Invoke(nameof(StartLiveConnection), Mathf.Min(delay, 30f));
+                    Debug.Log("LIVE_TCP_DELAY_REALTIME seconds=" + Mathf.Min(delay, 30f).ToString("R", CultureInfo.InvariantCulture) + " endpoint=" + client.Host + ":" + client.Port);
+                    // The session intro intentionally pauses scaled game time.  Live
+                    // transport startup must remain a realtime wait so the paused
+                    // safe-stop state cannot prevent a requested TCP connection.
+                    StartCoroutine(StartLiveConnectionAfterDelay(Mathf.Min(delay, 30f)));
                 }
                 else StartLiveConnection();
             }
@@ -120,8 +127,14 @@ namespace FlyVisualDemo
         void StartLiveConnection()
         {
             delayingLiveConnection = false;
+            Debug.Log("LIVE_TCP_START endpoint=" + client.Host + ":" + client.Port);
             if(Flag("-liveTrial")) gameObject.AddComponent<LiveIntegrationTrial>();
             SetMode(BrainSourceMode.LiveTcp);
+        }
+        IEnumerator StartLiveConnectionAfterDelay(float seconds)
+        {
+            yield return new WaitForSecondsRealtime(seconds);
+            StartLiveConnection();
         }
         public void SelectReplay(string action)
         {
@@ -140,6 +153,17 @@ namespace FlyVisualDemo
             if (next == BrainSourceMode.Replay) SelectReplay(selected);
             else { previousLiveFrame=client.LatestBrainFrame; waitingForLiveFrame=true; client.enabled = true; client.Connect(); controller.SetMotorSource(null); }
         }
+        // Leaves the local intro pause while retaining the selected LiveTcp transport.
+        // A motor source is installed only after a frame newer than this boundary arrives.
+        public void BeginLiveSession()
+        {
+            if (mode != BrainSourceMode.LiveTcp) return;
+            emergency = false;
+            Time.timeScale = 1;
+            previousLiveFrame = client.LatestBrainFrame;
+            waitingForLiveFrame = true;
+            controller.SetMotorSource(null);
+        }
         void Update()
         {
             // Optional benchmark warmup keeps loading/render startup out of recorded playback.
@@ -156,6 +180,7 @@ namespace FlyVisualDemo
                 if(client.ConnectionState!="CONNECTED") { previousLiveFrame=client.LatestBrainFrame; waitingForLiveFrame=true; controller.SetMotorSource(null); }
                 else if(waitingForLiveFrame && client.LatestBrainFrame!=null && !ReferenceEquals(previousLiveFrame,client.LatestBrainFrame))
                 { waitingForLiveFrame=false; if(!emergency) controller.SetMotorSource(live); }
+                ReportLiveConnection();
             }
             if (quitAfter > 0 && Time.realtimeSinceStartup-startedAt >= quitAfter) Application.Quit();
             if(Flag("-demoExerciseControls") && !controlsRestarted)
@@ -165,6 +190,16 @@ namespace FlyVisualDemo
                 else if(controlStep==1 && elapsed>3) {Debug.Log("CONTROL_PAUSE_DRIFT "+Vector3.Distance(pausedPosition,body.Position).ToString("R",CultureInfo.InvariantCulture));SelectReplay("FORWARD");controlStep=2;}
                 else if(controlStep==2 && elapsed>7) {controlsRestarted=true;Debug.Log("CONTROL_RESTART_REQUESTED");RestartDemo();}
             }
+        }
+        void ReportLiveConnection()
+        {
+            string state = client.ConnectionState;
+            string last = client.LastError ?? string.Empty;
+            if (state == reportedLiveConnectionState && last == reportedLiveError) return;
+            reportedLiveConnectionState = state;
+            reportedLiveError = last;
+            Debug.Log("LIVE_TCP_STATE state=" + state + " endpoint=" + client.Host + ":" + client.Port +
+                " lastError=" + (string.IsNullOrEmpty(last) ? "none" : last));
         }
         void LateUpdate()
         {
@@ -280,7 +315,9 @@ namespace FlyVisualDemo
             for (int row=0; row<2; row++) { GUILayout.BeginHorizontal(); for(int col=0;col<3;col++) { string a=actions[row*3+col]; if(GUILayout.Button(a,buttonStyle)) { if(mode==BrainSourceMode.Replay) SelectReplay(a); else client.SetAction(a); } } GUILayout.EndHorizontal(); }
             GUI.enabled=gameAllows;
             GUILayout.BeginHorizontal();
+            GUI.enabled=gameAllows && mode==BrainSourceMode.Replay;
             if(GUILayout.Button("ALL 6",buttonStyle)) SelectReplay("ALL");
+            GUI.enabled=gameAllows;
             if(GUILayout.Button("RESTART",buttonStyle)) RestartDemo();
             if(GUILayout.Button("E-STOP",buttonStyle)) PauseDemo();
             GUILayout.EndHorizontal();

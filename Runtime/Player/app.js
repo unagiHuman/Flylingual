@@ -281,6 +281,14 @@
   settingsUI=new FlySettings({connect:connectSettings,apply:applySettings,onBusy(value){settingsBusy=value;renderVoice();},onLanguage(language){$('voice-hint').textContent=language==='en'?'“Go forward”, “Stop”, “How are you feeling?”':'「前に進んで」「止まって」「今どんな気持ち？」';}});
   if(['http:','https:'].includes(location.protocol))$('bridge-url').value=(location.protocol==='https:'?'wss://':'ws://')+location.host+'/ws';
   if(location.port==='4173')$('bridge-url').value='ws://127.0.0.1:8771/ws';
+  // Local launchers select a deployment explicitly; visiting the URL does not
+  // start audio, acquire control, or resume inhibited output.
+  const launchSettings=new URLSearchParams(location.search);
+  const launchProfile=launchSettings.get('profile'), launchStream=launchSettings.get('stream');
+  if([...$('profile-select').options].some(option=>option.value===launchProfile))$('profile-select').value=launchProfile;
+  if([...$('video-stream-select').options].some(option=>option.value===launchStream))$('video-stream-select').value=launchStream;
+  const videoPort=launchSettings.get('videoPort');
+  if(videoPort && /^\d{1,5}$/.test(videoPort) && Number(videoPort)>0 && Number(videoPort)<=65535)$('video-endpoint').value='http://127.0.0.1:'+Number(videoPort);
   const watchdog=setInterval(()=>{
     if(phase==='listening'&&(!captureAllowed()||!audio.active))stopVoice('音声または観測が途切れたため停止しました。「話しかける」で再開できます。');
     checkWaiters();render();

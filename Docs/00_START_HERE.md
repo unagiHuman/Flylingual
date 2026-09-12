@@ -1,5 +1,7 @@
 # FlyBrain：MaleCNS検証とWindows並列開発
 
+Windows 1台での通常起動は [Windowsローカル構成](windows/Windows-Local-Stack.md) を参照する。Brain・Bridge・Unity・Web UI・WebRTCをこのPCで起動し、Macを必須にしない。下記の初期検証計画より、現在の実行指示とAGENTS.mdを優先する。
+
 作成日：2026-09-11（JST）／版：1.0
 
 ## 現在の統合設計の正本（2026-09-12）

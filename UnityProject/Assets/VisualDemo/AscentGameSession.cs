@@ -41,6 +41,12 @@ namespace FlyVisualDemo
         public void Begin()
         {
             Current = Phase.Running;
+            if (demo.mode == WindowsReplayDemo.BrainSourceMode.LiveTcp)
+            {
+                demo.BeginLiveSession();
+                Debug.Log("GAME_BEGIN source=LIVE_TCP waitingForNewFrame=true");
+                return;
+            }
             demo.loop = true;
             demo.SelectReplay("STOP");
             Debug.Log("GAME_BEGIN source=REPLAY_SHIU");
