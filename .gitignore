@@ -16,6 +16,7 @@ UnityProject/Assets/Resources/PerformanceTestRunSettings.json*
 **/__pycache__/
 **/.venv/
 .venv-bridge/
+.venv-video/
 Runtime/Config/local.json
 **/.pytest_cache/
 **/.mypy_cache/
