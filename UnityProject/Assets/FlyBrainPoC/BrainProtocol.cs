@@ -50,6 +50,7 @@ namespace FlyBrainPoC
     [Serializable] public class BackendMetadata
     {
         public string backendId, datasetId, model, motor_readout, mode;
+        public string instanceId, sessionId;
         public bool ready;
     }
     [Serializable] public class PopulationReadout

@@ -3,6 +3,7 @@ import argparse
 import asyncio
 import aiohttp
 import json
+import re
 from pathlib import Path
 import subprocess
 import time
@@ -24,7 +25,11 @@ async def second_control_rejected():
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--cycles', type=int, default=1, choices=range(1, 6))
+    parser.add_argument('--no-microphone', action='store_true', help='Disable microphone capture; validate reply audio only')
+    parser.add_argument('--actions', action='store_true', help='Test 6 actions x 3 using real text intent/Brain/Unity; requires --no-microphone')
     args = parser.parse_args()
+    if args.actions and not args.no_microphone:
+        parser.error('--actions requires --no-microphone')
     output = ROOT / 'artifacts/windows-native-conversation' / time.strftime('validation-%Y%m%d-%H%M%S')
     output.mkdir(parents=True, exist_ok=False)
     results = []
@@ -34,12 +39,16 @@ def main():
                    '-flyRepoRoot', str(ROOT), '-flyConversationProbe', '-flyConversationProbeQuit',
                    '-flyConversationProbeOutput', str(path), '-logFile', str(output / f'player-{cycle}.log'),
                    '-screen-fullscreen', '0', '-screen-width', '1280', '-screen-height', '800']
+        if args.no_microphone:
+            command.append('-flyConversationNoMicrophone')
+        if args.actions:
+            command.append('-flyVoiceActionsProbe')
         started = time.monotonic()
         process = subprocess.Popen(command, cwd=ROOT, env=scrubbed_environment(), stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
         owned = Owned(process)
         peak_rss = 0
         rejected = None
-        while process.poll() is None and time.monotonic() - started < 140:
+        while process.poll() is None and time.monotonic() - started < (480 if args.actions else 140):
             owned.refresh()
             if rejected is None and path.with_suffix('.png').is_file():
                 rejected = asyncio.run(second_control_rejected())
@@ -60,7 +69,10 @@ def main():
                 break
             time.sleep(.25)
         report = json.loads(path.read_text(encoding='utf-8')) if path.is_file() else {'result': 'missing_probe'}
+        player_log = output / f'player-{cycle}.log'
+        exception_count = len(re.findall(r'^[\w.]*Exception:', player_log.read_text(encoding='utf-8', errors='replace'), re.MULTILINE)) if player_log.is_file() else -1
         report.update(cycle=cycle, timeout=timeout, exitCode=process.poll(), remainingOwnedPids=remaining,
+                      playerExceptionCount=exception_count,
                       secondControlRejected=rejected,
                       peakTreeRssBytes=peak_rss, wallSeconds=round(time.monotonic()-started, 3))
         results.append(report)
@@ -68,7 +80,8 @@ def main():
         (output / 'summary.json').write_text(json.dumps(results, indent=2), encoding='utf-8')
         if remaining:
             owned.stop()  # Only this cycle's positively identified processes.
-        if report['result'] != 'transport_audio_pass' or remaining or timeout or rejected is not True:
+        expected = 'native_actions_transport_pass' if args.actions else 'reply_audio_pass_no_microphone' if args.no_microphone else 'transport_audio_pass'
+        if report['result'] != expected or remaining or timeout or rejected is not True or exception_count != 0:
             return 1
     return 0
 

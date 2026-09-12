@@ -4,9 +4,11 @@
 
 ## 対象範囲
 
-初版は段階 1〜3の **会話のみ** モードです。`chat_only` では行動要求を Bridge 側で拒否し、身体出力は抑止します。実装と自動検証の結果は [検証記録](Unity-Native-Conversation-Validation.md) に記録します。実マイク10往復、6 Action の各3回、15分継続、身体移動、Gameplay acceptance は未受入れです。`ready=false` と750msの制限は維持します。
+既定の会話のみから身体操作へは自動で移行しません。「声で操作を有効にする」の明示操作だけが新しい control session と身体経路を開始します。
 
-会話の責務は「音声・字幕・会話状態」、Brain／Bridge の責務は「外部 API、意図翻訳、Brain 接続、排他、安全停止」です。Unity は Brain TCP や API へ直接接続せず、Bridge の control/audio WS だけを使います。旧ブラウザ Player や WebRTC はこの会話版に不要で、同じ Bridge へ第二の control WS を開かないでください。
+起動時は **会話のみ** モードです。BridgeReady 後に `chat_only` 会話を一度だけ自動開始し、マイク収録と送信を自動開始します。`chat_only` では行動要求を Bridge 側で拒否し、身体出力は抑止します。「声で操作」を追加しましたが、現PCの実Brainが750msを超えて安全停止するため、6 Action各3回の動作検証は未達です。実装と自動検証の結果は [検証記録](Unity-Native-Conversation-Validation.md) に記録します。実マイク10往復、15分継続、移動品質は未受入れです。`ready=false` と750msの制限は維持します。
+
+会話の責務は「音声・字幕・会話状態」、Brain／Bridge の責務は「外部 API、意図翻訳、Brain 接続、排他、安全停止」です。Unity は Brain や API へ直接接続せず、同居Bridgeの control/audio WS と、声で操作を有効にした場合の motor TCP を使います。旧ブラウザ Player や WebRTC はこの会話版に不要で、同じ Bridge へ第二の control WS を開かないでください。
 
 ## 初回準備
 
@@ -29,7 +31,7 @@ Bridge 環境に process ownership 用依存を入れます。
 uv pip install --python .venv-bridge/Scripts/python.exe -r tools/requirements-windows-native.txt
 ```
 
-ヘッドセットを推奨します。初版は PTT（押して話す）で、Unity の Windows `Microphone` API を使います。ブラウザの AEC／noise suppression が自動的に得られる構成ではないため、スピーカー同時通話や割込み発話は後段です。
+ヘッドセットを推奨します。Unity の Windows `Microphone` API で収録を継続しますが、AEC／noise suppression はありません。スピーカー利用時のエコーと割込み発話の実機品質は未検証です。
 
 ## 起動と終了
 
@@ -47,27 +49,37 @@ uv pip install --python .venv-bridge/Scripts/python.exe -r tools/requirements-wi
 
 `-flyConversation` により `ConversationNativeBootstrap` が Unity の所有者 PID と heartbeat を作り、`tools/windows_native.py` を起動します。helper は `windows-local`、Bridge の `Runtime/Config/local.json`、秘密鍵パスを使い、Brain／Bridge を自分が起動した子だけ管理します。既存ポートを無条件に奪ったり、一括 kill したりしません。Unity を閉じると stop marker が書かれ、Bridge の会話終了と所有子プロセスの停止が行われます。
 
-専用exeの直接起動でも同じ会話モードになります。内部サービス起動とローカル制御WS接続は自動で行い、画面の接続状態が `connected` になったら「会話を開始」を押します。起動しただけではGPT会話やマイク送信を開始しません。
+専用exeの直接起動でも同じ会話モードになります。内部サービス起動とローカル制御WS接続は自動で行い、BridgeReady 後に `chat_only` 会話とマイク収録・送信を一度だけ開始します。会話終了後の自動再開はありません。
 
 ## 会話操作
 
-1. 「会話を開始」を押します。Bridge へ `conversation_start` と `interaction: chat_only` を送り、会話世代を確認します。会話のみでは owner は observer のままで、`resume` や Action は送信しません。
-2. Spaceキーか「押して話す」ボタンを押し続けて話します。最初のPTTでマイク収録を開始し、離すと送信を止めて未送信データを破棄します。会話終了でマイクを解放します。返答再生中と終了後200msは送信を抑止します。
-3. 返答音声は Unity の AudioSource で再生し、返答と自分の認識結果を字幕に表示します。再生中は入力を抑止し、古い世代の音声・字幕は破棄します。
-4. 「会話を終了」を押すと PTT、マイク、再生キュー、会話セッションを終了します。
-5. 「身体を停止」は緊急停止です。会話を終了し、Bridge に safety STOP を要求します。
+1. BridgeReady 後、Unity は Bridge へ `conversation_start` と `interaction: chat_only` を一度だけ送り、会話世代を確認します。会話のみでは owner は observer のままで、`resume` や Action は送信しません。
+2. マイクは自動収録・送信されます。返答 PCM はマイク状態にかかわらず再生し、返答音声と認識結果を字幕に表示します。
+3. GPT Live の双方向通話中は、非ゼロ返答 PCM の再生中もマイクを常時収録・送信します。返信再生とマイク送信が同時に動作しても、AEC やエコー自動除去を意味しません。
+4. ミュートはマイクを解放するだけで、返答音声の再生は継続します。デバイス変更または unmute で再収録します。
+5. 「会話を終了」または「身体を停止」はマイク、再生キュー、会話セッションを停止します。接続中なら「会話を再開」で新しい会話を開始します。WS 切断も同じく停止し、自動再開しません。WS 切断時は Player を起動し直します。
+
+## 声による身体操作
+
+既定の会話のみ画面で「声で操作を有効にする」を押すと、Unity は会話を停止し、`nativeVoiceControl`／`control` の新しい会話 session を要求します。Bridge は `owner=gpt` と safety STOP を適用し、新しい BrainFrame が fresh STOP であること、live session と `voiceControlAvailable` を確認してから明示的な `resume` を受け付けます。その後 Unity は localhost Bridge motor TCP へ接続し、既存の BrainMotorSource／locomotion 経路へ渡します。
+
+GPT は `FORWARD`、`TURN_R`、`TURN_L`、`FORWARD_R`、`FORWARD_L`、`STOP` の6 Actionを提案するだけです。実行は既存 Brain、raw 神経出力、decoder、motor 経路を通り、Unity や GPT が motor 値を直接生成しません。画面では「指示受付」と「Brain 適用」を区別します。これらは移動成功の証明ではなく、実際の身体の移動は別に確認します。
+
+TTL、stale 750 ms、epoch 更新、Brain／Bridge 切断では身体出力を停止し、無断再開しません。再開には「声で操作を有効にする」をもう一度押します。ミュートは音声だけを止め、身体停止は緊急停止です。会話の入力・返答時には非物理の色 pulse を表示できますが、神経由来の感情や身体反応とは扱いません。
 
 ## 設定と診断
 
-「設定と診断」を開くと、マイクデバイス、入力 RMS、実サンプルレート、返信バッファ、underrun、音声エラー、Bridge の backend、Brain ready、frame age、sequence、schema error を確認できます。言語・voice・persona・custom persona text を変更して「停止状態で設定を適用」を押します。設定変更は会話停止かつ output inhibited の状態でのみ受理され、次回の明示的な会話開始が必要です。
+「設定と診断」を開くと、マイクデバイス、入力 RMS、実サンプルレート、返信バッファ、underrun、音声エラー、Bridge の backend、Brain ready、frame age、sequence、schema error を確認できます。言語・voice・persona・custom persona text を変更して「停止状態で設定を適用」を押します。設定変更は会話停止かつ output inhibited の状態でのみ受理され、次回の明示的な会話開始が必要です。ミュート、unmute、デバイス変更はマイク資源と収録だけを切り替え、返答再生は止めません。
 
-Bridge の `conversationGeneration` が変わった場合、Unity は字幕、マイク、返信音声を破棄します。古い generation の音声を送信せず、`old_conversation_generation` を成功扱いにしません。Bridge WS が切断した場合も Unity は直ちに PTT、録音、再生を停止します。
+Bridge の `conversationGeneration` が変わった場合、Unity は字幕、マイク、返信音声を破棄します。古い generation の音声を送信せず、`old_conversation_generation` を成功扱いにしません。Bridge WS が切断した場合も Unity は直ちに録音、再生を停止します。
+
+マイクを使わない受信専用の検証は `Start-UnityConversation.cmd -flyConversationNoMicrophone` で起動します。この引数では起動時から録音を禁止し、ミュート解除操作でも録音しません。通常のハンズフリー利用時には付けません。
 
 ## 未受入れの段階
 
-- 段階3の Windows 実マイク＋実 API 10往復は未受入れです。
+- 自動収録、ミュート／unmute、デバイス変更、返信再生中の同時送受信を含む Windows 実マイク＋実 API 10往復は未受入れです。
 - 会話＋身体操作、6 Action 各3回、fresh STOP／resume／stale の身体 gate は未受入れです。
 - 15分継続、実音声機器の抜差し、AECの評価は未受入れです。起動終了の回数・プロセス残留結果は検証記録を参照してください。
-- 実マイク、スピーカー AEC、認識精度、返答品質、神経妥当性、移動品質、Gameplay はこの初版から判断しません。
+- 実マイク、AEC、割込み発話、認識精度、返答品質、神経妥当性、移動品質、Gameplay はこの初版から判断しません。
 
 旧 Web client を併用すると単一 control WS 契約に違反するため、Unity 会話版の確認中はブラウザ Player や一時 guard を接続しないでください。

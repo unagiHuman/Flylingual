@@ -9,14 +9,13 @@ namespace Flylingual.Conversation
         public ConversationSessionController Controller { get; set; }
         Rect panel = new Rect(18f, 18f, 420f, 360f);
         Vector2 scroll;
-        bool expanded, spaceHeld, mouseHeld;
+        bool expanded;
         GUISkin skin;
         int deviceIndex;
         string language = "ja", voice = "marin", persona = "friendly", personaText = "";
+        string playerText = "";
 
         void Awake() { if (Controller == null) Controller = GetComponent<ConversationSessionController>(); }
-        void Update() { if (Controller != null) Controller.SetPushToTalk(spaceHeld || mouseHeld); }
-        void OnApplicationFocus(bool focused) { if (!focused) { spaceHeld = mouseHeld = false; } }
 
         void OnGUI()
         {
@@ -33,7 +32,7 @@ namespace Flylingual.Conversation
             float scale = Mathf.Max(1f, Screen.dpi > 0f ? Screen.dpi / 120f : 1f);
             GUI.matrix = Matrix4x4.Scale(new Vector3(scale, scale, 1f));
             panel.width = Mathf.Min(560f / scale, Screen.width / scale - 20f);
-            panel.height = Mathf.Min(expanded ? 620f / scale : 390f / scale, Screen.height / scale - 20f);
+            panel.height = Mathf.Min(expanded ? 740f / scale : 470f / scale, Screen.height / scale - 20f);
             panel = GUI.Window(WindowId, panel, Draw, "Flylingual 会話");
             GUI.matrix = Matrix4x4.identity;
             GUI.skin = previousSkin;
@@ -48,19 +47,22 @@ namespace Flylingual.Conversation
             if (!string.IsNullOrEmpty(Controller.Error)) GUILayout.Label("エラー: " + Controller.Error);
             GUILayout.BeginHorizontal();
             GUI.enabled = Controller.Ready && !Controller.IsSessionRequested;
-            if (GUILayout.Button("会話を開始")) Controller.StartConversation();
-            GUI.enabled = Controller.IsSessionRequested;
+            if (GUILayout.Button("会話を再開")) Controller.StartConversation();
+            GUI.enabled = Controller.IsSessionRequested || Controller.EnablingVoiceActions;
             if (GUILayout.Button("会話を終了")) Controller.StopConversation();
             GUI.enabled = true;
             if (GUILayout.Button("身体を停止")) Controller.EmergencyStop();
             GUILayout.EndHorizontal();
-            Rect pttRect = GUILayoutUtility.GetRect(new GUIContent("押して話す (Space)"), GUI.skin.button, GUILayout.Height(30f));
-            Event e = Event.current;
-            if (e.type == EventType.MouseDown && pttRect.Contains(e.mousePosition)) { mouseHeld = true; e.Use(); }
-            if (e.type == EventType.MouseUp && mouseHeld) { mouseHeld = false; e.Use(); }
-            if (e.type == EventType.KeyDown && e.keyCode == KeyCode.Space) { spaceHeld = true; e.Use(); }
-            if (e.type == EventType.KeyUp && e.keyCode == KeyCode.Space) { spaceHeld = false; e.Use(); }
-            GUI.Button(pttRect, mouseHeld || spaceHeld ? "話しています…" : "押して話す (Space)");
+            GUI.enabled = Controller.Ready && Controller.VoiceActionsAvailable && !Controller.EnablingVoiceActions && !Controller.BodyControlActive;
+            if (GUILayout.Button(Controller.EnablingVoiceActions ? "声で操作：準備中" : "声で操作を有効にする")) Controller.EnableVoiceActions();
+            GUI.enabled = true;
+            GUILayout.Label(Controller.ActionFeedback);
+            GUILayout.Label(!Controller.ConversationLive ? "会話の接続待ち" :
+                Controller.MicrophoneMuted ? "マイクはミュート中" :
+                Controller.ReplyPlaying && Controller.MicrophoneTransmitting ? "ハエが話しています。こちらの声も届きます" :
+                Controller.MicrophoneTransmitting ? "聞いています。そのまま話しかけてください" : "マイクの準備中");
+            if (GUILayout.Button(Controller.MicrophoneMuted ? "マイクをオン" : "マイクをミュート"))
+                Controller.SetMicrophoneMuted(!Controller.MicrophoneMuted);
             GUILayout.Label("字幕: " + Controller.Caption);
             GUILayout.Label("マイク RMS: " + Controller.InputRms.ToString("F3") + " @ " + Controller.SampleRate + " Hz / 返信: " + Controller.BufferedMilliseconds + " ms");
             GUILayout.Label("再生 samples: " + Controller.PlayedSamples + "  underruns: " + Controller.Underruns);
@@ -92,6 +94,11 @@ namespace Flylingual.Conversation
             GUILayout.Label("Brain backend: " + Controller.Backend + "  ready: " + Controller.BrainReady);
             GUILayout.Label("frame age: " + Controller.FrameAgeMs + " ms  sequence: " + Controller.Sequence);
             if (!string.IsNullOrEmpty(Controller.SchemaError)) GUILayout.Label("schema: " + Controller.SchemaError);
+            GUILayout.Label("文字でも同じ指示を送れます（例：前に進んで、止まって）");
+            playerText = GUILayout.TextField(playerText, 2000);
+            GUI.enabled = Controller.BodyControlActive;
+            if (GUILayout.Button("指示を送る")) { Controller.SendPlayerText(playerText); playerText = ""; }
+            GUI.enabled = true;
         }
 
         static string SelectOrText(string label, string current, string[] options)
@@ -105,7 +112,6 @@ namespace Flylingual.Conversation
             }
             return GUILayout.TextField(current);
         }
-        void OnDisable() { spaceHeld = mouseHeld = false; Controller?.SetPushToTalk(false); }
         void OnDestroy() { if (skin != null) { Destroy(skin.font); Destroy(skin); } }
     }
 }

@@ -99,9 +99,11 @@ class Bridge:
                 'target': {'host': self.target['host'], 'port': self.target['port']},
                 'brainConnected': bool(self.adapter and self.adapter.connected), 'brainReady': False,
                 'conversationState': self.conversation.state, 'conversationMode': self.conversation.mode,
-                'capabilities': ['conversation_only_v1'],
+                'capabilities': ['conversation_only_v1', 'native_voice_actions_v1'],
                 'conversationInteraction': self.conversation_interaction,
                 'conversationGeneration': self.conversation_generation,
+                'conversationStopping': bool(self.conversation_operation and not self.conversation_operation.done()),
+                'motorEndpoint': {'host': self.config['bridge']['host'], 'port': self.config['bridge']['tcpPort']},
                 'audioDiagnostics': self.conversation.diagnostics(),
                 'conversationSettings': dict(self.conversation.settings),
                 'conversationSettingsRevision': self.conversation_settings_revision,
@@ -309,8 +311,7 @@ class Bridge:
             self.emit(self.state())
 
     async def conversation_event(self, event):
-        if (self.conversation_interaction == 'chat_only'
-                and event['type'] in ('audio', 'conversation_text') and not self.conversation_accepting):
+        if event['type'] in ('audio', 'conversation_text') and not self.conversation_accepting:
             return
         if event['type'] == 'error':
             # Only our bounded numeric counters and allowlisted error codes;
@@ -459,6 +460,9 @@ class Bridge:
                 raise ControlError('chat_only_cannot_control')
             if self.arbiter.owner == 'observer':
                 raise ControlError('observer_cannot_control')
+            if 'controlEpoch' in event and (type(event['controlEpoch']) is not int
+                                             or event['controlEpoch'] != self.arbiter.epoch):
+                raise ControlError('old_epoch')
             if self.arbiter.owner == 'gpt' and self.conversation.state not in ('live', 'mock'):
                 raise ControlError('conversation_not_started')
             if not self.resume_ready():
@@ -488,6 +492,11 @@ class Bridge:
             interaction = event.get('interaction', 'control')
             if interaction not in ('chat_only', 'control'):
                 raise ControlError('invalid_conversation_interaction')
+            native_voice_control = event.get('nativeVoiceControl', False)
+            if type(native_voice_control) is not bool:
+                raise ControlError('invalid_native_voice_control')
+            if native_voice_control and interaction != 'control':
+                raise ControlError('native_voice_control_requires_control')
             if (self.conversation_operation is not None and not self.conversation_operation.done()
                     or self.conversation.state not in ('off', 'disconnected')):
                 raise ControlError('conversation_already_started_or_stopping')
@@ -496,6 +505,12 @@ class Bridge:
                     raise ControlError('old_epoch')
                 self.arbiter.set_owner('observer')
                 await self.inhibit('chat_only')
+            elif native_voice_control:
+                if (type(event.get('controlEpoch')) is not int
+                        or event['controlEpoch'] != self.arbiter.epoch):
+                    raise ControlError('old_epoch')
+                self.arbiter.set_owner('gpt')
+                await self.inhibit('native_voice_control')
             self.conversation_interaction = interaction
             self.conversation.interaction = interaction
             self.conversation_generation += 1
@@ -511,8 +526,14 @@ class Bridge:
                 if (not self.conversation_accepting or type(event.get('conversationGeneration')) is not int
                         or event['conversationGeneration'] != self.conversation_generation):
                     raise ControlError('old_conversation_generation')
-            elif event.get('controlEpoch') != self.arbiter.epoch:
-                raise ControlError('old_audio_epoch')
+            else:
+                if event.get('controlEpoch') != self.arbiter.epoch:
+                    raise ControlError('old_audio_epoch')
+                if 'conversationGeneration' in event and (
+                        type(event['conversationGeneration']) is not int
+                        or event['conversationGeneration'] != self.conversation_generation
+                        or not self.conversation_accepting):
+                    raise ControlError('old_conversation_generation')
             await self.conversation.input_audio(event.get('audio'))
         else:
             raise ControlError('unknown_message')

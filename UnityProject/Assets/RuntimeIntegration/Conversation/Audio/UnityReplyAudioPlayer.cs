@@ -1,4 +1,5 @@
 using System;
+using System.Threading;
 using UnityEngine;
 
 namespace Flylingual.Conversation
@@ -21,14 +22,18 @@ namespace Flylingual.Conversation
         float volume = 1f;
         volatile bool playing;
         long playedSamples;
+        long playedNonzeroSamples;
         long underruns;
 
         public bool IsPlaying => playing;
         public int BufferedMilliseconds { get { lock (gate) return queued * 1000 / InputRate; } }
         // Applied in the audio callback so the value is not multiplied again by AudioSource.volume.
         public float Volume { get => volume; set => volume = Math.Max(0f, Math.Min(1f, value)); }
-        public long PlayedSamples => playedSamples;
-        public long Underruns => underruns;
+        public int OutputSampleRate => outputSampleRate;
+        public long PlayedSamples => Interlocked.Read(ref playedSamples);
+        // Counts non-zero mono frames after the configured reply volume has been applied.
+        public long PlayedNonzeroSamples => Interlocked.Read(ref playedNonzeroSamples);
+        public long Underruns => Interlocked.Read(ref underruns);
         public string Error { get; private set; }
 
         void Awake()
@@ -108,6 +113,8 @@ namespace Flylingual.Conversation
             int frames = data.Length / channels;
             bool hadUnderrun = false;
             bool playedNonZero = false;
+            int playedFrames = 0;
+            int playedNonzeroFrames = 0;
             lock (gate)
             {
                 for (int frame = 0; frame < frames; frame++)
@@ -118,6 +125,7 @@ namespace Flylingual.Conversation
                     float interpolated = (float)(a + (b - a) * phase);
                     float sample = interpolated * volume;
                     playedNonZero |= interpolated != 0f;
+                    if (sample != 0f) playedNonzeroFrames++;
                     int baseIndex = frame * channels;
                     for (int channel = 0; channel < channels; channel++) data[baseIndex + channel] = sample;
                     int consume;
@@ -137,13 +145,15 @@ namespace Flylingual.Conversation
                         }
                         queued -= consume;
                     }
-                    playedSamples++;
+                    playedFrames++;
                 }
                 // Keep the state through the callback that emitted the final non-zero
                 // sample; the controller can then apply its 200 ms tail inhibition.
                 playing = nonZeroQueued > 0 || playedNonZero;
             }
-            if (hadUnderrun) underruns++;
+            if (playedFrames > 0) Interlocked.Add(ref playedSamples, playedFrames);
+            if (playedNonzeroFrames > 0) Interlocked.Add(ref playedNonzeroSamples, playedNonzeroFrames);
+            if (hadUnderrun) Interlocked.Increment(ref underruns);
         }
 
         void OnDisable()

@@ -299,3 +299,37 @@ operation are rejected (`conversation_already_started_or_stopping`). Native clie
 must reject playback locally as soon as Stop is pressed, even before the new
 generation arrives. Settings retain the existing stopped/revision/requestId rules.
 The single control WebSocket restriction is unchanged.
+
+## Native voice actions extension
+
+An implementation that advertises `native_voice_actions_v1` additionally includes
+`conversationStopping` and a loopback-only `motorEndpoint` object in
+`bridge_state`. `conversationStopping` is true while the reserved stop lifecycle
+operation has not completed. `motorEndpoint` is the configured local Bridge
+motor listener, for example `{"host":"127.0.0.1","port":18770}`; it is not
+a direct Brain endpoint and does not grant control.
+
+`chat_only` remains a strict no-action mode. A native client can opt into the
+existing control path only by sending a stopped-session start with every field
+below:
+
+```json
+{"type":"conversation_start","interaction":"control","nativeVoiceControl":true,"controlEpoch":7}
+```
+
+`nativeVoiceControl` must be JSON boolean `true`, `interaction` must be
+`control`, and `controlEpoch` must be an integer equal to the current epoch.
+The Bridge sets owner `gpt`, inhibits with `native_voice_control`, sends the
+existing safety STOP, and then starts the existing control conversation. This
+does not resume output. The client must still observe the current fresh stopped
+BrainFrame, wait for `resumeReady`, and send explicit `resume`. If a `resume`
+message includes `controlEpoch`, it too must be an integer matching the current
+epoch; legacy resumes may omit that field.
+
+Control-mode native audio continues to require the current `controlEpoch`.
+When it includes `conversationGeneration`, that value must be an integer equal
+to the current accepting session; stale or stopping-session audio is rejected.
+Delayed audio and conversation text are dropped once any conversation is no
+longer accepting. These additions do not change `ready=false`, the 750 ms
+freshness boundary, action TTL, voice-session epoch barrier, or the raw
+BrainFrame/motor decoder path.

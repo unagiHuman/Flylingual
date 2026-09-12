@@ -103,6 +103,53 @@ class NativeConversationTests(unittest.IsolatedAsyncioTestCase):
         await self.bridge.command({'type': 'audio', 'controlEpoch': self.bridge.arbiter.epoch, 'audio': 'AAA='})
         self.bridge.conversation.input_audio.assert_awaited_once()
 
+    async def test_native_voice_control_requires_explicit_control_epoch_and_advertises_endpoints(self):
+        first_epoch = self.bridge.arbiter.epoch
+        for event in (
+                {'type': 'conversation_start', 'interaction': 'chat_only', 'nativeVoiceControl': True,
+                 'controlEpoch': first_epoch},
+                {'type': 'conversation_start', 'interaction': 'control', 'nativeVoiceControl': 'true',
+                 'controlEpoch': first_epoch},
+                {'type': 'conversation_start', 'interaction': 'control', 'nativeVoiceControl': True,
+                 'controlEpoch': True}):
+            with self.assertRaises(ControlError):
+                await self.bridge.command(event)
+        await self.bridge.command({'type': 'conversation_start', 'interaction': 'control',
+                                   'nativeVoiceControl': True, 'controlEpoch': first_epoch})
+        await self.bridge.conversation_operation
+        self.assertEqual(self.bridge.arbiter.owner, 'gpt')
+        self.assertTrue(self.bridge.arbiter.inhibited)
+        self.assertEqual(self.bridge.arbiter.reason, 'native_voice_control')
+        self.assertGreater(self.bridge.arbiter.epoch, first_epoch)
+        state = self.bridge.state()
+        self.assertIn('native_voice_actions_v1', state['capabilities'])
+        self.assertEqual(state['motorEndpoint'], {'host': self.bridge.config['bridge']['host'],
+                                                  'port': self.bridge.config['bridge']['tcpPort']})
+        with self.assertRaisesRegex(ControlError, 'old_epoch'):
+            await self.bridge.command({'type': 'resume', 'controlEpoch': first_epoch})
+
+    async def test_native_control_audio_rejects_obsolete_generation_and_stopping_session(self):
+        epoch = self.bridge.arbiter.epoch
+        await self.bridge.command({'type': 'conversation_start', 'interaction': 'control',
+                                   'nativeVoiceControl': True, 'controlEpoch': epoch})
+        await self.bridge.conversation_operation
+        current_epoch, generation = self.bridge.arbiter.epoch, self.bridge.conversation_generation
+        with self.assertRaisesRegex(ControlError, 'old_conversation_generation'):
+            await self.bridge.command({'type': 'audio', 'controlEpoch': current_epoch,
+                                       'conversationGeneration': generation - 1, 'audio': 'AAA='})
+        self.bridge.conversation.input_audio.assert_not_awaited()
+        await self.bridge.command({'type': 'audio', 'controlEpoch': current_epoch,
+                                   'conversationGeneration': generation, 'audio': 'AAA='})
+        self.bridge.conversation.input_audio.assert_awaited_once()
+        async def slow_stop():
+            await asyncio.sleep(0.05)
+        self.bridge.conversation.stop = AsyncMock(side_effect=slow_stop)
+        self.bridge.stop_conversation_session()
+        self.assertTrue(self.bridge.state()['conversationStopping'])
+        with self.assertRaisesRegex(ControlError, 'old_conversation_generation'):
+            await self.bridge.command({'type': 'audio', 'controlEpoch': current_epoch,
+                                       'conversationGeneration': generation, 'audio': 'AAA='})
+
 
 if __name__ == '__main__':
     unittest.main()

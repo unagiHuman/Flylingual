@@ -1,4 +1,6 @@
 using System;
+using System.Collections;
+using System.Collections.Generic;
 using System.Collections.Concurrent;
 using System.Globalization;
 using System.Text;
@@ -9,13 +11,12 @@ using UnityEngine;
 namespace Flylingual.Conversation
 {
     /// <summary>
-    /// Conversation-only Unity endpoint. This class never sends owner, resume, or action commands.
+    /// Unity voice endpoint. Explicit voice control uses the Bridge's fresh STOP/resume gate.
     /// A bootstrap must explicitly call ConnectAsync; Awake/Start deliberately do not connect.
     /// </summary>
     public sealed class ConversationSessionController : MonoBehaviour
     {
         const string DefaultUrl = "ws://127.0.0.1:18771/ws";
-        const float ReplyTailSeconds = .2f;
         const int MaximumMainThreadMessages = 256;
         const int MaximumMessagesPerUpdate = 64;
         readonly ConcurrentQueue<Action> mainThread = new ConcurrentQueue<Action>();
@@ -25,13 +26,19 @@ namespace Flylingual.Conversation
         UnityReplyAudioPlayer replyAudio;
         int requestNumber;
         bool requestedStart;
-        bool pttHeld;
-        float replyBlockedUntil;
+        bool autoStartPending = true;
+        bool captureAttempted;
         string expectedSettingsRequestId;
         string selectedDevice;
         string captionRole;
         int mainThreadCount;
         int connectionAttempt;
+        Coroutine enableActionsRoutine;
+        bool bodyArmed, resumePending, bridgeConnected, voiceControlAvailable, resumeReady, conversationStopping;
+        int armedEpoch;
+        string bridgeConversationState;
+        double frameReceivedAt = double.NegativeInfinity, stateReceivedAt;
+        readonly Dictionary<int, string> pendingActions = new Dictionary<int, string>();
 
         [SerializeField] UnityMicrophoneCapture microphoneCapture;
         [SerializeField] UnityReplyAudioPlayer replyAudioPlayer;
@@ -69,9 +76,36 @@ namespace Flylingual.Conversation
         public long ReceivedNonzeroAudioBytes { get; private set; }
         public long ReceivedTranscriptDeltas { get; private set; }
         public long SentAudioChunks { get; private set; }
+        public long SentAudioChunksDuringReply { get; private set; }
+        public bool MicrophoneMuted { get; private set; }
+        public bool MicrophoneCaptureDisabled { get; private set; }
+        public bool MicrophoneCapturing => microphone != null && microphone.IsCapturing;
+        public bool MicrophoneTransmitting { get; private set; }
+        public bool ReplyPlaying => replyAudio != null && replyAudio.IsPlaying;
+        public long PlayedNonzeroSamples => replyAudio == null ? 0L : replyAudio.PlayedNonzeroSamples;
+        public bool VoiceActionsAvailable { get; private set; }
+        public bool EnablingVoiceActions { get; private set; }
+        public string BrainSessionId { get; private set; }
+        public string BrainInstanceId { get; private set; }
+        public string BridgeMotorHost { get; private set; }
+        public int BridgeMotorPort { get; private set; }
+        public string ActionFeedback { get; private set; } = "会話のみ。声で操作を有効にすると移動できます";
+        public int SubmittedActions { get; private set; }
+        public int AppliedActions { get; private set; }
+        public int RejectedActions { get; private set; }
+        public int LastAppliedRequestId { get; private set; }
+        public string LastAppliedAction { get; private set; }
+        public long LastAppliedSequence { get; private set; }
+        public bool HasFreshBrain => bridgeConnected && !string.IsNullOrEmpty(BrainSessionId)
+            && Time.realtimeSinceStartupAsDouble - frameReceivedAt <= .75
+            && FrameAgeMs + (Time.realtimeSinceStartupAsDouble - stateReceivedAt) * 1000 <= 750;
+        public bool BodyControlActive => bodyArmed && armedEpoch == ControlEpoch && Ready && ConversationLive
+            && ConversationInteraction == "control" && Owner == "gpt" && !OutputInhibited && voiceControlAvailable && HasFreshBrain;
 
         void Awake()
         {
+            MicrophoneCaptureDisabled = Array.IndexOf(Environment.GetCommandLineArgs(), "-flyConversationNoMicrophone") >= 0;
+            MicrophoneMuted = MicrophoneCaptureDisabled;
             if (FindAnyObjectByType<AudioListener>() == null)
             {
                 // A filter cannot share an object with both listener and source.
@@ -82,6 +116,8 @@ namespace Flylingual.Conversation
             microphone = microphoneCapture ?? GetComponent<UnityMicrophoneCapture>() ?? gameObject.AddComponent<UnityMicrophoneCapture>();
             replyAudio = replyAudioPlayer ?? GetComponent<UnityReplyAudioPlayer>() ?? gameObject.AddComponent<UnityReplyAudioPlayer>();
             BindMicrophone();
+            if (GetComponent<NativeConversationBody>() == null) gameObject.AddComponent<NativeConversationBody>();
+            if (GetComponent<NativeConversationReaction>() == null) gameObject.AddComponent<NativeConversationReaction>();
         }
 
         public void AttachAudioAdapters(UnityMicrophoneCapture microphoneAdapter, UnityReplyAudioPlayer replyAudioAdapter)
@@ -99,7 +135,10 @@ namespace Flylingual.Conversation
                 Interlocked.Decrement(ref mainThreadCount);
                 action();
             }
-            if (replyAudio != null && replyAudio.IsPlaying) replyBlockedUntil = Time.unscaledTime + ReplyTailSeconds;
+            if (autoStartPending && Ready && OutputInhibited && transport != null && transport.IsConnected)
+                StartConversation();
+            UpdateMicrophone();
+            if (bodyArmed && !BodyControlActive) BodyFault("voice_control_stopped_or_stale");
         }
 
         public async Task ConnectAsync(string url)
@@ -131,20 +170,27 @@ namespace Flylingual.Conversation
 
         public void StartConversation()
         {
+            if (EnablingVoiceActions) return;
+            autoStartPending = false;
+            if (requestedStart) return;
             if (transport == null || !transport.IsConnected || !Ready || !OutputInhibited)
             {
                 SetError("conversation_start_not_safe");
                 return;
             }
             requestedStart = true;
+            Error = null;
             Send(new ConversationStart { type = "conversation_start", interaction = "chat_only", controlEpoch = ControlEpoch });
         }
 
         public void StopConversation()
         {
+            if (enableActionsRoutine != null) StopCoroutine(enableActionsRoutine);
+            enableActionsRoutine = null;
+            EnablingVoiceActions = resumePending = bodyArmed = false;
+            autoStartPending = false;
             requestedStart = false;
             ConversationLive = false;
-            SetPtt(false);
             StopCapture();
             DiscardReply();
             if (transport != null && transport.IsConnected) Send(new ConversationStop { type = "conversation_stop" });
@@ -154,6 +200,73 @@ namespace Flylingual.Conversation
         {
             StopConversation();
             if (transport != null && transport.IsConnected) Send(new EmergencyStopMessage { type = "emergency_stop" });
+        }
+
+        public void EnableVoiceActions()
+        {
+            if (!Ready || !VoiceActionsAvailable || EnablingVoiceActions || BodyControlActive) return;
+            int previousGeneration = ConversationGeneration;
+            StopConversation();
+            EnablingVoiceActions = true;
+            Error = null;
+            ActionFeedback = "声で操作の準備中：会話を切り替えています";
+            enableActionsRoutine = StartCoroutine(EnableActions(previousGeneration));
+        }
+
+        IEnumerator EnableActions(int previousGeneration)
+        {
+            double deadline = Time.realtimeSinceStartupAsDouble + 25;
+            while (Ready && Time.realtimeSinceStartupAsDouble < deadline
+                && (ConversationGeneration <= previousGeneration || conversationStopping
+                    || (bridgeConversationState != "off" && bridgeConversationState != "disconnected"))) yield return null;
+            if (!Ready || conversationStopping || ConversationGeneration <= previousGeneration
+                || (bridgeConversationState != "off" && bridgeConversationState != "disconnected"))
+            { FailActionStart("voice_control_stop_timeout"); yield break; }
+            requestedStart = true;
+            Send(new ConversationStart { type = "conversation_start", interaction = "control", nativeVoiceControl = true, controlEpoch = ControlEpoch });
+            ActionFeedback = "声で操作の準備中：実Brainの停止確認を待っています";
+            deadline = Time.realtimeSinceStartupAsDouble + 30;
+            while (Ready && Time.realtimeSinceStartupAsDouble < deadline
+                && !(ConversationLive && resumeReady && voiceControlAvailable && HasFreshBrain && Owner == "gpt")) yield return null;
+            if (!Ready || !ConversationLive || !resumeReady || !voiceControlAvailable || !HasFreshBrain || Owner != "gpt")
+            { FailActionStart("fresh_stop_or_voice_required"); yield break; }
+            armedEpoch = ControlEpoch;
+            resumePending = true;
+            Send(new ResumeMessage { type = "resume", controlEpoch = ControlEpoch });
+            deadline = Time.realtimeSinceStartupAsDouble + 3;
+            while (Ready && resumePending && Time.realtimeSinceStartupAsDouble < deadline) yield return null;
+            if (!bodyArmed) { FailActionStart("voice_control_resume_failed"); yield break; }
+            EnablingVoiceActions = false;
+            enableActionsRoutine = null;
+            ActionFeedback = "声で操作できます：前へ、右、左、止まって";
+        }
+
+        void FailActionStart(string code)
+        {
+            enableActionsRoutine = null;
+            EmergencyStop();
+            ActionFeedback = "操作を開始できません：" + code;
+            SetError(code);
+        }
+
+        public void BodyFault(string code)
+        {
+            Debug.Log("NATIVE_BODY_STOP " + code + " epoch=" + ControlEpoch + " sequence=" + Sequence
+                + " frameAgeMs=" + ((Time.realtimeSinceStartupAsDouble - frameReceivedAt) * 1000).ToString("F1", CultureInfo.InvariantCulture)
+                + " serverAgeMs=" + (FrameAgeMs + (Time.realtimeSinceStartupAsDouble - stateReceivedAt) * 1000).ToString("F1", CultureInfo.InvariantCulture)
+                + " inhibited=" + OutputInhibited + " voice=" + voiceControlAvailable);
+            bodyArmed = resumePending = false;
+            ActionFeedback = "身体を停止しました。再開には「声で操作」が必要です：" + code;
+            SetError(code);
+            if (transport != null && transport.IsConnected) Send(new EmergencyStopMessage { type = "emergency_stop" });
+        }
+
+        // The same intent route as voice delegation, useful for accessible input and explicit verification.
+        public void SendPlayerText(string text)
+        {
+            if (!BodyControlActive || string.IsNullOrWhiteSpace(text) || text.Length > 2000) return;
+            Send(new PlayerTextMessage { type = "player_text", text = text, controlEpoch = ControlEpoch,
+                commandId = "unity-intent-" + Guid.NewGuid().ToString("N") });
         }
 
         public void ApplySettings(string language, string voice, string persona, string personaText)
@@ -173,7 +286,17 @@ namespace Flylingual.Conversation
 
         public void SetMicrophoneDevice(string device)
         {
+            if (selectedDevice == device) return;
             selectedDevice = device;
+            StopCapture();
+        }
+
+        public void SetMicrophoneMuted(bool muted)
+        {
+            muted |= MicrophoneCaptureDisabled;
+            if (MicrophoneMuted == muted) return;
+            MicrophoneMuted = muted;
+            StopCapture();
         }
 
         public void SetVolume(float value)
@@ -205,12 +328,23 @@ namespace Flylingual.Conversation
                 case "discard_audio": HandleDiscard(JsonUtility.FromJson<GenerationMessage>(json)); break;
                 case "error": HandleError(JsonUtility.FromJson<ErrorMessage>(json)); break;
                 case "brain_frame": HandleFrame(JsonUtility.FromJson<BrainFrameMessage>(json)); break;
+                case "command_result": HandleCommandResult(JsonUtility.FromJson<CommandResult>(json)); break;
             }
         }
 
         void HandleBridgeState(BridgeState state)
         {
             if (state == null) return;
+            if (state.epoch < ControlEpoch) return;
+            bool boundary = state.epoch != ControlEpoch || state.sessionId != BrainSessionId || state.instanceId != BrainInstanceId;
+            if (boundary)
+            {
+                frameReceivedAt = double.NegativeInfinity;
+                Sequence = -1;
+                pendingActions.Clear();
+                LastAppliedRequestId = 0;
+                LastAppliedSequence = 0;
+            }
             ControlEpoch = state.epoch;
             Owner = string.IsNullOrEmpty(state.owner) ? "observer" : state.owner;
             OutputInhibited = state.outputInhibited;
@@ -220,17 +354,31 @@ namespace Flylingual.Conversation
             Backend = state.backend;
             BrainReady = state.brainReady;
             FrameAgeMs = state.frameAgeMs;
+            stateReceivedAt = Time.realtimeSinceStartupAsDouble;
+            BrainSessionId = state.sessionId;
+            BrainInstanceId = state.instanceId;
+            bridgeConnected = state.brainConnected && !state.switching && !state.releaseUnknown;
+            resumeReady = state.resumeReady;
+            voiceControlAvailable = state.voiceControlAvailable;
+            bridgeConversationState = state.conversationState;
+            conversationStopping = state.conversationStopping;
+            VoiceActionsAvailable = HasCapability(state.capabilities, "native_voice_actions_v1");
+            if (state.motorEndpoint != null && (state.motorEndpoint.host == "127.0.0.1" || state.motorEndpoint.host == "localhost")
+                && state.motorEndpoint.port > 0 && state.motorEndpoint.port <= 65535)
+            { BridgeMotorHost = state.motorEndpoint.host; BridgeMotorPort = state.motorEndpoint.port; }
             if (state.conversationGeneration >= 0 && state.conversationGeneration != ConversationGeneration)
                 ResetGeneration(state.conversationGeneration);
             if (state.conversationSettings != null) Settings = state.conversationSettings;
             SettingsRevision = state.conversationSettingsRevision;
+            if (resumePending && ControlEpoch == armedEpoch && !OutputInhibited && HasFreshBrain && voiceControlAvailable)
+            { bodyArmed = true; resumePending = false; }
         }
 
         void HandleConversationState(ConversationStateMessage state)
         {
             if (state == null || !AcceptGeneration(state.conversationGeneration)) return;
             ConversationLive = requestedStart && state.state == "live";
-            if (!ConversationLive) { SetPtt(false); StopCapture(); }
+            if (!ConversationLive) StopCapture();
         }
 
         void HandleText(ConversationTextMessage text)
@@ -256,7 +404,8 @@ namespace Flylingual.Conversation
                 var bytes = Convert.FromBase64String(audio.audio ?? string.Empty);
                 ReceivedAudioBytes += bytes.Length;
                 foreach (byte value in bytes) if (value != 0) { ReceivedNonzeroAudioBytes += bytes.Length; break; }
-                if (bytes.Length == 0 || pttHeld) return;
+                // Receiving a reply must never depend on microphone input being enabled.
+                if (bytes.Length == 0) return;
                 replyAudio?.EnqueuePcm(bytes);
             }
             catch (FormatException) { SetError("invalid_reply_audio"); }
@@ -297,32 +446,31 @@ namespace Flylingual.Conversation
             Caption = string.Empty;
             captionRole = null;
             ConversationLive = false;
-            SetPtt(false);
+            bodyArmed = false;
             StopCapture();
             DiscardReply();
         }
 
-        public void SetPushToTalk(bool held)
+        void UpdateMicrophone()
         {
-            if (held && CanTransmit())
+            bool active = CanTransmit();
+            if (!active)
             {
-                if (!pttHeld) { DiscardReply(false); StartCapture(); }
-                SetPtt(true);
+                if (captureAttempted) StopCapture();
+                return;
             }
-            else SetPtt(false);
+            // Open once per session/device/unmute, including while the greeting plays.
+            // GPT Live receives input continuously, including while reply audio plays.
+            if (!captureAttempted) { captureAttempted = true; StartCapture(); }
+            MicrophoneTransmitting = MicrophoneCapturing && CanTransmit();
+            microphone?.SetTransmitting(MicrophoneTransmitting);
         }
 
         bool CanTransmit()
         {
-            return requestedStart && ConversationLive && Ready && OutputInhibited && Owner == "observer"
-                && ConversationInteraction == "chat_only"
-                && (replyAudio == null || !replyAudio.IsPlaying) && Time.unscaledTime >= replyBlockedUntil;
-        }
-
-        void SetPtt(bool enabled)
-        {
-            pttHeld = enabled;
-            microphone?.SetTransmitting(enabled && CanTransmit());
+            return !MicrophoneMuted && requestedStart && ConversationLive && Ready
+                && ((OutputInhibited && Owner == "observer" && ConversationInteraction == "chat_only")
+                    || (ConversationInteraction == "control" && Owner == "gpt"));
         }
 
         void StartCapture()
@@ -334,8 +482,8 @@ namespace Flylingual.Conversation
                 microphone.StartCapture(selectedDevice);
             }
         }
-        void StopCapture() { microphone?.StopCapture(); }
-        void DiscardReply(bool extendTail = true) { replyAudio?.Discard(); replyBlockedUntil = extendTail ? Time.unscaledTime + ReplyTailSeconds : 0f; }
+        void StopCapture() { MicrophoneTransmitting = false; microphone?.StopCapture(); captureAttempted = false; }
+        void DiscardReply() { replyAudio?.Discard(); }
 
         void BindMicrophone()
         {
@@ -343,9 +491,10 @@ namespace Flylingual.Conversation
         }
         void OnPcmChunk(byte[] pcm)
         {
-            if (!CanTransmit() || pcm == null || pcm.Length == 0) return;
+            if (!MicrophoneTransmitting || !CanTransmit() || pcm == null || pcm.Length == 0) return;
             SentAudioChunks++;
-            Send(new AudioOutbound { type = "audio", conversationGeneration = ConversationGeneration, audio = Convert.ToBase64String(pcm) });
+            if (ReplyPlaying) SentAudioChunksDuringReply++;
+            Send(new AudioOutbound { type = "audio", conversationGeneration = ConversationGeneration, controlEpoch = ControlEpoch, audio = Convert.ToBase64String(pcm) });
         }
 
         void Send(object message)
@@ -356,7 +505,12 @@ namespace Flylingual.Conversation
         void Disconnected(string code)
         {
             Status = "disconnected"; Ready = false; requestedStart = false; ConversationLive = false;
-            SetPtt(false); StopCapture(); DiscardReply(); SetError(code); CloseTransport();
+            autoStartPending = false;
+            bodyArmed = resumePending = false;
+            if (enableActionsRoutine != null) StopCoroutine(enableActionsRoutine);
+            enableActionsRoutine = null;
+            EnablingVoiceActions = false;
+            StopCapture(); DiscardReply(); SetError(code); CloseTransport();
         }
         void EnqueueMain(int attempt, Action action)
         {
@@ -377,7 +531,6 @@ namespace Flylingual.Conversation
             cancellation?.Cancel(); cancellation?.Dispose(); cancellation = null;
         }
         void SetError(string code) { Error = code; }
-        void OnApplicationFocus(bool focused) { if (!focused) SetPtt(false); }
         void OnDisable() { StopConversation(); CloseTransport(); }
         void OnDestroy()
         {
@@ -401,8 +554,43 @@ namespace Flylingual.Conversation
         }
         [Serializable] public sealed class ConversationSettings { public string language = "ja"; public string voice = "marin"; public string persona = "friendly"; public string personaText = ""; }
         [Serializable] sealed class MessageHeader { public string type; }
-        [Serializable] sealed class BridgeState { public int epoch; public string owner; public bool outputInhibited; public string[] capabilities; public string conversationInteraction; public int conversationGeneration = -1; public ConversationSettings conversationSettings; public int conversationSettingsRevision; public string backend; public bool brainReady; public float frameAgeMs; }
-        void HandleFrame(BrainFrameMessage frame) { if (frame != null) Sequence = frame.sequence; }
+        [Serializable] sealed class BridgeState { public int epoch; public string owner; public bool outputInhibited; public string[] capabilities; public string conversationInteraction; public int conversationGeneration = -1; public ConversationSettings conversationSettings; public int conversationSettingsRevision; public string backend; public bool brainReady; public float frameAgeMs; public string sessionId, instanceId, conversationState; public bool brainConnected, resumeReady, voiceControlAvailable, conversationStopping, switching, releaseUnknown; public MotorEndpoint motorEndpoint; }
+        [Serializable] sealed class MotorEndpoint { public string host; public int port; }
+        void HandleFrame(BrainFrameMessage frame)
+        {
+            if (frame == null || frame.metadata == null || frame.motor == null || !bridgeConnected
+                || frame.metadata.sessionId != BrainSessionId || frame.metadata.instanceId != BrainInstanceId
+                || frame.sequence <= Sequence || float.IsNaN(frame.motor.forward) || float.IsInfinity(frame.motor.forward)
+                || float.IsNaN(frame.motor.turn) || float.IsInfinity(frame.motor.turn)) return;
+            Sequence = frame.sequence;
+            frameReceivedAt = Time.realtimeSinceStartupAsDouble;
+            // A state age describes the preceding frame. Only a NEW valid frame
+            // starts a new age baseline; heartbeats/duplicates cannot refresh it.
+            FrameAgeMs = 0;
+            stateReceivedAt = frameReceivedAt;
+            if (frame.appliedRequestId > 0 && frame.appliedRequestId == LastAppliedRequestId) LastAppliedSequence = frame.sequence;
+        }
+        void HandleCommandResult(CommandResult result)
+        {
+            if (result == null || ConversationInteraction != "control" || !requestedStart) return;
+            if (result.stage == "submitted" && result.epoch == ControlEpoch && result.commandId != null
+                && (result.commandId.StartsWith("voice-", StringComparison.Ordinal) || result.commandId.StartsWith("unity-intent-", StringComparison.Ordinal)))
+            {
+                if (pendingActions.Count >= 32) pendingActions.Clear();
+                pendingActions[result.requestId] = result.action;
+                SubmittedActions++;
+                ActionFeedback = "指示を受付：" + result.action + "（Brain適用待ち）";
+            }
+            else if (result.stage == "brain_applied" && pendingActions.TryGetValue(result.requestId, out string action))
+            {
+                pendingActions.Remove(result.requestId);
+                AppliedActions++;
+                LastAppliedRequestId = result.requestId;
+                LastAppliedAction = action;
+                ActionFeedback = "Brainが適用：" + action + "（移動結果は身体観測で確認）";
+            }
+            else if (result.stage == "rejected") { RejectedActions++; ActionFeedback = "指示を実行できません：" + result.reason; }
+        }
 
         [Serializable] sealed class ConversationStateMessage { public string state; public int conversationGeneration = -1; }
         [Serializable] class GenerationMessage { public int conversationGeneration = -1; }
@@ -410,12 +598,15 @@ namespace Flylingual.Conversation
         [Serializable] sealed class AudioMessage : GenerationMessage { public string audio; }
         [Serializable] sealed class ErrorMessage { public string error; public string requestId; }
         [Serializable] sealed class ConversationSettingsMessage { public string requestId; public ConversationSettings settings; public int revision; }
-        [Serializable] sealed class ConversationStart { public string type; public string interaction; public int controlEpoch; }
+        [Serializable] sealed class ConversationStart { public string type; public string interaction; public int controlEpoch; public bool nativeVoiceControl; }
+        [Serializable] sealed class ResumeMessage { public string type; public int controlEpoch; }
+        [Serializable] sealed class PlayerTextMessage { public string type, text, commandId; public int controlEpoch; }
+        [Serializable] sealed class CommandResult { public string stage, commandId, action, reason; public int epoch, requestId; }
         [Serializable] sealed class ConversationStop { public string type; }
         [Serializable] sealed class EmergencyStopMessage { public string type; }
-        [Serializable] sealed class AudioOutbound { public string type; public int conversationGeneration; public string audio; }
+        [Serializable] sealed class AudioOutbound { public string type; public int conversationGeneration, controlEpoch; public string audio; }
         [Serializable] sealed class ConfigureConversation { public string type; public string requestId; public int controlEpoch; public int expectedRevision; public ConversationSettings settings; }
         [Serializable] public sealed class ConversationOptions { public string[] languages; public string[] voices; public string[] personas; public int maxPersonaTextLength; }
-        [Serializable] sealed class BrainFrameMessage { public long sequence; }
+        [Serializable] sealed class BrainFrameMessage { public long sequence; public int appliedRequestId; public FlyBrainPoC.BackendMetadata metadata; public FlyBrainPoC.MotorOutput motor; }
     }
 }

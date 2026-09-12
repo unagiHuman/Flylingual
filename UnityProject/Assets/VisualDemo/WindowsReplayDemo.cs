@@ -183,7 +183,8 @@ namespace FlyVisualDemo
         {
             if (Flylingual.Conversation.NativeConversationRuntime.Enabled)
             {
-                controller.SetMotorSource(null);
+                // NativeConversationBody owns this source while the conversation safety gate is armed.
+                if (GetComponent<Flylingual.Conversation.NativeConversationBody>() == null) controller.SetMotorSource(null);
                 if (quitAfter > 0 && Time.realtimeSinceStartup-startedAt >= quitAfter) Application.Quit();
                 return;
             }

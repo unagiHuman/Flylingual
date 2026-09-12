@@ -71,8 +71,96 @@ unity build UnityProject --editor-version 6000.5.5f1 --target StandaloneWindows6
 ```
 
 最後のコマンドはWindows実Brainと実GPT APIを使用する。`-flyConversationProbe` は明示的な
-開発用試験引数で、通常起動では会話・API・マイクを自動開始しない。
+開発用試験引数。下記ハンズフリー修正以後は通常起動でも会話・API・マイクを自動開始する。
+マイクを収録しない検証には `--no-microphone` を付ける。
 
 未確認: 実マイク10往復、音声機器抜差し・使用拒否の実機試験、15分継続、
 会話＋行動の6 Action各3回、認識精度・音声聴取・身体動作品質。
 これらを合格扱いにせず、次の受入れ段階として残す。
+
+## ハンズフリーと音声破棄の修正（2026-09-12 23:08 JST）
+
+以下は半二重版の当時の実測。最新のマイク方針は末尾の「常時送信への変更」を参照する。
+
+ユーザー依頼によりPTTを撤廃し、Bridge準備後に一度だけ会話を自動開始する。
+既存の `pttHeld` 中に受信返信を捨てる処理と、PTT開始時の返信キュー消去を削除した。
+入力許可と返答再生を分離し、マイクのミュートで返答を止めない。
+通常起動ではマイクを自動収録し、非ゼロ返信再生中と終了後200msは入力を破棄、以後送信を再開する。
+停止・切断後の自動再開はしない。身体出力は引き続き抑止する。
+
+- Windows Playerビルド成功。ログ: `artifacts/windows-native-conversation/handsfree-build.log`。
+- 既存PCM EditModeテスト4件成功: `artifacts/windows-native-conversation/handsfree-pcm-tests.xml`。
+- 実行: `.\.venv-bridge\Scripts\python.exe tools/verify_native_player.py --cycles 1 --no-microphone`。
+- Windows実Brain `127.0.0.1:18766`、Bridge `127.0.0.1:18771`、GPT Live実APIで1回成功。
+- ボタン操作なしの会話開始、返答153,600 bytes受信、音量適用後の非ゼロ出力141,719 frames、字幕delta 11件。
+  最初のパケットで停止せず、返信の継続再生まで確認した。物理スピーカーを人が聴取した証拠ではない。
+- マイクは起動時から禁止し、送信チャンク0。入力再開・実マイク経由の往復は未検証。
+  実マイクを自動収録・外部API送信する試験は自動承認レビューに拒否されたため、受信専用で実行した。
+- Brain sequence 9、backend `MALECNS_EXPERIMENTAL`、ready=false、出力抑止=trueを維持。
+- 停止3秒後に会話再開なし、音声バッファ0、所有プロセス残留なし、第二control WSは409。
+  実Brainの同一sessionのcontroller解放は `activeControllerCount=0`。
+- 終了処理中にBridgeの `background_failed: ClientConnectionResetError` が1件記録された。
+  同時刻にcontroller解放とbridge_stoppedを確認。再生中のエラーや未解放とは区別し、終了時ログの扱いは残課題。
+- 全体wall 16.797秒、プロセスツリーpeak RSS 980,590,592 bytes（N=1、応答遅延・長期安定性の指標ではない）。
+- 原本: `artifacts/windows-native-conversation/validation-20260912-230832/summary.json` と `evidence.json`。
+  evidenceには実行時source/config/graph hash、依存版、BrainFrameと解放イベントを保存した。
+
+この修正では依存定義・Brainモデル・decoder・物理設定は変更していない。
+マイクデバイス切替、実機音声出力、音声認識、10往復、15分連続の受入れは未完了。
+
+## 常時送信への変更（2026-09-12）
+
+ユーザーの訂正に従い、返信再生中および終了後200msのマイク送信抑止を撤廃した。
+会話がliveの間はマイク入力と返答再生を同時に継続する。明示ミュート、会話終了、
+切断、世代変更等の停止処理は維持する。受信音声が入力を止める処理はない。
+GPT Liveの公式WebSocket例も入力を連続送信し、出力を別途受信・再生する構成である。
+参照: https://developers.openai.com/api/docs/guides/voice-websockets
+
+検証probeに返信再生中の送信チャンク数を追加し、マイク有効時の合格条件を同時送受信へ変更した。
+この版の実マイク／実APIによる同時送受信試験は未実施。上の受信専用試験をその証拠にしない。
+Windows Playerの再ビルドは成功（Unity CLI exit 0）。ログは
+`artifacts/windows-native-conversation/duplex-build.log`。静的差分検査も成功。
+AECは実装していない。依存定義、Bridge、Brain、物理設定はこの変更では変更していない。
+
+## 声による操作経路と表示リアクション（2026-09-12 23:42 JST）
+
+実装: 明示的な「声で操作」を追加。会話を停止してnative control sessionを開始し、
+Bridgeのgpt owner、安全STOP、新鮮なSTOP適用frame、live会話を確認してresumeする。
+以後GPT Live delegation→既存Responses意図解析→実Brain→既存raw decoder→
+Bridge motor TCP→Unity BrainMotorSource/locomotionへ接続する。
+声・返答への色pulseは見た目だけの演出で、脳の感情やmotorを捏造しない。
+
+追加契約は `native_voice_actions_v1`、`nativeVoiceControl`、`conversationStopping`、
+loopback `motorEndpoint` とnative音声の世代検証。Unityは身体用TCPでもsession/instance、
+新規sequence、750ms、有限motorを照合し、制御断・失鮮度時に独立停止する。
+旧chat_onlyとbrowser controlは保持し、依存定義・Brainモデル・decoder・PhysX設定は変更していない。
+
+検証結果:
+
+- Unity Windows Playerビルド成功: `artifacts/windows-native-conversation/actions-build.log`。
+- Python契約／起動テスト22件成功:
+  `.\.venv-bridge\Scripts\python.exe -m unittest tools.test_native_conversation tools.test_windows_native tools.test_windows_local`。
+- 実動作試験コマンド:
+  `.\.venv-bridge\Scripts\python.exe tools/verify_native_player.py --cycles 1 --no-microphone --actions`。
+  マイク収録は起動時から禁止。文字を同じ意図解析へ送り、ASR／実音声経路を検証したとは扱わない。
+- 初回 `validation-20260912-233627` はReactionのMaterialPropertyBlockをfield initializerで
+  作成したUnity例外と身体ガード停止で不合格。Awakeで作成するよう修正した。
+- 二回目 `validation-20260912-234002` は例外0だが身体ガード停止で不合格。
+  新規frameの後も前frameのserver ageが残る問題を修正し、停止時の鮮度数値を追加した。
+- 最終 `validation-20260912-234219` は例外0、会話切替→fresh STOP→resume→
+  Bridge motor TCP→実frameから身体を有効化するところまで到達したが、**動作gateは不合格**。
+  Brain frame 3→4が766ms間隔、frame 4のstepWallTimeMs=756.10msで750ms制限を超えた。
+  UnityはframeAge=747.1ms、serverAge=768.9msで停止。制限を緩めず、無断再開しない。
+- 最終trialのBrainFrame 10件、step wall最小510.05ms／最大756.10ms／平均619.82ms。
+  6 Action各3回のうち最初のSTOP評価中に停止し、指示適用・移動の合格数は0。
+  初期の身体位置変化約0.00052mは静止姿勢の変化であり、音声移動成功とはしない。
+- backend `MALECNS_EXPERIMENTAL`、ready=false。最終wall13.547秒、peak tree RSS909,193,216 bytes。
+  最後に会話停止・バッファ0・所有process残留なし・controller解放activeControllerCount=0。
+  第二control WSは409。意図的TCP切断試験は、先に失鮮度で停止したため未達。
+- 原本: `artifacts/windows-native-conversation/validation-20260912-234219/summary.json`、
+  `evidence.json`、`player-1.log`。evidenceにsource/config/graph hash、依存版、frameと解放を保存。
+
+残課題は実Brainの処理時間と余裕の確保、6 Action各3回、実マイクの指示・割込み、
+移動・旋回品質、意図的切断、15分継続。現在のコードで50ms windowを500回のsim.step(1)に
+分けていることは確認したが、神経計算をこのUI統合作業で変更してはいない。
+性能改善には数値出力を維持する個別計測と再検証が必要である。
