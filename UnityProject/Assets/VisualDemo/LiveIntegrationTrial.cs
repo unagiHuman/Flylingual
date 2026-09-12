@@ -23,6 +23,8 @@ namespace FlyVisualDemo
         readonly System.Collections.Generic.Queue<Vector4> poses=new System.Collections.Generic.Queue<Vector4>();
         readonly string[] movingActions={"FORWARD","TURN_R","TURN_L","FORWARD_R","FORWARD_L"};
         int actionIndex;
+        float nextHeldInput;
+        string heldInput = "STOP";
         void Awake()
         {
             demo=GetComponent<WindowsReplayDemo>(); output=WindowsReplayDemo.Argument("-demoOutput");
@@ -36,7 +38,7 @@ namespace FlyVisualDemo
         void Received(string line){lock(sync)wire?.WriteLine("{\"utc\":\""+DateTime.UtcNow.ToString("o")+"\",\"direction\":\"receive\",\"message\":"+line+"}");}
         void Sent(string line){lock(sync)wire?.WriteLine("{\"utc\":\""+DateTime.UtcNow.ToString("o")+"\",\"direction\":\"send\",\"message\":"+line+"}");}
         void Log(string text){events.WriteLine(DateTime.UtcNow.ToString("o")+" t="+F(Time.realtimeSinceStartup)+" "+text);Debug.Log("LIVE_TRIAL "+text);}
-        void Stimulate(string action){Log("INPUT "+action);demo.client.SetAction(action,true);entered=Time.realtimeSinceStartup;stable=0;poses.Clear();}
+        void Stimulate(string action){Log("INPUT "+action);heldInput=action;nextHeldInput=Time.realtimeSinceStartup+2f;demo.client.SetAction(action,true);entered=Time.realtimeSinceStartup;stable=0;poses.Clear();}
         static string F(float x)=>x.ToString("R",CultureInfo.InvariantCulture);
         void Finish(string outcome)
         {
@@ -52,6 +54,11 @@ namespace FlyVisualDemo
             var client=demo.client; var body=demo.body;
             client.TryGetLatestFrame(out BrainFrame frame,out double age);
             if(!string.IsNullOrEmpty(client.LastError)){Finish("FAIL client_error="+client.LastError);return;}
+            // Opt-in held input for a local Bridge with expiring manual
+            // commands. Refresh the stimulus through the normal Brain path;
+            // never substitute a motor value or extend the Bridge timeout.
+            if(WindowsReplayDemo.Flag("-liveRefreshInput") && sentStop && client.ConnectionState=="CONNECTED" && now>=nextHeldInput)
+            { nextHeldInput=now+2f;client.SetAction(heldInput,true); }
             if(now>=nextImage){nextImage=now+1;ScreenCapture.CaptureScreenshot(Path.Combine(output,"live-"+(imageIndex++).ToString("D3")+".png"));}
             if(now>=nextSample)
             {

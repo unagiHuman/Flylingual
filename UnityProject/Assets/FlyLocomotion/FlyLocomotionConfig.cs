@@ -28,6 +28,9 @@ namespace FlyLocomotionPoC
         public float jointUpperLimit = 65f;
 
         [Header("Tripod CPG")]
+        // Opt-in for the candidate rig whose rest pose places the feet below
+        // the knees. Existing serialized scenes retain their original gait.
+        public bool groundedTripodGait = false;
         public float gaitFrequencyHz = 2.2f;
         public float coxaStrideAmplitudeDegrees = 22f;
         public float femurLiftAmplitudeDegrees = 20f;

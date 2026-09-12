@@ -54,6 +54,7 @@ namespace FlyVisualDemo
         float nextVideoFrame;
         int videoFrame;
         bool playbackStarting;
+        bool delayingLiveConnection;
         int warmupFrames;
         readonly List<float> renderTimes = new List<float>();
         GUIStyle titleStyle, textStyle, smallStyle, buttonStyle;
@@ -102,11 +103,25 @@ namespace FlyVisualDemo
             {
                 string host=Argument("-brainHost");
                 if(!string.IsNullOrEmpty(host)) client.ConfigureEndpoint(host,int.Parse(Argument("-brainPort"),CultureInfo.InvariantCulture),false);
-                if(Flag("-liveTrial")) gameObject.AddComponent<LiveIntegrationTrial>();
-                SetMode(BrainSourceMode.LiveTcp);
+                if (float.TryParse(Argument("-demoLiveConnectDelay"), NumberStyles.Float, CultureInfo.InvariantCulture, out float delay) && delay > 0f)
+                {
+                    // Allow local Brain/Bridge startup to remain inhibited
+                    // during Player loading. No replay motor runs in this gap.
+                    mode = BrainSourceMode.LiveTcp;
+                    delayingLiveConnection = true;
+                    controller.SetMotorSource(null);
+                    Invoke(nameof(StartLiveConnection), Mathf.Min(delay, 30f));
+                }
+                else StartLiveConnection();
             }
             playbackStarting = Flag("-demoWarmup") && mode == BrainSourceMode.Replay;
             if (playbackStarting) controller.SetMotorSource(null);
+        }
+        void StartLiveConnection()
+        {
+            delayingLiveConnection = false;
+            if(Flag("-liveTrial")) gameObject.AddComponent<LiveIntegrationTrial>();
+            SetMode(BrainSourceMode.LiveTcp);
         }
         public void SelectReplay(string action)
         {
@@ -134,7 +149,7 @@ namespace FlyVisualDemo
             renderTimes.Add(Time.unscaledDeltaTime*1000f);
             if (mode == BrainSourceMode.Replay && loop && !emergency && replay.FrameCount > 0 && !replay.HasFreshFrame) SelectReplay(selected);
             // Disconnect cancels asynchronously; retry after its old task has exited.
-            if (!Flag("-liveTrial") && mode == BrainSourceMode.LiveTcp && client.ConnectionState == "DISCONNECTED" && Time.unscaledTime >= nextConnectAttempt)
+            if (!delayingLiveConnection && !Flag("-liveTrial") && mode == BrainSourceMode.LiveTcp && client.ConnectionState == "DISCONNECTED" && Time.unscaledTime >= nextConnectAttempt)
             { nextConnectAttempt=Time.unscaledTime+.5f; client.Connect(); }
             if(mode==BrainSourceMode.LiveTcp)
             {
@@ -206,6 +221,7 @@ namespace FlyVisualDemo
         }
         void OnGUI()
         {
+            if (Flag("-demoNoHud")) return;
             if (titleStyle == null)
             {
                 titleStyle = new GUIStyle(GUI.skin.label) { fontSize = 27, fontStyle = FontStyle.Bold, normal = { textColor = new Color(.98f,.9f,.67f) } };

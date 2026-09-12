@@ -67,12 +67,33 @@ namespace FlyLocomotionPoC
             float swingWave = Mathf.Max(0f, strideWave);
             float sideScale = config.SideScale(leftSide,float.IsNaN(steeringTurn) ? motor.turn : steeringTurn);
             float gaitDrive = Mathf.Max(Mathf.Abs(motor.forward), Mathf.Abs(motor.turn) * config.turnGaitContribution);
-            float stride = -strideWave * config.coxaStrideAmplitudeDegrees * gaitDrive * sideScale;
+            // With the grounded rest pose, cosine moves the planted foot
+            // continuously from front to back over the stance half-cycle.
+            float stride = (config.groundedTripodGait ? Mathf.Cos(legPhase) : -strideWave)
+                * config.coxaStrideAmplitudeDegrees * gaitDrive * sideScale;
             float baseCoxa = stride;
             if (stance) stride *= Mathf.Max(1f, stanceCoxaMultiplier);
             float lift = swingWave * gaitDrive;
             float femurBase = lift * config.femurLiftAmplitudeDegrees;
             float tibiaBase = -lift * config.tibiaLiftAmplitudeDegrees;
+            if (config.groundedTripodGait)
+            {
+                // The two sides share bone-local hinge axes. Mirrored limbs
+                // therefore need opposite drive signs for the same world lift.
+                float sign = leftSide ? -1f : 1f;
+                baseCoxa *= sign;
+                stride *= sign;
+                femurBase *= sign;
+                tibiaBase *= sign;
+                // A stopped gait supports the body on all six feet, even if
+                // its phase froze during a swing half-cycle.
+                if (gaitDrive < config.gaitStartThreshold)
+                {
+                    stance = true;
+                    stanceProgress = .5f;
+                    baseCoxa = stride = femurBase = tibiaBase = 0f;
+                }
+            }
             return new LegDriveTarget {
                 baseAngles = new Vector3(baseCoxa, femurBase, tibiaBase),
                 angles = new Vector3(stride + coxaOffsetDegrees, femurBase + femurOffsetDegrees, tibiaBase + tibiaOffsetDegrees),

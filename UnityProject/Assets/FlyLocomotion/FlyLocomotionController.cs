@@ -102,7 +102,9 @@ namespace FlyLocomotionPoC
                 Mathf.Lerp(currentMotor.forward, targetMotor.forward, blend),
                 Mathf.Lerp(currentMotor.turn, targetMotor.turn, blend));
 
-            float activity = Mathf.Max(currentMotor.forward, Mathf.Abs(currentMotor.turn) * 0.5f);
+            float activity = config.groundedTripodGait
+                ? Mathf.Max(Mathf.Abs(currentMotor.forward), Mathf.Abs(currentMotor.turn) * config.turnGaitContribution)
+                : Mathf.Max(currentMotor.forward, Mathf.Abs(currentMotor.turn) * 0.5f);
             if (activity > config.gaitStartThreshold)
             {
                 phase += 2f * Mathf.PI * config.gaitFrequencyHz * Time.fixedDeltaTime;

@@ -1,0 +1,42 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8d98685452449455cac63be25b7ff184, type: 3}
+  m_Name: FlyLocomotionConfig
+  m_EditorClassIdentifier: Assembly-CSharp::FlyLocomotionPoC.FlyLocomotionConfig
+  thoraxMass: 0.35
+  thoraxSize: {x: 1.4, y: 0.7, z: 1.8}
+  thoraxLinearDamping: 0.25
+  thoraxAngularDamping: 0.8
+  coxaLength: 0.42
+  femurLength: 0.9
+  tibiaLength: 0.9
+  coxaRadius: 0.11
+  femurRadius: 0.1
+  tibiaRadius: 0.08
+  legMass: 0.035
+  driveStiffness: 2600
+  driveDamping: 160
+  driveForceLimit: 850
+  jointLowerLimit: -65
+  jointUpperLimit: 65
+  groundedTripodGait: 1
+  gaitFrequencyHz: 1.6
+  coxaStrideAmplitudeDegrees: 24
+  femurLiftAmplitudeDegrees: 24
+  tibiaLiftAmplitudeDegrees: 16
+  gaitStartThreshold: 0.03
+  steeringGain: 0.5
+  minimumSideScale: 0.15
+  turnGaitContribution: 0.7
+  turnSign: -1
+  motorSmoothingSeconds: 0.12
+  statusLogIntervalSeconds: 1
