@@ -70,6 +70,7 @@ class ConversationAdapter:
         self.config = config
         self.settings = settings_from_config({'conversation': config})
         self.mode = config['mode']
+        self.interaction = 'control'
         self.on_event = on_event
         self.on_utterance = on_utterance
         self.state = 'off'
@@ -174,8 +175,15 @@ class ConversationAdapter:
                 headers={'Authorization': 'Bearer ' + key},
                 max_msg_size=2 * 1024 * 1024, heartbeat=20,
             )
+            instructions = build_voice_instructions(self.settings)
+            if self.interaction == 'chat_only':
+                instructions += ('\nThis is conversation-only mode. Have a natural voice conversation. '
+                    'Body control is disabled. Never execute or claim to execute an action. '
+                    'Current neural observations and body movement are unavailable to this conversation; '
+                    'do not describe them as observed. If asked to move, explain that body control is disabled. '
+                    'Do not delegate ordinary conversation or questions to the client.')
             await self.ws.send_json({'type': 'session.start', 'session': {
-                'model': self.config['model'], 'instructions': build_voice_instructions(self.settings),
+                'model': self.config['model'], 'instructions': instructions,
                 'audio': {'format': {'type': 'audio/pcm', 'rate': 24000},
                           'output': {'voice': self.settings['voice']}},
                 'delegation': {'type': 'client'},

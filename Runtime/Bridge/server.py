@@ -53,6 +53,11 @@ class Bridge:
         self.voice_control_epoch = None
         self.conversation_settings_revision = 0
         self.settings_request_ids = OrderedDict()
+        self.conversation_interaction = 'control'  # Legacy clients keep conservative semantics.
+        self.conversation_generation = 0
+        self.conversation_accepting = False
+        self.conversation_operation = None
+        self.brain_identity = None
         self.closed = False
         self.log_file = None
 
@@ -94,6 +99,9 @@ class Bridge:
                 'target': {'host': self.target['host'], 'port': self.target['port']},
                 'brainConnected': bool(self.adapter and self.adapter.connected), 'brainReady': False,
                 'conversationState': self.conversation.state, 'conversationMode': self.conversation.mode,
+                'capabilities': ['conversation_only_v1'],
+                'conversationInteraction': self.conversation_interaction,
+                'conversationGeneration': self.conversation_generation,
                 'audioDiagnostics': self.conversation.diagnostics(),
                 'conversationSettings': dict(self.conversation.settings),
                 'conversationSettingsRevision': self.conversation_settings_revision,
@@ -108,6 +116,8 @@ class Bridge:
                 'brainMode': 'LIVE', 'ready': False}
 
     def emit(self, event):
+        if event.get('type') in ('audio', 'conversation_text', 'conversation_state', 'discard_audio'):
+            event = {**event, 'conversationGeneration': self.conversation_generation}
         queue = self.control_queue
         if queue is not None:
             if queue.full():
@@ -127,20 +137,24 @@ class Bridge:
                 return
             queue.put_nowait(event)
 
-    def invalidate(self):
+    def invalidate(self, preserve_conversation=False):
         self.intent_revision += 1
         for task in tuple(self.intent_tasks):
             if task is not asyncio.current_task():
                 task.cancel()
-        self.conversation.clear_context()
+        if not preserve_conversation:
+            self.conversation.clear_context()
         self.last_spoken_state = None
         self.conversation_announced = False
         self.voice_control_epoch = None
-        self.emit({'type': 'discard_audio', 'epoch': self.arbiter.epoch})
+        if not preserve_conversation:
+            self.emit({'type': 'discard_audio', 'epoch': self.arbiter.epoch})
 
     async def inhibit(self, reason, send_stop=True):
         self.arbiter.inhibit(reason)
-        self.invalidate()
+        # Physical safety events cannot end general chat in the native mode.
+        # No Brain observations are fed into that session (UI still shows them).
+        self.invalidate(preserve_conversation=self.conversation_interaction == 'chat_only')
         self.emit(self.state())
         self.log('output_inhibited', reason=reason)
         # Never synthesize a zero BrainFrame: downstream audio/control adapters
@@ -154,6 +168,8 @@ class Bridge:
                 self.log('stop_send_failed')
 
     async def submit(self, action, source, command_id, unity_id=None):
+        if self.conversation_interaction == 'chat_only' and source != 'safety':
+            raise ControlError('chat_only_cannot_control')
         if not self.adapter or not self.adapter.connected:
             raise ControlError('brain_disconnected')
         self.request_counter += 1
@@ -181,6 +197,10 @@ class Bridge:
     async def brain_message(self, event):
         kind = event['type']
         if kind == 'status':
+            identity = tuple(event.get(k) for k in ('instanceId', 'sessionId', 'backendId', 'datasetId'))
+            if self.brain_identity is not None and identity != self.brain_identity:
+                self.stop_conversation_session()
+            self.brain_identity = identity
             self.log('brain_identity', **{k: event.get(k) for k in (
                 'instanceId', 'sessionId', 'backendId', 'datasetId', 'sourceHash', 'configHash',
                 'graphHash', 'activeControllerCount')})
@@ -239,7 +259,8 @@ class Bridge:
         return motor['forward'] <= .02 and abs(motor['turn']) <= .02
 
     def resume_ready(self):
-        return (self.arbiter.inhibited and bool(self.adapter and self.adapter.connected)
+        return (self.conversation_interaction != 'chat_only'
+                and self.arbiter.inhibited and bool(self.adapter and self.adapter.connected)
                 and not self.switching and not self.release_unknown
                 and self.arbiter.owner != 'observer'
                 and (self.arbiter.owner != 'gpt' or self.conversation.state in ('live', 'mock'))
@@ -253,6 +274,7 @@ class Bridge:
         target = load_config(profile, local=self.config.get('_localPath'))['brain']
         self.switching = True
         try:
+            self.stop_conversation_session()
             await self.inhibit('switching')
             self.log('switch_stage', stage='release_old')
             if self.adapter:
@@ -287,6 +309,9 @@ class Bridge:
             self.emit(self.state())
 
     async def conversation_event(self, event):
+        if (self.conversation_interaction == 'chat_only'
+                and event['type'] in ('audio', 'conversation_text') and not self.conversation_accepting):
+            return
         if event['type'] == 'error':
             # Only our bounded numeric counters and allowlisted error codes;
             # never persist API messages, transcripts, or audio payloads.
@@ -297,6 +322,10 @@ class Bridge:
             if event['state'] == 'live':
                 # A fresh voice session has no old-epoch audio awaiting ASR.
                 self.voice_control_epoch = self.arbiter.epoch
+                if self.conversation_interaction == 'chat_only' and self.conversation_accepting:
+                    self.task(self.conversation.append('commentary',
+                        'Greet the player briefly once in the configured language and invite them to talk. '
+                        'This is conversation-only mode; no current Brain observations are available.'))
             if event['state'] not in ('live', 'mock') and self.arbiter.owner == 'gpt':
                 await self.inhibit('conversation_disconnected')
             self.emit(self.state())
@@ -306,12 +335,21 @@ class Bridge:
 
     async def voice_utterance(self, text, delegation_id, generation):
         if generation == self.conversation.context_generation:
+            if self.conversation_interaction == 'chat_only':
+                # Do not invoke Responses or construct an Action in this mode.
+                if self.conversation_accepting:
+                    await self.conversation.append('commentary',
+                        'Conversation only. No action was executed. Current Brain observations are unavailable. '
+                        'Continue the conversation; explain that body control is disabled if requested.', delegation_id)
+                return
             try:
                 self.start_intent(text, 'voice-' + str(uuid.uuid4()), self.arbiter.epoch, delegation_id)
             except ControlError as exc:
                 self.emit({'type': 'error', 'error': str(exc)})
 
     def start_intent(self, text, command_id, epoch, delegation_id=None):
+        if self.conversation_interaction == 'chat_only':
+            raise ControlError('chat_only_cannot_control')
         if not isinstance(text, str) or not text.strip() or len(text) > 2000:
             raise ControlError('invalid_text')
         if not isinstance(command_id, str) or not 1 <= len(command_id) <= 128:
@@ -412,9 +450,13 @@ class Bridge:
         elif kind == 'emergency_stop':
             await self.inhibit('emergency_stop')
         elif kind == 'set_owner':
+            if self.conversation_interaction == 'chat_only' and event.get('owner') != 'observer':
+                raise ControlError('chat_only_cannot_control')
             self.arbiter.set_owner(event.get('owner'))
             await self.inhibit('owner_changed')
         elif kind == 'resume':
+            if self.conversation_interaction == 'chat_only':
+                raise ControlError('chat_only_cannot_control')
             if self.arbiter.owner == 'observer':
                 raise ControlError('observer_cannot_control')
             if self.arbiter.owner == 'gpt' and self.conversation.state not in ('live', 'mock'):
@@ -425,6 +467,8 @@ class Bridge:
             self.log('resumed')
             self.emit(self.state())
         elif kind == 'set_action':
+            if self.conversation_interaction == 'chat_only':
+                raise ControlError('chat_only_cannot_control')
             if self.motor_writer is not None:
                 raise ControlError('manual_tcp_has_input_slot')
             self.require_fresh()
@@ -439,17 +483,56 @@ class Bridge:
                 raise ControlError('switch_in_progress')
             self.task(self.switch_target(event.get('profile')))
         elif kind == 'conversation_start':
-            self.task(self.conversation.start())
+            if self.closed:
+                raise ControlError('bridge_closed')
+            interaction = event.get('interaction', 'control')
+            if interaction not in ('chat_only', 'control'):
+                raise ControlError('invalid_conversation_interaction')
+            if (self.conversation_operation is not None and not self.conversation_operation.done()
+                    or self.conversation.state not in ('off', 'disconnected')):
+                raise ControlError('conversation_already_started_or_stopping')
+            if interaction == 'chat_only':
+                if type(event.get('controlEpoch')) is not int or event['controlEpoch'] != self.arbiter.epoch:
+                    raise ControlError('old_epoch')
+                self.arbiter.set_owner('observer')
+                await self.inhibit('chat_only')
+            self.conversation_interaction = interaction
+            self.conversation.interaction = interaction
+            self.conversation_generation += 1
+            self.conversation_accepting = True
+            self.emit(self.state())
+            self.conversation_operation = self.task(self.conversation.start())
         elif kind == 'conversation_stop':
             if self.arbiter.owner == 'gpt':
                 await self.inhibit('conversation_stopped')
-            self.task(self.conversation.stop())
+            self.stop_conversation_session()
         elif kind == 'audio':
-            if event.get('controlEpoch') != self.arbiter.epoch:
+            if self.conversation_interaction == 'chat_only':
+                if (not self.conversation_accepting or type(event.get('conversationGeneration')) is not int
+                        or event['conversationGeneration'] != self.conversation_generation):
+                    raise ControlError('old_conversation_generation')
+            elif event.get('controlEpoch') != self.arbiter.epoch:
                 raise ControlError('old_audio_epoch')
             await self.conversation.input_audio(event.get('audio'))
         else:
             raise ControlError('unknown_message')
+
+    def stop_conversation_session(self):
+        # Reserve the lifecycle operation synchronously: queued starts cannot
+        # resurrect a session after Stop / WS disconnect / identity replacement.
+        self.conversation_accepting = False
+        self.conversation_generation += 1
+        self.conversation.clear_context()
+        self.emit({'type': 'discard_audio', 'epoch': self.arbiter.epoch})
+        self.emit(self.state())
+        previous = self.conversation_operation
+        if previous is not None and not previous.done():
+            previous.cancel()
+        async def stop():
+            if previous is not None:
+                await asyncio.gather(previous, return_exceptions=True)
+            await self.conversation.stop()
+        self.conversation_operation = self.task(stop())
 
     async def watchdog(self):
         while True:
@@ -465,6 +548,8 @@ class Bridge:
                 self.last_summary = time.monotonic()
                 summary = self.summary()
                 self.emit({'type': 'brain_summary', 'summary': summary})
+                if self.conversation_interaction == 'chat_only':
+                    continue  # General voice remains valid without fresh Brain data.
                 semantic = (summary['stale'], summary['interpretation'], self.arbiter.inhibited)
                 if semantic != self.last_spoken_state:
                     self.last_spoken_state = semantic
@@ -575,7 +660,7 @@ class Bridge:
                 self.control_ws = self.control_queue = None
                 if not self.closed:
                     await self.inhibit('control_client_disconnected')
-                    self.task(self.conversation.stop())
+                    self.stop_conversation_session()
         return ws
 
     async def motor_client(self, reader, writer):
@@ -646,8 +731,9 @@ class Bridge:
 
     async def close(self):
         self.closed = True
+        self.stop_conversation_session()
         await self.inhibit('bridge_shutdown')
-        await self.conversation.stop()
+        await self.conversation_operation
         if self.adapter and self.adapter.connected:
             try:
                 self.log('controller_released', **await self.adapter.release())
@@ -678,6 +764,7 @@ async def run(config):
     app.router.add_get('/player/{asset:.*}', bridge.player_page)
     runner = web.AppRunner(app, access_log=None)
     tcp = None
+    shutdown_watcher = None
     stopped = asyncio.Event()
     loop = asyncio.get_running_loop()
     for sig in (signal.SIGINT, signal.SIGTERM):
@@ -691,9 +778,18 @@ async def run(config):
         tcp = await asyncio.start_server(bridge.motor_client, config['bridge']['host'],
                                         config['bridge']['tcpPort'], limit=65536)
         await bridge.start()
+        if config.get('_shutdownFile'):
+            async def watch_shutdown():
+                while not Path(config['_shutdownFile']).exists():
+                    await asyncio.sleep(.2)
+                stopped.set()
+            shutdown_watcher = asyncio.create_task(watch_shutdown())
         print(f"BRIDGE READY http://{config['bridge']['host']}:{config['bridge']['controlPort']} ready=false", flush=True)
         await stopped.wait()
     finally:
+        if shutdown_watcher:
+            shutdown_watcher.cancel()
+            await asyncio.gather(shutdown_watcher, return_exceptions=True)
         if tcp:
             tcp.close()
             await tcp.wait_closed()

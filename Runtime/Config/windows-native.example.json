@@ -1,0 +1,8 @@
+{
+  "bridgePython": ".venv-bridge/Scripts/python.exe",
+  "bridgeLocalConfig": "Runtime/Config/local.json",
+  "keyFile": "C:/secure/flylingual-openai-key.txt",
+  "runRoot": "artifacts/windows-native-runs",
+  "startupSeconds": 45,
+  "heartbeatSeconds": 10
+}

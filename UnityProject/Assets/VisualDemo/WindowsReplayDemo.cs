@@ -89,6 +89,18 @@ namespace FlyVisualDemo
             samples.WriteLine("time,mode,index,sequence,action,forward,turn,DNp09,DNa02_R,DNa02_L,dx,dy,dz,yaw,attached,grip,detach");
             samples.AutoFlush = true;
             float.TryParse(Argument("-demoQuitAfter"), NumberStyles.Float, CultureInfo.InvariantCulture, out quitAfter);
+            // Native conversation starts with no motor route. It never loads a
+            // recorded source and cannot reconnect / resume the body implicitly.
+            if (Flylingual.Conversation.NativeConversationRuntime.Enabled)
+            {
+                mode = BrainSourceMode.LiveTcp;
+                if (game != null) game.enabled = false;
+                if (view != null) view.rect = new Rect(0, 0, 1, 1);
+                Time.timeScale = 0;
+                controller.SetMotorSource(null);
+                emergency = true;
+                return;
+            }
             try
             {
                 string path = Path.Combine(Application.streamingAssetsPath, fixtureName);
@@ -138,6 +150,7 @@ namespace FlyVisualDemo
         }
         public void SelectReplay(string action)
         {
+            if (Flylingual.Conversation.NativeConversationRuntime.Enabled) return;
             if (originalLines == null) return;
             selectedLines = action == "ALL" ? originalLines : originalLines.Where(s => JsonUtility.FromJson<BrainFrame>(s).requestedAction == action).ToArray();
             if (selectedLines.Length == 0) { error = "No recorded frames for " + action; return; }
@@ -149,6 +162,7 @@ namespace FlyVisualDemo
         }
         void SetMode(BrainSourceMode next)
         {
+            if (Flylingual.Conversation.NativeConversationRuntime.Enabled) return;
             emergency = false; mode = next; lastIndex = -1; Time.timeScale=1;
             if (next == BrainSourceMode.Replay) SelectReplay(selected);
             else { previousLiveFrame=client.LatestBrainFrame; waitingForLiveFrame=true; client.enabled = true; client.Connect(); controller.SetMotorSource(null); }
@@ -157,6 +171,7 @@ namespace FlyVisualDemo
         // A motor source is installed only after a frame newer than this boundary arrives.
         public void BeginLiveSession()
         {
+            if (Flylingual.Conversation.NativeConversationRuntime.Enabled) return;
             if (mode != BrainSourceMode.LiveTcp) return;
             emergency = false;
             Time.timeScale = 1;
@@ -166,6 +181,12 @@ namespace FlyVisualDemo
         }
         void Update()
         {
+            if (Flylingual.Conversation.NativeConversationRuntime.Enabled)
+            {
+                controller.SetMotorSource(null);
+                if (quitAfter > 0 && Time.realtimeSinceStartup-startedAt >= quitAfter) Application.Quit();
+                return;
+            }
             // Optional benchmark warmup keeps loading/render startup out of recorded playback.
             // The fixture, frame durations and motor values are unchanged.
             if (playbackStarting && ++warmupFrames >= 60)
@@ -256,6 +277,7 @@ namespace FlyVisualDemo
         }
         void OnGUI()
         {
+            if (Flylingual.Conversation.NativeConversationRuntime.Enabled) return;
             if (Flag("-demoNoHud")) return;
             if (titleStyle == null)
             {
@@ -345,7 +367,8 @@ namespace FlyVisualDemo
                 visualPhysicsComponents=visualPhysicsCount,
                 frameTimeP95Ms=renderTimes.Count==0?0:renderTimes[Mathf.Min(renderTimes.Count-1,Mathf.CeilToInt(renderTimes.Count*.95f)-1)],fixedDeltaTime=Time.fixedDeltaTime,maxVisualEndpointError=ReferenceEquals(mapper,null)?0:mapper.MaximumEndpointError };
             if(!string.IsNullOrEmpty(output)) File.WriteAllText(Path.Combine(output,"validation_"+DateTime.UtcNow.ToString("yyyyMMdd_HHmmss_fff")+".json"),JsonUtility.ToJson(report,true));
-            Debug.Log("REPLAY_VALIDATION skippedFrames="+skippedFrames); samples?.Dispose(); if(client!=null) client.Disconnect(); Time.timeScale=1;
+            if (!Flylingual.Conversation.NativeConversationRuntime.Enabled) Debug.Log("REPLAY_VALIDATION skippedFrames="+skippedFrames);
+            samples?.Dispose(); if(client!=null) client.Disconnect(); Time.timeScale=1;
         }
     }
 }

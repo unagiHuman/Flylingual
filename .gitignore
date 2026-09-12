@@ -62,6 +62,7 @@ Brain/MaleCNS/results/*
 !Brain/MaleCNS/results/server_e2e.json
 
 # Keys and personal settings
+Runtime/Config/windows-native.local.json
 .env
 .env.*
 !.env.example

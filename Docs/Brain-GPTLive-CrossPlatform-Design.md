@@ -71,6 +71,14 @@ Brain 互換 TCP には会話・切替・操作権の未知 message を混ぜず
 
 ## 3. Brain 操作と GPT 会話
 
+Windows Unityの会話専用初版は `conversation_only_v1` 拡張を使用する。
+画面・音声・設定・内部サービスの起動管理をUnityへ集約し、同居Python Bridge/Brainを再利用する。
+`chat_only` は身体の操作権と独立した会話世代を持ち、Brain stale中も一般会話を許可する一方、
+Bridgeで行動要求を拒否する。初版の脳観測は診断画面に限定し、音声へ現在の観測として渡さない。
+旧ブラウザのcontrolモードとMac profileを維持する。
+詳しい契約は `Contracts/bridge-v1/protocol.md`、実装段階と未受入れは
+`Docs/windows/Unity-Native-Conversation-Usage.md` を参照する。
+
 GPT は 6 Action（`STOP`、`FORWARD`、`TURN_R`、`TURN_L`、`FORWARD_R`、`FORWARD_L`）の提案だけを行う。Action は既存刺激、MaleCNS、raw 神経出力、既存 decoder、motor の経路を通る。GPT が神経 ID、強度、weight、motor を直接変更してはならない。
 
 manual と GPT の操作権は明示的に排他切替する。observer は解説のみで操作できない。解説音声は操作入力としてフィードバックしない。緊急停止は Unity で即時に出力抑止し、明示解除までラッチする。刺激 OFF の通常 `STOP` とは区別する。曖昧な意図や未対応動作を勝手な Action へ変換しない。

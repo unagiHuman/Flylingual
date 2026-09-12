@@ -57,6 +57,7 @@ namespace Flylingual.Video
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         static void Bootstrap()
         {
+            if (Flylingual.Conversation.NativeConversationRuntime.Enabled) return;
             if (FindAnyObjectByType<UnityVideoPublisher>() != null) return;
             string path = Environment.GetEnvironmentVariable("FLY_VIDEO_CONFIG");
             string[] args = Environment.GetCommandLineArgs();

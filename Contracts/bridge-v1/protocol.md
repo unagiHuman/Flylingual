@@ -253,3 +253,49 @@ Real API text/voice delegation and output with the real Mac Brain are recorded
 in [the live checkpoint](../../Docs/integration/Live-Browser-Validation-2026-09-12.md).
 Audio hardware, the latest browser UI flow, cross-OS switching, and Unity
 behaviour remain separate, unverified gates; `ready=false`.
+# Native conversation-only extension (2026-09-12)
+
+`bridge_state.capabilities` advertises `conversation_only_v1`. `conversationMode`
+continues to mean API adapter mode (`live/off/mock`). The separate
+`conversationInteraction` is `control` (legacy default) or `chat_only`.
+
+Native clients explicitly send `{"type":"conversation_start","interaction":"chat_only","controlEpoch":CURRENT}`.
+The Bridge validates the epoch, sets owner `observer`, inhibits body output and
+requests safety STOP. It does not wait for Brain readiness/freshness to open the
+voice session. No new motor/BrainFrame is synthesized. `ready=false` and 750 ms
+freshness semantics are unchanged.
+
+`bridge_state.conversationGeneration` is independent of the physical epoch.
+Start, stop, control disconnect and Brain identity replacement advance it.
+`audio`, `conversation_text`, `conversation_state` and `discard_audio` carry this
+generation. Audio input in chat mode must include integer `conversationGeneration`
+matching the active, explicitly started session; otherwise
+`old_conversation_generation` is returned. Legacy control audio still requires
+`controlEpoch`. Native capture emits 100 ms PCM16LE mono / 24 kHz (4,800 bytes)
+as the existing JSON `audio` base64 field.
+
+| State | General audio | Body commands |
+|---|---|---|
+| chat_only, live, current generation | allowed, including Brain stale/disconnected | rejected |
+| chat_only, stopped/stopping/old generation | rejected; queued playback discarded | rejected |
+| control (legacy) | previous controlEpoch rules | previous owner/fresh STOP/resume rules |
+
+`resume`, non-observer `set_owner`, `set_action`, text intentions and delegated
+intent interpretation cannot execute actions in chat mode (`chat_only_cannot_control`).
+The common submit boundary also blocks all non-safety sources. Delegation may
+receive a factual “control disabled” reply but never calls the intent translator.
+Changing to `control` requires a stopped session and another explicit start;
+it does not grant an owner or resume output.
+
+Physical inhibition alone preserves general chat. This initial voice mode receives
+no live Brain observation context: neural observations are shown in the Unity
+diagnostics, and spoken descriptions must state that current observations are
+unavailable. Brain identity replacement/profile switching discards the session and
+requires explicit start, preventing old observations from carrying over.
+
+Stop reserves the lifecycle operation immediately, rejects input, discards late
+output, cancels a pending start, then closes the API session. Starts during that
+operation are rejected (`conversation_already_started_or_stopping`). Native clients
+must reject playback locally as soon as Stop is pressed, even before the new
+generation arrives. Settings retain the existing stopped/revision/requestId rules.
+The single control WebSocket restriction is unchanged.

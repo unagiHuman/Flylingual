@@ -297,6 +297,7 @@ def _parser() -> argparse.ArgumentParser:
         )
         if command == "up":
             child.add_argument("--launch-brain", action="store_true")
+            child.add_argument("--shutdown-file", help="Private launcher stop signal; never an HTTP endpoint")
     return parser
 
 
@@ -317,6 +318,8 @@ def main() -> int:
             return 0 if not errors else 1
         # This is launcher-only runtime context, deliberately outside the JSON config schema.
         config["_localPath"] = _resolved_local_path(args.local)
+        if args.shutdown_file:
+            config["_shutdownFile"] = str(Path(args.shutdown_file).resolve())
         asyncio.run(_up(config, args.launch_brain))
         return 0
     except (ConfigError, CredentialError, RuntimeError, OSError) as exc:
