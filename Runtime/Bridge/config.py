@@ -12,6 +12,8 @@ import sys
 from pathlib import Path
 from typing import Any, Mapping
 
+from .conversation_settings import DEFAULT_SETTINGS, SettingsError, settings_from_config
+
 
 ROOT = Path(__file__).resolve().parents[2]
 CONFIG_ROOT = ROOT / "Runtime" / "Config"
@@ -37,7 +39,7 @@ _CHILD_KEYS = {
         "host", "port", "expectedBackend", "expectedDataset", "expectedConfigHash",
         "expectedGraphHash", "expectedSourceHash", "graph", "config", "python",
     },
-    "conversation": {"mode", "model", "intentModel"},
+    "conversation": {"mode", "model", "intentModel", *DEFAULT_SETTINGS},
     "control": {"owner", "maxActionMs", "defaultActionMs", "staleMs", "stopTimeoutMs"},
 }
 
@@ -52,7 +54,10 @@ _DEFAULT: dict[str, Any] = {
         "config": "Brain/MaleCNS/config/analog_temporal_v1.json",
         "python": sys.executable,
     },
-    "conversation": {"mode": "off", "model": "gpt-live-1", "intentModel": "gpt-5.6-luna"},
+    "conversation": {
+        "mode": "off", "model": "gpt-live-1", "intentModel": "gpt-5.6-luna",
+        **DEFAULT_SETTINGS,
+    },
     "control": {"owner": "observer", "maxActionMs": 8000, "defaultActionMs": 4000,
                 "staleMs": 750, "stopTimeoutMs": 12000},
     "logPath": "artifacts/bridge/events.jsonl",
@@ -194,6 +199,10 @@ def _validate(config: dict[str, Any]) -> None:
         raise ConfigError("control.owner must be manual, gpt, or observer")
     if config["conversation"]["mode"] not in {"off", "mock", "live"}:
         raise ConfigError("conversation.mode must be off, mock, or live")
+    try:
+        config["conversation"].update(settings_from_config(config))
+    except SettingsError as exc:
+        raise ConfigError("conversation settings are invalid") from exc
     for key in ("expectedConfigHash", "expectedGraphHash", "expectedSourceHash"):
         value = config["brain"][key]
         if value is not None and (not isinstance(value, str) or not _HASH.fullmatch(value)):
@@ -215,6 +224,9 @@ def _env_overrides() -> dict[str, Any]:
         "FLY_BRAIN_PYTHON": ("brain", "python", str),
         "FLY_BRAIN_GRAPH": ("brain", "graph", str),
         "FLY_CONVERSATION_MODE": ("conversation", "mode", str),
+        "FLY_CONVERSATION_LANGUAGE": ("conversation", "language", str),
+        "FLY_CONVERSATION_VOICE": ("conversation", "voice", str),
+        "FLY_CONVERSATION_PERSONA": ("conversation", "persona", str),
     }
     for env_name, (section, key, convert) in values.items():
         if env_name not in os.environ:

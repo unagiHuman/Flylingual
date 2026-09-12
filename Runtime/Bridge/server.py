@@ -19,7 +19,8 @@ from .brain_adapter import BrainAdapter, BrainAdapterError
 from .config import load_config
 from .control import ControlArbiter, ControlError
 from .conversation import ConversationAdapter, ConversationError
-from .translation import summarize
+from .conversation_settings import SettingsError, options_message, validate_settings
+from .translation import message_text, summarize
 
 
 class Bridge:
@@ -50,6 +51,8 @@ class Bridge:
         self.intent_revision = 0
         self.conversation_announced = False
         self.voice_control_epoch = None
+        self.conversation_settings_revision = 0
+        self.settings_request_ids = OrderedDict()
         self.closed = False
         self.log_file = None
 
@@ -78,7 +81,10 @@ class Bridge:
         return max(0, (time.monotonic() - self.adapter.latest_received_at)*1000)
 
     def summary(self):
-        return summarize(self.frame, self.age_ms(), self.config['control']['staleMs'])
+        return summarize(self.frame, self.age_ms(), self.config['control']['staleMs'], self.conversation.settings['language'])
+
+    def text(self, key):
+        return message_text(key, self.conversation.settings['language'])
 
     def state(self):
         status = self.adapter.status if self.adapter else {}
@@ -88,6 +94,9 @@ class Bridge:
                 'target': {'host': self.target['host'], 'port': self.target['port']},
                 'brainConnected': bool(self.adapter and self.adapter.connected), 'brainReady': False,
                 'conversationState': self.conversation.state, 'conversationMode': self.conversation.mode,
+                'conversationSettings': dict(self.conversation.settings),
+                'conversationSettingsRevision': self.conversation_settings_revision,
+                'resumeReady': self.resume_ready(),
                 'voiceControlAvailable': self.voice_control_epoch == self.arbiter.epoch,
                 'frameAgeMs': self.age_ms(), 'switching': self.switching,
                 'releaseUnknown': self.release_unknown, 'executionOS': platform.system(),
@@ -161,7 +170,7 @@ class Bridge:
         await self.adapter.send_action(action, request_id)
         self.emit({'type': 'command_result', 'stage': 'submitted', 'commandId': command_id,
                    'requestId': request_id, 'action': action, 'epoch': self.arbiter.epoch,
-                   'message': '刺激変更を送信しました。神経応答・身体動作はまだ未確認です。'})
+                   'message': self.text('submitted')})
         return request_id
 
     def require_fresh(self):
@@ -191,7 +200,7 @@ class Bridge:
                 self.log('command_applied', requestId=rid, commandId=item['commandId'], sequence=event['sequence'], e2eMs=latency)
                 self.emit({'type': 'command_result', 'stage': 'brain_applied', 'commandId': item['commandId'],
                            'requestId': rid, 'action': item['action'], 'e2eMs': latency,
-                           'message': 'Brainの刺激設定への適用を確認。身体動作は未確認です。'})
+                           'message': self.text('applied')})
             self.emit(event)
             # Preserve the original upstream request ID and unmodified neural
             # values. Bounded rotation prevents unlimited raw-frame accumulation.
@@ -228,6 +237,13 @@ class Bridge:
         motor = self.frame['motor']
         return motor['forward'] <= .02 and abs(motor['turn']) <= .02
 
+    def resume_ready(self):
+        return (self.arbiter.inhibited and bool(self.adapter and self.adapter.connected)
+                and not self.switching and not self.release_unknown
+                and self.arbiter.owner != 'observer'
+                and (self.arbiter.owner != 'gpt' or self.conversation.state in ('live', 'mock'))
+                and self.stopped_fresh())
+
     async def switch_target(self, profile):
         if self.switching or self.release_unknown:
             raise ControlError('switch_unavailable')
@@ -259,7 +275,7 @@ class Bridge:
                 await asyncio.sleep(.05)
             self.arbiter.reason = 'explicit_resume_required'
             self.log('switch_stage', stage='stopped_waiting_resume')
-            self.task(self.conversation.append('instructions', 'Brain接続先を切替済み。旧targetの情報は過去情報です。新しい観測まで操作・反応は不明です。'))
+            self.task(self.conversation.append('instructions', self.text('target_changed')))
         except Exception as exc:
             if not self.release_unknown:
                 self.arbiter.reason = 'switch_failed'
@@ -321,11 +337,11 @@ class Bridge:
                 valid_ms = proposal['validForMs'] - (time.monotonic()-started)*1000
                 self.arbiter.accept('gpt', proposal['action'], command_id, epoch, valid_ms)
                 await self.submit(proposal['action'], 'gpt', command_id)
-                reply = '刺激の変更を送信しました。Brainへの適用と神経応答はこの後の観測で確認します。'
+                reply = self.text('intent_sent')
             elif proposal['kind'] == 'question':
-                reply = self.summary()['interpretation'] + ' 気持ちは観測に基づく擬人的表現です。'
+                reply = self.summary()['interpretation'] + ' ' + self.text('disclosure')
             else:
-                reply = '指示が曖昧、または対応外です。停止・前進・左右旋回のどれかを明確に指定してください。操作していません。'
+                reply = self.text('clarify')
             if self.conversation.mode == 'mock':
                 self.emit({'type': 'conversation_text', 'role': 'assistant', 'text': '[MOCK] ' + reply, 'append': False})
             else:
@@ -338,22 +354,66 @@ class Bridge:
             if isinstance(exc, (ConversationError, BrainAdapterError)) and self.arbiter.owner == 'gpt':
                 await self.inhibit('intent_service_failed')
             if epoch == self.arbiter.epoch:
-                await self.conversation.append('commentary', '操作していません。制御権・接続・期限・出力抑止を確認してください。', delegation_id)
+                await self.conversation.append('commentary', self.text('rejected'), delegation_id)
+
+    async def configure_conversation(self, event):
+        request_id = event.get('requestId')
+        try:
+            if not isinstance(request_id, str) or not 1 <= len(request_id) <= 128:
+                raise ControlError('invalid_settings_request_id')
+            settings = validate_settings(event.get('settings'))
+            async with self.conversation.lifecycle:
+                if self.control_ws is None:
+                    raise ControlError('control_client_required')
+                if type(event.get('controlEpoch')) is not int or event['controlEpoch'] != self.arbiter.epoch:
+                    raise ControlError('old_epoch')
+                if (type(event.get('expectedRevision')) is not int
+                        or event['expectedRevision'] != self.conversation_settings_revision):
+                    raise ControlError('stale_settings_revision')
+                if request_id in self.settings_request_ids:
+                    raise ControlError('duplicate_settings_request')
+                if (self.conversation.state != 'off' or self.conversation.http is not None
+                        or not self.arbiter.inhibited or self.switching or self.release_unknown):
+                    raise ControlError('conversation_settings_require_stopped')
+                # State changes are atomic (no await here). An old in-flight
+                # interpretation cannot execute or describe the new settings.
+                self.arbiter.inhibit('conversation_settings_changed')
+                self.invalidate()
+                self.conversation.settings = settings
+                self.config['conversation'].update(settings)
+                self.conversation_settings_revision += 1
+                self.settings_request_ids[request_id] = True
+                if len(self.settings_request_ids) > 256:
+                    self.settings_request_ids.popitem(last=False)
+                self.emit(self.state())
+                self.emit({'type': 'conversation_settings', 'requestId': request_id,
+                           'settings': dict(settings), 'revision': self.conversation_settings_revision,
+                           'requiresExplicitStart': True})
+                # Do not persist custom persona text in ordinary logs.
+                self.log('conversation_settings_changed', revision=self.conversation_settings_revision,
+                         language=settings['language'], voice=settings['voice'], persona=settings['persona'])
+        except (ControlError, SettingsError) as exc:
+            self.emit({'type': 'error', 'error': str(exc),
+                       'requestId': request_id if isinstance(request_id, str) and len(request_id) <= 128 else None})
 
     async def command(self, event):
         if not isinstance(event, dict):
             raise ControlError('invalid_message')
         kind = event.get('type')
-        if kind == 'emergency_stop':
+        if kind == 'configure_conversation':
+            self.task(self.configure_conversation(event))
+        elif kind == 'emergency_stop':
             await self.inhibit('emergency_stop')
         elif kind == 'set_owner':
             self.arbiter.set_owner(event.get('owner'))
             await self.inhibit('owner_changed')
         elif kind == 'resume':
-            if self.switching or self.release_unknown or not self.stopped_fresh():
-                raise ControlError('fresh_stopped_brain_required')
+            if self.arbiter.owner == 'observer':
+                raise ControlError('observer_cannot_control')
             if self.arbiter.owner == 'gpt' and self.conversation.state not in ('live', 'mock'):
                 raise ControlError('conversation_not_started')
+            if not self.resume_ready():
+                raise ControlError('fresh_stopped_brain_required')
             self.arbiter.resume()
             self.log('resumed')
             self.emit(self.state())
@@ -448,7 +508,10 @@ class Bridge:
         self.check_origin(request)
         if self.control_ws is not None:
             raise web.HTTPConflict(text='control_client_already_connected')
-        ws = web.WebSocketResponse(max_msg_size=128*1024, heartbeat=10)
+        # Keep loopback control/audio frames uncompressed. The embedded browser
+        # / aiohttp deflate path produced RSV errors on the first command.
+        # Disable negotiation, never weaken the frame parser's validation.
+        ws = web.WebSocketResponse(max_msg_size=128*1024, heartbeat=10, compress=False)
         # Reserve before the first await, including the HTTP upgrade.
         self.control_ws = ws
         queue = asyncio.Queue(maxsize=128)
@@ -456,11 +519,13 @@ class Bridge:
         sender = None
         try:
             await ws.prepare(request)
+            self.log('control_client_connected', compression=ws.compress)
             async def send():
                 while True:
                     await asyncio.wait_for(ws.send_json(await queue.get()), timeout=2)
             sender = self.task(send())
             self.emit(self.state())
+            self.emit(options_message())
             if self.frame:
                 self.emit(self.frame)
             async for message in ws:
@@ -470,8 +535,32 @@ class Bridge:
                     except (ValueError, TypeError, KeyError, BrainAdapterError, ConversationError) as exc:
                         self.emit({'type': 'error', 'error': str(exc) if isinstance(exc, (ControlError, ConversationError, BrainAdapterError)) else 'invalid_message'})
                 elif message.type in (WSMsgType.ERROR, WSMsgType.CLOSE):
+                    if message.type == WSMsgType.ERROR:
+                        error = message.data
+                        # Classify parser errors without logging payloads,
+                        # transcripts, or custom persona text from the wire.
+                        description = str(error)
+                        category = 'transport_error'
+                        for phrase, label in (
+                            ('reserved bits', 'reserved_bits'),
+                            ('Continuation frame', 'unexpected_continuation'),
+                            ('opcode', 'invalid_opcode'),
+                            ('fragmented control frame', 'fragmented_control'),
+                            ('Control frame payload', 'control_too_large'),
+                            ('Invalid close', 'invalid_close'),
+                            ('UTF-8', 'invalid_utf8'),
+                            ('exceeds', 'message_too_large'),
+                        ):
+                            if phrase in description:
+                                category = label
+                                break
+                        code = getattr(error, 'code', None)
+                        self.log('control_ws_error', error=type(error).__name__,
+                                 category=category, code=int(code) if isinstance(code, int) else None,
+                                 compression=ws.compress)
                     break
         finally:
+            self.log('control_client_closed', closeCode=ws.close_code)
             if sender:
                 sender.cancel()
                 await asyncio.gather(sender, return_exceptions=True)

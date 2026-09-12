@@ -99,15 +99,21 @@ neural outcome nor Unity movement.
 
 ## Control WebSocket
 
+The loopback control WS does not negotiate permessage-deflate. Plain WebSocket
+frames avoid a reproduced embedded-browser reserved-bit protocol error. Frame
+validation, the 128 KiB inbound limit, and origin restrictions remain enabled.
+
 The control WS carries JSON commands such as `emergency_stop`, `set_owner`,
 `resume`, `set_action`, `player_text`, `switch_target`, `conversation_start`,
-`conversation_stop`, and `audio`. It emits `bridge_state`, `command_result`,
-raw `brain_frame`, `brain_summary`, `conversation_state`, `conversation_text`,
+`conversation_stop`, `configure_conversation`, and `audio`. It emits `bridge_state`,
+`conversation_options`, `conversation_settings`, `command_result`, raw
+`brain_frame`, `brain_summary`, `conversation_state`, `conversation_text`,
 `audio`, `discard_audio`, and safe `error` codes. `bridge_state` separates
 `brainConnected`, `brainReady` (currently not promoted by this protocol),
 `outputInhibited`, reason, owner, epoch, frame age, session/instance, target and
-identity hashes. `voiceControlAvailable` is true only after a fresh voice session
-starts in the current epoch. An epoch change invalidates voice-derived actions
+identity hashes. It also carries `conversationSettings`,
+`conversationSettingsRevision`, and `resumeReady`. `voiceControlAvailable` is true
+only after a fresh voice session starts in the current epoch. An epoch change invalidates voice-derived actions
 until explicit conversation stop/start; transcription of old audio must never
 operate a new target. Text proposals remain independent of this audio barrier.
 
@@ -132,6 +138,57 @@ adapter; audio/transcripts are not persisted by default. The detailed live API
 event vocabulary, model choice, and credentials remain isolated in
 `ConversationAdapter` and are intentionally not duplicated here. API calls and
 Unity audio/visual behaviour are separate gates.
+
+## Conversation presentation settings
+
+On each control-WS connection, Bridge emits this non-secret option message:
+
+```json
+{"type":"conversation_options","languages":["ja","en"],"voices":["marin","quartz","ripple","vesper","willow","stone","gleam","meridian","bossa","tempo","beacon","delta","cinder"],"personas":["friendly","curious","calm","custom"],"maxPersonaTextLength":800}
+```
+
+The configured settings always contain exactly `language`, `voice`, `persona`,
+and `personaText`. Defaults are `ja`, `marin`, `friendly`, and the empty string.
+`personaText` is trimmed, limited to 800 characters, and permits normal text
+plus newline/tab but not other control characters. It must be nonempty for the
+`custom` persona. Unknown keys and invalid values are rejected with stable safe
+error codes; the submitted text is not put in an error or ordinary log.
+
+Change settings only with the conversation stopped and Bridge output inhibited, using the
+currently advertised `controlEpoch` and `conversationSettingsRevision`:
+
+```json
+{"type":"configure_conversation","requestId":"settings-7","controlEpoch":3,"expectedRevision":0,"settings":{"language":"en","voice":"quartz","persona":"curious","personaText":""}}
+```
+
+The request is rejected if the control WS is absent, the epoch/revision is old,
+the request ID was already used, a conversation/session is still open, output
+is not inhibited, switching is in progress, or release is unknown. On success,
+Bridge invalidates old context and audio, retains inhibition, increments the
+revision, and emits `conversation_settings` with the accepted settings,
+revision, and `requiresExplicitStart=true`. It does not resume control or start
+conversation automatically. This is a conversation/output-inhibition gate, not
+proof that neural motor output has returned to zero. Settings can be changed
+without a connected Brain; control resumption still requires the separate
+fresh-STOP gate below.
+
+The operator sequence is explicit stop → apply settings → explicit
+`conversation_start` → verify `resumeReady` → explicit `resume`. `resumeReady`
+is false unless output is inhibited, the Brain adapter is connected, the owner
+is non-observer, no switch/release issue exists, a fresh stopped Brain frame is
+present, and a `gpt` owner has an open live/mock
+conversation. Voice is selected at GPT-Live session startup, so every voice
+change requires that new explicit conversation session; it is never changed in
+place. Persona affects conversation expression only and is never an Intent
+translator input. Language selects the conversation/response language. Neither
+changes Brain/decoder values, permissions, control ownership, model selection,
+or the Intent translator's allowed-action/safety rules.
+
+These settings are runtime-only. A Bridge process restart resets their revision
+and uses the validated terminal-local configuration; it does not restore a
+previous WebSocket setting. Voice cloning and voice upload are outside this
+contract. Older Bridge or UI implementations that do not implement these
+messages are not compatible evidence and must not be reported as configured.
 
 ## Current acceptance boundary
 

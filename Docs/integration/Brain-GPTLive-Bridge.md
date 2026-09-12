@@ -29,6 +29,12 @@ liveへ進む場合は、`doctor` または `up` の `--key-file PATH` でロー
 
 実際の引数は `tools/dev.py --help`、`tools/dev.py doctor --help`、`tools/dev.py up --help` とソースを正本として確認する。`doctor` は設定・依存・graph metadata とローカル credential の検査だけで、TCP 接続や課金 API を実行しない。`--launch-brain` は local profile の自己所有 Brain だけを起動・終了し、remote process は管理しない。標準 port は Bridge TCP `8770`、HTTP/WS `8771` である。実検証時だけは Bridge HTTP/WS `18771`、TCP `18770`、Brain `18767` を使い、通常設定を置換しない。
 
+会話の表現設定は `language`（`ja`/`en`）、`voice`（既定 `marin`、選択肢は `quartz`、`ripple`、`vesper`、`willow`、`stone`、`gleam`、`meridian`、`bossa`、`tempo`、`beacon`、`delta`、`cinder` を含む）、`persona`（既定 `friendly`、`curious`/`calm`/`custom`）、`personaText`（既定空）である。CLI の `--language`、`--voice`、`--persona`、`--persona-text`、または許可された `FLY_CONVERSATION_LANGUAGE`、`FLY_CONVERSATION_VOICE`、`FLY_CONVERSATION_PERSONA`、Git外の local.json で設定し、通常の優先順位に従う。起動時の custom 本文は local/CLI で渡し、trim後800文字以下、customでは非空、改行/tab以外の制御文字なしとする。`doctor` は language/voice/persona と custom本文の有無だけを表示し、本文を表示しない。
+
+実行中の変更は `configure_conversation` を使う。現在の `controlEpoch` と settings revision を指定し、**明示停止 → 適用 → 明示会話開始 → `resumeReady` 確認 → 明示再開** の順に行う。会話がopen、出力が抑止されていない、切替中、release unknown、古いepoch/revisionでは変更できない。成功しても自動で会話・操作を開始しない。voiceはGPT-Live session作成時だけに選ばれるため、変更には新しい明示会話sessionが必要である。人格は会話表現だけに渡しIntent翻訳へ渡さない。言語は会話/応答言語を選択するが、どちらもIntent翻訳の許可Action、安全境界、Brain/decoder、権限、モデルを変えない。runtime設定はBridge再起動で失われ、検証済みlocal設定が正となる。voice clone/uploadは対象外である。契約詳細は [Bridge v1](../../Contracts/bridge-v1/protocol.md) を参照する。
+
+設定変更でいう停止は「会話停止かつ出力抑止」であり、Brainの神経出力がゼロへ収束した証明ではない。Brain未接続でも設定できるが、操作の再開には、接続中のBrainでSTOP適用とfreshなゼロ近傍の観測を別途確認する。`resumeReady` はその条件に加え、出力抑止中・非observer・必要な会話開始・切替/release問題なしを満たすときだけtrueとなる。
+
 ブラウザで `http://127.0.0.1:8771/` を開き、接続先 profile を選択して「接続」を押す。接続後も初期状態は `output inhibited=true` のままである。操作確認は次の順序に限定する。
 
 1. `observer` / `manual` / `gpt` の owner を明示選択する。
@@ -66,6 +72,7 @@ liveへ進む場合は、`doctor` または `up` の `--key-file PATH` でロー
 - Brain adapter、制御 arbiter、観測要約、厳密 mock 意図辞書、および Mac player の表示・操作契約。
 - player の初期抑止、切断時の旧 frame 破棄、音声停止、未知 message の非 fatal ログ。
 - GPT-Liveのprimary WebSocket、client delegation、Responses structured intent、PCM16 mono 24kHz入出力。これは実装状況であり、実APIの疎通証明ではない。
+- 会話の言語・voice・persona設定、停止状態でのrevision付き変更、およびoptions/settings表示契約。旧Bridge/UIがこの設定契約を持たないことは設定成功の証拠ではない。
 
 ### Mac実Brainで確認済み
 
@@ -79,6 +86,7 @@ liveへ進む場合は、`doctor` または `up` の `--key-file PATH` でロー
 
 - ユーザー提供のローカル credential file を launcher だけで読み、`gpt-live-1` session、client delegation、`gpt-5.6-luna` の意図翻訳、実 MaleCNS への適用を確認した。詳細と失敗を含む測定は [Live Browser/API 検証記録](Live-Browser-Validation-2026-09-12.md) を参照する。
 - この gate は実マイク録音・スピーカー聴感・Windows Unity・跨 OS 切替・操作感の合格を意味しない。`ready=false` を維持する。
+- 新しい設定で `ja/marin/friendly` と `en/quartz/custom` の独立した実API sessionを確認した。音声受信、API側voice名、返答言語、自由記述人格の反映、日本語／英語のFORWARD意図、神経設定変更要求の拒否を測定した。[会話設定の検証記録](Conversation-Settings-Validation-2026-09-12.md) を参照する。全13 voiceの実聴感・人間マイク・Windows統合を通過したものではない。
 
 ### Windows 未検証
 

@@ -4,6 +4,10 @@
     "graph": "/absolute/path/to/neuron_checkpoint"
   },
   "conversation": {
-    "mode": "off"
+    "mode": "off",
+    "language": "ja",
+    "voice": "marin",
+    "persona": "friendly",
+    "personaText": ""
   }
 }

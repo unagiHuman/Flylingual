@@ -74,8 +74,19 @@ def _cli_overrides(args: argparse.Namespace) -> dict[str, Any]:
         brain["python"] = args.brain_python
     if brain:
         result["brain"] = brain
+    conversation: dict[str, str] = {}
     if args.conversation is not None:
-        result["conversation"] = {"mode": args.conversation}
+        conversation["mode"] = args.conversation
+    for argument, key in (
+        (args.language, "language"),
+        (args.voice, "voice"),
+        (args.persona, "persona"),
+        (args.persona_text, "personaText"),
+    ):
+        if argument is not None:
+            conversation[key] = argument
+    if conversation:
+        result["conversation"] = conversation
     return result
 
 
@@ -90,6 +101,10 @@ def _doctor(config: dict[str, Any]) -> tuple[dict[str, Any], list[str]]:
         "profile": config["profile"],
         "brainTarget": f"{config['brain']['host']}:{config['brain']['port']}",
         "conversationMode": config["conversation"]["mode"],
+        "conversationLanguage": config["conversation"]["language"],
+        "conversationVoice": config["conversation"]["voice"],
+        "conversationPersona": config["conversation"]["persona"],
+        "conversationCustomTextPresent": bool(config["conversation"]["personaText"]),
         "aiohttpAvailable": importlib.util.find_spec("aiohttp") is not None,
         "openAiKeyPresent": bool(os.environ.get("OPENAI_API_KEY")),
         "selectedSource": str(ROOT / "Brain/MaleCNS/brain_server_bridge.py"),
@@ -268,6 +283,10 @@ def _parser() -> argparse.ArgumentParser:
         child.add_argument("--profile", default="mac-local")
         child.add_argument("--local", help="local JSON override; defaults to Runtime/Config/local.json if present")
         child.add_argument("--conversation", choices=("off", "mock", "live"))
+        child.add_argument("--language", choices=("ja", "en"))
+        child.add_argument("--voice")
+        child.add_argument("--persona", choices=("friendly", "curious", "calm", "custom"))
+        child.add_argument("--persona-text")
         child.add_argument("--brain-host")
         child.add_argument("--brain-port", type=int)
         child.add_argument("--graph")

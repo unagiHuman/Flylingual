@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <meta name="description" content="映像を見ながら、声でつながる。ハエの小さな気持ちを届けるハエリンガル。">
+  <title>ハエリンガル — 声で、小さな世界とつながる。</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='18' fill='%23776bea'/%3E%3Ctext x='14' y='45' fill='white' font-family='sans-serif' font-size='38' font-weight='bold'%3Ef.%3C/text%3E%3C/svg%3E">
+  <link rel="stylesheet" href="styles.css">
+  <script src="core.js" defer></script>
+  <script src="audio.js" defer></script>
+  <script src="video.js" defer></script>
+  <script src="settings.js" defer></script>
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#voice-button">音声で話す</a>
+  <div class="app-shell">
+    <header class="topbar">
+      <a class="brand" href="" aria-label="ハエリンガル"><span class="brand-mark">f.</span><span>ハエリンガル<small>flylingual</small></span></a>
+      <span class="topbar-caption">声で、小さな世界とつながる。</span>
+      <button class="icon-button settings-button" id="settings-open" aria-label="接続設定" title="接続設定"><span data-icon="settings"></span></button>
+    </header>
+    <main>
+      <div class="page-heading"><div><p class="eyebrow">A LITTLE FRIEND, A LITTLE CONVERSATION</p><h1>きみは今、なにを思ってる？</h1></div><span class="connection-chip" id="session-label">接続前</span></div>
+      <div class="experience">
+        <section class="video-card" aria-labelledby="video-title">
+          <div class="panel-heading"><h2 id="video-title"><span data-icon="video"></span>ハエの世界</h2><span class="video-badge" id="video-live-state">未接続</span></div>
+          <div class="video-viewport">
+            <div class="video-placeholder" id="video-placeholder"><div class="video-placeholder-icon"><span data-icon="video"></span></div><h3 id="video-placeholder-title">小さな世界を、のぞいてみよう。</h3><p id="video-placeholder-note">Unityの映像をここに映します。</p><button class="video-view-button" id="video-view-button"><span data-icon="play"></span>映像をつなぐ</button><span class="placeholder-meta">UNITY · WebRTC</span></div>
+            <div class="unity-video-layer" id="unity-video-layer" hidden><video id="unity-video" muted autoplay playsinline aria-label="Unityで動いているハエのライブ映像"></video></div>
+          </div>
+          <div class="video-footer"><span><span class="small-dot" id="video-dot"></span><span id="video-brief">映像の接続を待っています</span></span><button id="video-fullscreen" class="icon-button" aria-label="映像を全画面表示" title="全画面表示"><span data-icon="expand"></span></button></div>
+        </section>
+        <section class="feeling-card" aria-labelledby="feeling-title">
+          <div class="panel-heading"><h2 id="feeling-title"><span data-icon="sparkles"></span>ハエのきもち</h2><span class="feeling-source" id="feeling-source">SAMPLE</span></div>
+          <div class="translator-device">
+            <div class="device-top"><span>HAE-LINGUAL</span><span class="device-lights" aria-hidden="true"><i></i><i></i><i></i></span></div>
+            <div class="lcd-screen" id="lcd-screen" data-mood="curious">
+              <div class="lcd-meta"><span id="mood-category">HELLO, FRIEND</span><span aria-hidden="true">✦</span></div>
+              <div class="mascot" id="mood-icon" role="img" aria-label="こちらを見つめる、かわいいハエのサンプルアイコン"></div>
+              <span class="unknown-symbol" id="unknown-symbol" hidden>?</span>
+              <div class="pixel-ground" aria-hidden="true"></div>
+              <p id="mood-title">きみに、きょうみしんしん。</p>
+            </div>
+            <div class="device-bottom"><span class="device-name">ちいさな、こころの翻訳機。</span><span class="speaker-grille" aria-hidden="true"></span></div>
+          </div>
+          <div class="thought-bubble" aria-live="polite"><p id="thought-text">どんな声で、話してくれるのかな。</p><span id="thought-evidence">接続前のサンプル表示</span></div>
+          <p class="feeling-disclosure">観測をもとにしたキャラクター表現です。<br>本当の感情を測定するものではありません。</p>
+        </section>
+      </div>
+      <section class="voice-dock" aria-labelledby="voice-title">
+        <div class="voice-copy"><p class="eyebrow">JUST YOUR VOICE</p><h2 id="voice-title">あとは、声をかけるだけ。</h2><p id="voice-hint">「前に進んで」「止まって」「今どんな気持ち？」</p></div>
+        <div class="voice-controls"><button class="voice-button" id="voice-button" aria-pressed="false"><span class="mic-orb"><span data-icon="mic"></span></span><span id="voice-button-label">話しかける</span><span class="voice-bars" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span></button><button class="emergency-button" id="emergency-button" disabled title="出力を直ちに抑止し、音声を終了します"><span data-icon="stop"></span>緊急停止</button></div>
+      </section>
+      <p class="voice-status" id="voice-status" role="status">開始するまでマイクはオフです。</p>
+    </main>
+    <footer><span>小さな声に、大きな好奇心。</span><span>flylingual <span class="footer-dot">·</span> VOICE & VISION</span></footer>
+  </div>
+  <dialog id="settings-dialog" aria-labelledby="settings-title">
+    <form method="dialog" class="dialog-heading"><div><p class="eyebrow">CONNECTION</p><h2 id="settings-title">接続設定</h2></div><button class="icon-button" aria-label="設定を閉じる"><span data-icon="close"></span></button></form>
+    <section class="settings-section"><h3><span data-icon="mic"></span>声とハエのきもち</h3><label for="bridge-url">ローカルBridge</label><input id="bridge-url" type="url" value="ws://127.0.0.1:8771/ws" spellcheck="false" autocomplete="off"><label for="profile-select">Brainの接続先</label><select id="profile-select"><option value="mac-local">Mac</option><option value="windows-local">Windows</option><option value="windows-to-mac">Windows → Mac</option><option value="mac-to-windows">Mac → Windows</option></select><p class="field-help">Bridgeと同じオリジンからこの画面を開いてください。接続・会話・マイクは「話しかける」で開始します。</p><button id="bridge-disconnect" class="subtle-button" disabled>会話接続を終了</button></section>
+    <section class="settings-section conversation-settings" aria-labelledby="conversation-settings-title">
+      <h3 id="conversation-settings-title">話し方・声・言語</h3>
+      <p class="field-help" id="conversation-settings-help">設定を読み込むまで編集できません。保存だけでは会話、マイク、API利用を開始しません。</p>
+      <button id="conversation-settings-load" class="secondary-button" type="button">設定を読み込む</button>
+      <p id="conversation-settings-error" class="error-message" role="alert"></p>
+      <div id="conversation-settings-fields" hidden>
+        <label for="conversation-language" id="conversation-language-label">言語</label>
+        <select id="conversation-language" disabled><option value="ja">日本語</option><option value="en">English</option></select>
+        <label for="conversation-voice" id="conversation-voice-label">声</label>
+        <select id="conversation-voice" disabled></select>
+        <label for="conversation-persona" id="conversation-persona-label">話し方</label>
+        <select id="conversation-persona" disabled></select>
+        <div id="conversation-persona-custom" hidden><label for="conversation-persona-text" id="conversation-persona-text-label">話し方の説明</label><textarea id="conversation-persona-text" disabled></textarea><p class="field-help"><span id="conversation-persona-count">0</span> / <span id="conversation-persona-max">800</span></p></div>
+        <p class="field-help" id="conversation-persona-note">話し方は表現だけを変えます。安全機能や操作権限は変わりません。</p>
+        <p id="conversation-settings-status" class="field-help" role="status"></p>
+        <button id="conversation-settings-apply" class="primary-button" type="button" disabled>会話を終了して設定を適用</button>
+      </div>
+    </section>
+    <section class="settings-section"><h3><span data-icon="video"></span>WebRTC映像</h3><form id="video-connect-form"><label for="video-endpoint">ローカル映像サービス</label><input id="video-endpoint" type="url" value="http://127.0.0.1:8880" spellcheck="false" autocomplete="off"><label for="video-stream-select">Unityの映像</label><select id="video-stream-select"><option value="unity-mac">unity-mac</option><option value="unity-windows">unity-windows</option></select><div class="settings-buttons"><button id="video-connect" class="secondary-button" type="submit">映像をつなぐ</button><button id="video-disconnect" class="subtle-button" type="button" disabled>映像を切断</button></div></form><p id="video-error" class="error-message" role="alert"></p></section>
+    <details class="connection-details"><summary>接続状態の詳細</summary><dl><dt>映像受信</dt><dd id="video-connection-status">未接続</dd><dt>映像配信</dt><dd id="video-stream-status">—</dd><dt>映像実行OS</dt><dd id="video-execution-os">—</dd><dt>映像ソース</dt><dd id="video-source-detail">—</dd><dt>Bridge / Brain</dt><dd id="brain-status">未接続</dd><dt>Brain ready</dt><dd id="brain-ready">未確認</dd><dt>実行OS / profile</dt><dd id="brain-profile">—</dd><dt>Backend / dataset</dt><dd id="brain-backend">—</dd><dt>制御 / epoch</dt><dd id="brain-control">—</dd><dt>観測鮮度</dt><dd id="brain-age">—</dd></dl><p id="video-note" class="field-help"></p><p id="brain-observation" class="field-help">実際の脳活動はまだ受信していません。</p><pre id="brain-identity"></pre><p id="last-event" class="field-help">—</p></details>
+    <p class="error-message" id="settings-error" role="alert"></p><div class="dialog-footer"><button class="primary-button" id="settings-done">閉じる</button></div>
+  </dialog>
+  <dialog id="voice-dialog" aria-labelledby="voice-dialog-title"><div class="dialog-heading"><div><p class="eyebrow">SAY HELLO</p><h2 id="voice-dialog-title">声で、つながろう。</h2></div></div><p>マイクの音声をBridge経由で会話サービスへ送信します。API利用料金が発生する場合があります。</p><p class="field-help">開始すると音声で操作できる状態になります。いつでも「会話を終了」または「緊急停止」で止められます。</p><div class="dialog-footer"><button class="subtle-button" id="voice-cancel">いまはやめる</button><button class="primary-button" id="voice-confirm"><span data-icon="mic"></span>音声で開始する</button></div></dialog>
+  <div class="toast" id="toast" role="status" hidden></div>
+  <noscript>この画面を使うにはJavaScriptを有効にしてください。</noscript>
+</body>
+</html>
