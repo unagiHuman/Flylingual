@@ -16,6 +16,8 @@ namespace FlyVisualDemo
         float entered, nextSample, nextImage, stable;
         int stage, imageIndex;
         bool sentStop, ended;
+        bool initialStopAcknowledged;
+        float freshStopSince = -1f;
         Vector3 forwardOrigin, forwardDirection;
         float forwardDistance;
         readonly System.Collections.Generic.Queue<Vector4> poses=new System.Collections.Generic.Queue<Vector4>();
@@ -61,8 +63,10 @@ namespace FlyVisualDemo
             if(stage==0)
             {
                 if(client.ConnectionState=="CONNECTED"&&!sentStop){sentStop=true;Stimulate("STOP");}
-                if(frame?.metadata?.backendId=="MALECNS_EXPERIMENTAL"&&frame.metadata.ready==false&&age<.75&&frame.requestedAction=="STOP"&&Mathf.Abs(frame.motor.forward)<.01f&&Mathf.Abs(frame.motor.turn)<.01f)
-                    stable+=Time.unscaledDeltaTime;else stable=0;
+                if(sentStop && frame?.requestedAction=="STOP" && frame.appliedRequestId>0) initialStopAcknowledged=true;
+                if(initialStopAcknowledged && frame?.metadata?.backendId=="MALECNS_EXPERIMENTAL"&&frame.metadata.ready==false&&age<.75&&frame.requestedAction=="STOP"&&Mathf.Abs(frame.motor.forward)<.01f&&Mathf.Abs(frame.motor.turn)<.01f)
+                    { if(freshStopSince<0) freshStopSince=now; stable=now-freshStopSince; }
+                else { freshStopSince=-1; stable=0; }
                 if(stable>=3)
                 {
                     Log("INITIAL_STOP_PASS");stage=1;forwardOrigin=body.Position;forwardDirection=body.Thorax.transform.forward;Stimulate("FORWARD");

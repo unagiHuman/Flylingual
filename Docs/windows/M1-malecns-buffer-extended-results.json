@@ -1,0 +1,36 @@
+{
+  "completed": true,
+  "additionalSeeds": [
+    20270102,
+    20270103
+  ],
+  "exactWindows": 120,
+  "originalMeanMs": 2051.3359741676445,
+  "candidateMeanMs": 676.6060333342466,
+  "tcpFrames": 79,
+  "allActionSignsPass": true,
+  "sequenceIncreasing": true,
+  "disconnect": true,
+  "stepMeanMs": 687.3027683512744,
+  "stepP95Ms": 747.8243999852565,
+  "stepsOver750Ms": 4,
+  "firstFrameMs": 449.4082000164781,
+  "firstActionFrameMs": {
+    "0STOP": 1078.4897999837995,
+    "1FORWARD": 1274.1528000042308,
+    "2TURN_R": 1433.733799989568,
+    "3TURN_L": 1423.4446000191383,
+    "4FORWARD_R": 1390.9736000059638,
+    "5FORWARD_L": 1377.0245999912731,
+    "6STOP": 1382.2780000045896
+  },
+  "finalStopFirstZeroMs": 4681.622900010552,
+  "errors": [],
+  "readyValues": [
+    false
+  ],
+  "reconnectStatus": true,
+  "reconnectSequenceContinued": true,
+  "serverStoppedByHarness": true,
+  "productionChanged": false
+}

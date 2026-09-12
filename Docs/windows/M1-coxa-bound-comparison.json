@@ -1,0 +1,70 @@
+{
+  "baseline": [
+    {
+      "action": "FORWARD_L",
+      "phase": 0,
+      "yaw2": -52.90247431100003,
+      "yaw8": -125.599095311,
+      "fallTrials": 0,
+      "clampSamples": 891
+    },
+    {
+      "action": "FORWARD_L",
+      "phase": 90,
+      "yaw2": 53.981476598,
+      "yaw8": 207.448663398,
+      "fallTrials": 0,
+      "clampSamples": 855
+    },
+    {
+      "action": "FORWARD_R",
+      "phase": 0,
+      "yaw2": 48.324196726,
+      "yaw8": 261.235150026,
+      "fallTrials": 0,
+      "clampSamples": 891
+    },
+    {
+      "action": "FORWARD_R",
+      "phase": 90,
+      "yaw2": 32.976863025333316,
+      "yaw8": 194.01522715866665,
+      "fallTrials": 0,
+      "clampSamples": 855
+    }
+  ],
+  "bounded": [
+    {
+      "action": "FORWARD_L",
+      "phase": 0,
+      "yaw2": -43.674536337666666,
+      "yaw8": -171.99037867100006,
+      "fallTrials": 0,
+      "clampSamples": 0
+    },
+    {
+      "action": "FORWARD_L",
+      "phase": 90,
+      "yaw2": 48.187245004,
+      "yaw8": -123.69363939600001,
+      "fallTrials": 0,
+      "clampSamples": 0
+    },
+    {
+      "action": "FORWARD_R",
+      "phase": 0,
+      "yaw2": 42.459391927666665,
+      "yaw8": 206.41625032766666,
+      "fallTrials": 0,
+      "clampSamples": 0
+    },
+    {
+      "action": "FORWARD_R",
+      "phase": 90,
+      "yaw2": 39.00091280066667,
+      "yaw8": 106.71986340066667,
+      "fallTrials": 0,
+      "clampSamples": 0
+    }
+  ]
+}

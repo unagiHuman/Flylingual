@@ -1,0 +1,213 @@
+{
+  "seed": 20270101,
+  "rows": [
+    {
+      "action": "STOP",
+      "trial": 0,
+      "original": 1939.956100017298,
+      "candidate": 658.4235999907833,
+      "exactStateAndFrame": true
+    },
+    {
+      "action": "STOP",
+      "trial": 1,
+      "candidate": 618.3753999939654,
+      "original": 2056.8082999961916,
+      "exactStateAndFrame": true
+    },
+    {
+      "action": "STOP",
+      "trial": 2,
+      "original": 2073.3641000115313,
+      "candidate": 669.9605000030715,
+      "exactStateAndFrame": true
+    },
+    {
+      "action": "STOP",
+      "trial": 3,
+      "candidate": 654.4423000013921,
+      "original": 2090.3647000086494,
+      "exactStateAndFrame": true
+    },
+    {
+      "action": "FORWARD",
+      "trial": 0,
+      "original": 2169.8854000132997,
+      "candidate": 725.2502999908756,
+      "exactStateAndFrame": true
+    },
+    {
+      "action": "FORWARD",
+      "trial": 1,
+      "candidate": 732.6644000131637,
+      "original": 2299.150999984704,
+      "exactStateAndFrame": true
+    },
+    {
+      "action": "FORWARD",
+      "trial": 2,
+      "original": 2518.5597999952734,
+      "candidate": 1036.6617999970913,
+      "exactStateAndFrame": true
+    },
+    {
+      "action": "FORWARD",
+      "trial": 3,
+      "candidate": 1062.3266999900807,
+      "original": 2603.756099997554,
+      "exactStateAndFrame": true
+    },
+    {
+      "action": "TURN_R",
+      "trial": 0,
+      "original": 2919.6796999895014,
+      "candidate": 1202.5358999962918,
+      "exactStateAndFrame": true
+    },
+    {
+      "action": "TURN_R",
+      "trial": 1,
+      "candidate": 780.034199997317,
+      "original": 2723.16680001677,
+      "exactStateAndFrame": true
+    },
+    {
+      "action": "TURN_R",
+      "trial": 2,
+      "original": 2751.440799998818,
+      "candidate": 927.441000007093,
+      "exactStateAndFrame": true
+    },
+    {
+      "action": "TURN_R",
+      "trial": 3,
+      "candidate": 999.9145999900065,
+      "original": 2901.3785000133794,
+      "exactStateAndFrame": true
+    },
+    {
+      "action": "TURN_L",
+      "trial": 0,
+      "original": 2800.6424000195693,
+      "candidate": 1251.898299989989,
+      "exactStateAndFrame": true
+    },
+    {
+      "action": "TURN_L",
+      "trial": 1,
+      "candidate": 1001.534899987746,
+      "original": 2578.706400003284,
+      "exactStateAndFrame": true
+    },
+    {
+      "action": "TURN_L",
+      "trial": 2,
+      "original": 2391.241399978753,
+      "candidate": 691.4066000026651,
+      "exactStateAndFrame": true
+    },
+    {
+      "action": "TURN_L",
+      "trial": 3,
+      "candidate": 673.4628000122029,
+      "original": 2190.7668999920134,
+      "exactStateAndFrame": true
+    },
+    {
+      "action": "FORWARD_R",
+      "trial": 0,
+      "original": 2163.319599989336,
+      "candidate": 708.03359997808,
+      "exactStateAndFrame": true
+    },
+    {
+      "action": "FORWARD_R",
+      "trial": 1,
+      "candidate": 695.7382000109646,
+      "original": 2620.0719000189565,
+      "exactStateAndFrame": true
+    },
+    {
+      "action": "FORWARD_R",
+      "trial": 2,
+      "original": 2544.203800003743,
+      "candidate": 726.8526999978349,
+      "exactStateAndFrame": true
+    },
+    {
+      "action": "FORWARD_R",
+      "trial": 3,
+      "candidate": 652.0032999978866,
+      "original": 2108.307500020601,
+      "exactStateAndFrame": true
+    },
+    {
+      "action": "FORWARD_L",
+      "trial": 0,
+      "original": 2034.2812000017148,
+      "candidate": 800.6467999948654,
+      "exactStateAndFrame": true
+    },
+    {
+      "action": "FORWARD_L",
+      "trial": 1,
+      "candidate": 879.9097000155598,
+      "original": 2322.366000007605,
+      "exactStateAndFrame": true
+    },
+    {
+      "action": "FORWARD_L",
+      "trial": 2,
+      "original": 2249.472900002729,
+      "candidate": 656.0726999887265,
+      "exactStateAndFrame": true
+    },
+    {
+      "action": "FORWARD_L",
+      "trial": 3,
+      "candidate": 649.6558000217192,
+      "original": 2055.2027999947313,
+      "exactStateAndFrame": true
+    },
+    {
+      "action": "STOP",
+      "trial": 0,
+      "original": 2049.109999992652,
+      "candidate": 714.7170000243932,
+      "exactStateAndFrame": true
+    },
+    {
+      "action": "STOP",
+      "trial": 1,
+      "candidate": 686.7020000063349,
+      "original": 2125.198099995032,
+      "exactStateAndFrame": true
+    },
+    {
+      "action": "STOP",
+      "trial": 2,
+      "original": 2267.2847000067122,
+      "candidate": 770.7791999855544,
+      "exactStateAndFrame": true
+    },
+    {
+      "action": "STOP",
+      "trial": 3,
+      "candidate": 845.6148999975994,
+      "original": 2470.9331000049133,
+      "exactStateAndFrame": true
+    }
+  ],
+  "completed": true,
+  "scope": "28 windows; exact arrays at window boundaries, RNG, pending spikes and BrainFrame excluding timing; not every tick or multiple seeds",
+  "meanOriginalMs": 2357.807857145547,
+  "meanCandidateMs": 802.609257142259,
+  "speedup": 2.937678373584515,
+  "productionChanged": false,
+  "hashes": {
+    "Brain\\MaleCNS\\shiu_compatible.py": "25079422f7b9efabfb60e1c5482218f38ea3c4ef34957c611e17f62fe0528a42",
+    "Brain\\MaleCNS\\config\\analog_temporal_v1.json": "4a2a785741f58ba07022618dcb91b8f99b5e5d2a1cc515017015b60119dfad96",
+    "tools\\probe_malecns_buffers.py": "a50efbc196bffdec0d26ad6fc3dbe1d191ffc95f07be96647e763f29b2143af8",
+    "artifacts\\windows-malecns\\buffer-probe\\candidate.py": "de37286831abfa9d8d60f68578a5e8ed7ef268f2c72f2b526a50d18d502a91d7"
+  }
+}

@@ -64,7 +64,7 @@ class MaleCNSAnalogController:
         sums=np.zeros((2,len(self.observed))); counts=np.zeros(len(self.ids),dtype=np.int64)
         for _ in range(ticks):
             events={self.sim.tick:list(stim[self.rng.random(len(stim))<.01])} if len(stim) else {}
-            c,_,_=self.sim.step(1,events); counts+=c
+            self.sim.step(1,events,count_buffer=counts)
             sums[0]+=self.sim.v[self.observed]; sums[1]+=self.sim.g[self.observed]
         mean=sums/ticks; delta=mean[0]-self.baseline
         response={axis:{s:float(np.mean([delta[ix].mean() for ix in g.values()])) for s,g in p.items()} for axis,p in self.groups.items()}

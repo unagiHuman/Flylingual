@@ -1,4 +1,5 @@
 using UnityEngine;
+using System.Collections.Generic;
 
 namespace FlyLocomotionPoC
 {
@@ -10,6 +11,23 @@ namespace FlyLocomotionPoC
         [SerializeField] private FlyLocalReflexLayer reflexLayer;
         [SerializeField] private float phase;
 
+        // Diagnostic-only, runtime opt-in; never serialized into gameplay assets.
+        public bool DiagnosticSeparateSteering { get; set; }
+        public float TrajectoryTurn => DiagnosticSeparateSteering ? targetMotor.turn : currentMotor.turn;
+
+        // No subscriber in normal gameplay; diagnostics observe without selecting targets.
+        public event System.Action<FlyLeg, FlyLeg.LegDriveTarget> DiagnosticTargetObserved;
+        public float DiagnosticJoinSeconds { get; set; }
+        private bool wasActive;
+        private float joinElapsed;
+        private readonly Dictionary<FlyLeg, Vector3> joinOrigins = new Dictionary<FlyLeg, Vector3>();
+        public static Vector3 BlendStartup(Vector3 origin, Vector3 nominal, float elapsed, float duration)
+        {
+            if (duration <= 0f || elapsed >= duration) return nominal;
+            float u = Mathf.Clamp01(elapsed / duration);
+            float w = u * u * u * (10f + u * (-15f + 6f * u));
+            return Vector3.LerpUnclamped(origin, nominal, w);
+        }
         private FlyMotorCommand currentMotor;
         private FlyMotorCommand targetMotor;
 
@@ -35,6 +53,7 @@ namespace FlyLocomotionPoC
             config = locomotionConfig;
             currentMotor = FlyMotorCommand.Stop;
             targetMotor = FlyMotorCommand.Stop;
+            wasActive = false; joinElapsed = 0f; joinOrigins.Clear();
         }
 
         public void SetMotorSource(FlyMotorSource source)
@@ -90,6 +109,16 @@ namespace FlyLocomotionPoC
                 phase = Mathf.Repeat(phase, 2f * Mathf.PI);
             }
 
+            bool active = activity > config.gaitStartThreshold;
+            if (DiagnosticJoinSeconds > 0f && active && !wasActive)
+            {
+                joinElapsed = 0f;
+                joinOrigins.Clear();
+                foreach (var leg in flyBody.Legs)
+                    if (leg != null) joinOrigins[leg] = new Vector3(leg.Coxa.Target, leg.Femur.Target, leg.Tibia.Target);
+            }
+            if (!active) joinOrigins.Clear();
+            wasActive = active;
             float trajectoryPhase = EffectivePhase;
             for (int i = 0; i < flyBody.Legs.Count; i++)
             {
@@ -106,9 +135,17 @@ namespace FlyLocomotionPoC
                         stanceCoxaMultiplier = reflexLayer.GetStanceCoxaMultiplier(leg, trajectoryPhase);
                     }
 
-                    leg.ApplyTrajectory(trajectoryPhase, currentMotor, config, coxaOffset, femurOffset, tibiaOffset, stanceCoxaMultiplier);
+                    var target = leg.CalculateNominalTargets(trajectoryPhase, currentMotor, config, coxaOffset, femurOffset, tibiaOffset, stanceCoxaMultiplier, TrajectoryTurn);
+                    if (DiagnosticJoinSeconds > 0f && joinOrigins.TryGetValue(leg, out var origin))
+                        target.angles = BlendStartup(origin, target.angles, joinElapsed, DiagnosticJoinSeconds);
+                    DiagnosticTargetObserved?.Invoke(leg, target);
+                    leg.ApplyDriveTargets(target);
                 }
             }
+            // Runtime diagnostic opt-in only; each foot otherwise retains its own FixedUpdate.
+            foreach (var leg in flyBody.Legs)
+                if (leg != null && leg.FootAdhesion != null) leg.FootAdhesion.EvaluateDiagnosticTick();
+            joinElapsed += Time.fixedDeltaTime;
         }
 
         private float ComputeSideScale(bool left)

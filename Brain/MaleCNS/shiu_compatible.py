@@ -18,20 +18,28 @@ class MaleCNSShiuCompatibleLIF:
         self.last = np.full(n, -1000000, dtype=np.int64)
         self.rfc = np.full(n, 22, dtype=np.int64)
         self.rfc[list(stimulated)] = 0
+        self._scratch_v = np.empty(n, dtype=np.float64)
+        self._scratch_g = np.empty(n, dtype=np.float64)
         self.tick = 0
         self.pending = [[] for _ in range(19)]
 
-    def step(self, ticks, events=None, record=False):
+    def step(self, ticks, events=None, record=False, count_buffer=None):
         events = events or {}
         spikes, states = [], []
-        count = np.zeros(len(self.v), dtype=np.int64)
+        count = np.zeros(len(self.v), dtype=np.int64) if count_buffer is None else count_buffer
         a, b = np.exp(-self.dt / 20), np.exp(-self.dt / 5)
         c = (a-b)/3
         for _ in range(ticks):
             k = self.tick
             active = (k-self.last) >= self.rfc
-            self.v[active] = -52 + (self.v[active]+52)*a + self.g[active]*c
-            self.g[active] *= b
+            # Reuse float64 buffers; retain the original arithmetic order and active mask.
+            np.add(self.v, 52, out=self._scratch_v)
+            np.multiply(self._scratch_v, a, out=self._scratch_v)
+            np.add(-52, self._scratch_v, out=self._scratch_v)
+            np.multiply(self.g, c, out=self._scratch_g)
+            np.add(self._scratch_v, self._scratch_g, out=self._scratch_v)
+            np.copyto(self.v, self._scratch_v, where=active)
+            np.multiply(self.g, b, out=self.g, where=active)
             fired = np.flatnonzero(active & (self.v > -45))
             self.last[fired] = k
             count[fired] += 1

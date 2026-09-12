@@ -1,0 +1,2646 @@
+{
+  "baseline": [
+    {
+      "trial": "FORWARD_L_0_both_0",
+      "yawOnset1degSeconds": 0.28,
+      "yawAt020": -0.24558371299999998,
+      "perLeg": {
+        "LF": {
+          "firstTargets": [
+            -1.03236043,
+            0.9319792,
+            -1.2648288
+          ],
+          "firstActual": [
+            1.35475528,
+            -1.3148061,
+            -0.165164739
+          ],
+          "firstStance": false,
+          "firstGround": null,
+          "earlyContacts": 0,
+          "earlyNormalImpulse": 0,
+          "earlyAttachedSamples": 0
+        },
+        "LM": {
+          "firstTargets": [
+            1.03236139,
+            0.0,
+            0.0
+          ],
+          "firstActual": [
+            -7.80183,
+            -15.126709,
+            3.59751654
+          ],
+          "firstStance": true,
+          "firstGround": 0.26,
+          "earlyContacts": 1,
+          "earlyNormalImpulse": 0.0,
+          "earlyAttachedSamples": 0
+        },
+        "LH": {
+          "firstTargets": [
+            -1.03236043,
+            0.9319792,
+            -1.2648288
+          ],
+          "firstActual": [
+            -0.3030399,
+            -0.156576753,
+            -0.3139115
+          ],
+          "firstStance": false,
+          "firstGround": null,
+          "earlyContacts": 0,
+          "earlyNormalImpulse": 0,
+          "earlyAttachedSamples": 0
+        },
+        "RF": {
+          "firstTargets": [
+            1.49729872,
+            0.0,
+            0.0
+          ],
+          "firstActual": [
+            -0.186075434,
+            1.29530525,
+            -0.38054052
+          ],
+          "firstStance": true,
+          "firstGround": 0.12,
+          "earlyContacts": 1,
+          "earlyNormalImpulse": 0.0281559862,
+          "earlyAttachedSamples": 0
+        },
+        "RM": {
+          "firstTargets": [
+            -1.49729729,
+            0.9319792,
+            -1.2648288
+          ],
+          "firstActual": [
+            7.79576349,
+            16.1734676,
+            -4.95279837
+          ],
+          "firstStance": false,
+          "firstGround": 0.38,
+          "earlyContacts": 0,
+          "earlyNormalImpulse": 0,
+          "earlyAttachedSamples": 0
+        },
+        "RH": {
+          "firstTargets": [
+            1.49729872,
+            0.0,
+            0.0
+          ],
+          "firstActual": [
+            1.44454026,
+            -0.345758468,
+            -0.08569794
+          ],
+          "firstStance": true,
+          "firstGround": 0.22,
+          "earlyContacts": 3,
+          "earlyNormalImpulse": 0.0473227011,
+          "earlyAttachedSamples": 1
+        }
+      },
+      "earlyNonFootContacts": 64
+    },
+    {
+      "trial": "FORWARD_L_0_both_1",
+      "yawOnset1degSeconds": 0.24,
+      "yawAt020": -0.5341241369999921,
+      "perLeg": {
+        "LF": {
+          "firstTargets": [
+            -1.03236043,
+            0.9319792,
+            -1.2648288
+          ],
+          "firstActual": [
+            1.15399444,
+            -1.23407519,
+            -0.147194326
+          ],
+          "firstStance": false,
+          "firstGround": null,
+          "earlyContacts": 0,
+          "earlyNormalImpulse": 0,
+          "earlyAttachedSamples": 0
+        },
+        "LM": {
+          "firstTargets": [
+            1.03236139,
+            0.0,
+            0.0
+          ],
+          "firstActual": [
+            -7.648134,
+            -15.2767344,
+            3.651289
+          ],
+          "firstStance": true,
+          "firstGround": 0.26,
+          "earlyContacts": 0,
+          "earlyNormalImpulse": 0,
+          "earlyAttachedSamples": 0
+        },
+        "LH": {
+          "firstTargets": [
+            -1.03236043,
+            0.9319792,
+            -1.2648288
+          ],
+          "firstActual": [
+            -0.304575,
+            -0.169080213,
+            -0.313968331
+          ],
+          "firstStance": false,
+          "firstGround": null,
+          "earlyContacts": 0,
+          "earlyNormalImpulse": 0,
+          "earlyAttachedSamples": 0
+        },
+        "RF": {
+          "firstTargets": [
+            1.49729872,
+            0.0,
+            0.0
+          ],
+          "firstActual": [
+            -0.3313526,
+            1.33500063,
+            -0.356566519
+          ],
+          "firstStance": true,
+          "firstGround": 0.12,
+          "earlyContacts": 1,
+          "earlyNormalImpulse": 0.0,
+          "earlyAttachedSamples": 0
+        },
+        "RM": {
+          "firstTargets": [
+            -1.49729729,
+            0.9319792,
+            -1.2648288
+          ],
+          "firstActual": [
+            7.828967,
+            16.10417,
+            -4.87196827
+          ],
+          "firstStance": false,
+          "firstGround": 0.38,
+          "earlyContacts": 0,
+          "earlyNormalImpulse": 0,
+          "earlyAttachedSamples": 0
+        },
+        "RH": {
+          "firstTargets": [
+            1.49729872,
+            0.0,
+            0.0
+          ],
+          "firstActual": [
+            1.23962653,
+            -0.23804754,
+            -0.08042669
+          ],
+          "firstStance": true,
+          "firstGround": 0.22,
+          "earlyContacts": 2,
+          "earlyNormalImpulse": 0.0238910587,
+          "earlyAttachedSamples": 1
+        }
+      },
+      "earlyNonFootContacts": 58
+    },
+    {
+      "trial": "FORWARD_L_0_both_2",
+      "yawOnset1degSeconds": 0.24,
+      "yawAt020": -0.5236946309999553,
+      "perLeg": {
+        "LF": {
+          "firstTargets": [
+            -1.03236043,
+            0.9319792,
+            -1.2648288
+          ],
+          "firstActual": [
+            1.18220448,
+            -1.25396621,
+            -0.145123973
+          ],
+          "firstStance": false,
+          "firstGround": null,
+          "earlyContacts": 0,
+          "earlyNormalImpulse": 0,
+          "earlyAttachedSamples": 0
+        },
+        "LM": {
+          "firstTargets": [
+            1.03236139,
+            0.0,
+            0.0
+          ],
+          "firstActual": [
+            -7.586665,
+            -15.3771572,
+            3.725116
+          ],
+          "firstStance": true,
+          "firstGround": 0.26,
+          "earlyContacts": 0,
+          "earlyNormalImpulse": 0,
+          "earlyAttachedSamples": 0
+        },
+        "LH": {
+          "firstTargets": [
+            -1.03236043,
+            0.9319792,
+            -1.2648288
+          ],
+          "firstActual": [
+            -0.303176731,
+            -0.176775113,
+            -0.31397137
+          ],
+          "firstStance": false,
+          "firstGround": null,
+          "earlyContacts": 0,
+          "earlyNormalImpulse": 0,
+          "earlyAttachedSamples": 0
+        },
+        "RF": {
+          "firstTargets": [
+            1.49729872,
+            0.0,
+            0.0
+          ],
+          "firstActual": [
+            -0.31465286,
+            1.331214,
+            -0.355298579
+          ],
+          "firstStance": true,
+          "firstGround": 0.12,
+          "earlyContacts": 1,
+          "earlyNormalImpulse": 0.0,
+          "earlyAttachedSamples": 0
+        },
+        "RM": {
+          "firstTargets": [
+            -1.49729729,
+            0.9319792,
+            -1.2648288
+          ],
+          "firstActual": [
+            7.75986671,
+            16.1806164,
+            -4.913897
+          ],
+          "firstStance": false,
+          "firstGround": 0.38,
+          "earlyContacts": 0,
+          "earlyNormalImpulse": 0,
+          "earlyAttachedSamples": 0
+        },
+        "RH": {
+          "firstTargets": [
+            1.49729872,
+            0.0,
+            0.0
+          ],
+          "firstActual": [
+            1.25807154,
+            -0.241054639,
+            -0.07864761
+          ],
+          "firstStance": true,
+          "firstGround": 0.22,
+          "earlyContacts": 2,
+          "earlyNormalImpulse": 0.0328159434,
+          "earlyAttachedSamples": 1
+        }
+      },
+      "earlyNonFootContacts": 58
+    },
+    {
+      "trial": "FORWARD_L_90_both_0",
+      "yawOnset1degSeconds": 0.299999982,
+      "yawAt020": 0.26060456099999996,
+      "perLeg": {
+        "LF": {
+          "firstTargets": [
+            -5.065165,
+            4.572655,
+            -6.205746
+          ],
+          "firstActual": [
+            0.3863059,
+            -0.185868129,
+            -1.4046067
+          ],
+          "firstStance": false,
+          "firstGround": null,
+          "earlyContacts": 0,
+          "earlyNormalImpulse": 0,
+          "earlyAttachedSamples": 0
+        },
+        "LM": {
+          "firstTargets": [
+            5.06516457,
+            0.0,
+            0.0
+          ],
+          "firstActual": [
+            -7.22604227,
+            -15.5751743,
+            3.77628922
+          ],
+          "firstStance": true,
+          "firstGround": 0.24,
+          "earlyContacts": 1,
+          "earlyNormalImpulse": 0.04716503,
+          "earlyAttachedSamples": 0
+        },
+        "LH": {
+          "firstTargets": [
+            -5.065165,
+            4.572655,
+            -6.205746
+          ],
+          "firstActual": [
+            -1.18618083,
+            0.8488111,
+            -1.52367055
+          ],
+          "firstStance": false,
+          "firstGround": null,
+          "earlyContacts": 0,
+          "earlyNormalImpulse": 0,
+          "earlyAttachedSamples": 0
+        },
+        "RF": {
+          "firstTargets": [
+            7.346327,
+            0.0,
+            0.0
+          ],
+          "firstActual": [
+            1.03983831,
+            1.22690654,
+            -0.404971778
+          ],
+          "firstStance": true,
+          "firstGround": 1.22,
+          "earlyContacts": 0,
+          "earlyNormalImpulse": 0,
+          "earlyAttachedSamples": 0
+        },
+        "RM": {
+          "firstTargets": [
+            -7.3463273,
+            4.572655,
+            -6.205746
+          ],
+          "firstActual": [
+            6.73630142,
+            17.9752865,
+            -6.218865
+          ],
+          "firstStance": false,
+          "firstGround": 0.26,
+          "earlyContacts": 0,
+          "earlyNormalImpulse": 0,
+          "earlyAttachedSamples": 0
+        },
+        "RH": {
+          "firstTargets": [
+            7.346327,
+            0.0,
+            0.0
+          ],
+          "firstActual": [
+            2.64774156,
+            -0.341107577,
+            -0.112865686
+          ],
+          "firstStance": true,
+          "firstGround": 0.58,
+          "earlyContacts": 0,
+          "earlyNormalImpulse": 0,
+          "earlyAttachedSamples": 0
+        }
+      },
+      "earlyNonFootContacts": 44
+    },
+    {
+      "trial": "FORWARD_L_90_both_1",
+      "yawOnset1degSeconds": 0.28,
+      "yawAt020": 0.39077299800000004,
+      "perLeg": {
+        "LF": {
+          "firstTargets": [
+            -5.065165,
+            4.572655,
+            -6.205746
+          ],
+          "firstActual": [
+            0.37994796,
+            -0.155067712,
+            -1.42146075
+          ],
+          "firstStance": false,
+          "firstGround": null,
+          "earlyContacts": 0,
+          "earlyNormalImpulse": 0,
+          "earlyAttachedSamples": 0
+        },
+        "LM": {
+          "firstTargets": [
+            5.06516457,
+            0.0,
+            0.0
+          ],
+          "firstActual": [
+            -7.201509,
+            -15.5892372,
+            3.76907134
+          ],
+          "firstStance": true,
+          "firstGround": 0.24,
+          "earlyContacts": 1,
+          "earlyNormalImpulse": 0.05370505,
+          "earlyAttachedSamples": 0
+        },
+        "LH": {
+          "firstTargets": [
+            -5.065165,
+            4.572655,
+            -6.205746
+          ],
+          "firstActual": [
+            -1.18935442,
+            0.847862,
+            -1.52367163
+          ],
+          "firstStance": false,
+          "firstGround": null,
+          "earlyContacts": 0,
+          "earlyNormalImpulse": 0,
+          "earlyAttachedSamples": 0
+        },
+        "RF": {
+          "firstTargets": [
+            7.346327,
+            0.0,
+            0.0
+          ],
+          "firstActual": [
+            1.1390332,
+            1.16865957,
+            -0.4012974
+          ],
+          "firstStance": true,
+          "firstGround": 1.24,
+          "earlyContacts": 0,
+          "earlyNormalImpulse": 0,
+          "earlyAttachedSamples": 0
+        },
+        "RM": {
+          "firstTargets": [
+            -7.3463273,
+            4.572655,
+            -6.205746
+          ],
+          "firstActual": [
+            6.57199526,
+            18.15715,
+            -6.30923128
+          ],
+          "firstStance": false,
+          "firstGround": 0.26,
+          "earlyContacts": 0,
+          "earlyNormalImpulse": 0,
+          "earlyAttachedSamples": 0
+        },
+        "RH": {
+          "firstTargets": [
+            7.346327,
+            0.0,
+            0.0
+          ],
+          "firstActual": [
+            2.749316,
+            -0.392454147,
+            -0.104955852
+          ],
+          "firstStance": true,
+          "firstGround": 0.58,
+          "earlyContacts": 0,
+          "earlyNormalImpulse": 0,
+          "earlyAttachedSamples": 0
+        }
+      },
+      "earlyNonFootContacts": 44
+    },
+    {
+      "trial": "FORWARD_L_90_both_2",
+      "yawOnset1degSeconds": 0.28,
+      "yawAt020": 0.325014681,
+      "perLeg": {
+        "LF": {
+          "firstTargets": [
+            -5.065165,
+            4.572655,
+            -6.205746
+          ],
+          "firstActual": [
+            0.452899069,
+            -0.2105648,
+            -1.40513325
+          ],
+          "firstStance": false,
+          "firstGround": null,
+          "earlyContacts": 0,
+          "earlyNormalImpulse": 0,
+          "earlyAttachedSamples": 0
+        },
+        "LM": {
+          "firstTargets": [
+            5.06516457,
+            0.0,
+            0.0
+          ],
+          "firstActual": [
+            -7.254532,
+            -15.5365973,
+            3.75746942
+          ],
+          "firstStance": true,
+          "firstGround": 0.24,
+          "earlyContacts": 1,
+          "earlyNormalImpulse": 0.0474247932,
+          "earlyAttachedSamples": 0
+        },
+        "LH": {
+          "firstTargets": [
+            -5.065165,
+            4.572655,
+            -6.205746
+          ],
+          "firstActual": [
+            -1.18626022,
+            0.854435742,
+            -1.52364576
+          ],
+          "firstStance": false,
+          "firstGround": null,
+          "earlyContacts": 0,
+          "earlyNormalImpulse": 0,
+          "earlyAttachedSamples": 0
+        },
+        "RF": {
+          "firstTargets": [
+            7.346327,
+            0.0,
+            0.0
+          ],
+          "firstActual": [
+            1.14903414,
+            1.16326094,
+            -0.3985014
+          ],
+          "firstStance": true,
+          "firstGround": 1.22,
+          "earlyContacts": 0,
+          "earlyNormalImpulse": 0,
+          "earlyAttachedSamples": 0
+        },
+        "RM": {
+          "firstTargets": [
+            -7.3463273,
+            4.572655,
+            -6.205746
+          ],
+          "firstActual": [
+            6.70158529,
+            18.0197334,
+            -6.2477293
+          ],
+          "firstStance": false,
+          "firstGround": 0.26,
+          "earlyContacts": 0,
+          "earlyNormalImpulse": 0,
+          "earlyAttachedSamples": 0
+        },
+        "RH": {
+          "firstTargets": [
+            7.346327,
+            0.0,
+            0.0
+          ],
+          "firstActual": [
+            2.77920461,
+            -0.4296257,
+            -0.09467532
+          ],
+          "firstStance": true,
+          "firstGround": 0.58,
+          "earlyContacts": 0,
+          "earlyNormalImpulse": 0,
+          "earlyAttachedSamples": 0
+        }
+      },
+      "earlyNonFootContacts": 44
+    },
+    {
+      "trial": "FORWARD_R_0_both_0",
+      "yawOnset1degSeconds": 0.26,
+      "yawAt020": 0.308852655,
+      "perLeg": {
+        "LF": {
+          "firstTargets": [
+            -1.581036,
+            0.9319792,
+            -1.2648288
+          ],
+          "firstActual": [
+            1.0637157,
+            -1.23832691,
+            -0.152890682
+          ],
+          "firstStance": false,
+          "firstGround": 0.24,
+          "earlyContacts": 1,
+          "earlyNormalImpulse": 0.0,
+          "earlyAttachedSamples": 0
+        },
+        "LM": {
+          "firstTargets": [
+            1.58103752,
+            0.0,
+            0.0
+          ],
+          "firstActual": [
+            -7.536273,
+            -15.4500933,
+            3.7729125
+          ],
+          "firstStance": true,
+          "firstGround": 0.399999976,
+          "earlyContacts": 0,
+          "earlyNormalImpulse": 0,
+          "earlyAttachedSamples": 0
+        },
+        "LH": {
+          "firstTargets": [
+            -1.581036,
+            0.9319792,
+            -1.2648288
+          ],
+          "firstActual": [
+            -0.4255633,
+            -0.165754452,
+            -0.313819349
+          ],
+          "firstStance": false,
+          "firstGround": 0.179999992,
+          "earlyContacts": 4,
+          "earlyNormalImpulse": 0.0987413358,
+          "earlyAttachedSamples": 0
+        },
+        "RF": {
+          "firstTargets": [
+            0.948622763,
+            0.0,
+            0.0
+          ],
+          "firstActual": [
+            -0.429766774,
+            1.34782875,
+            -0.365183532
+          ],
+          "firstStance": true,
+          "firstGround": null,
+          "earlyContacts": 0,
+          "earlyNormalImpulse": 0,
+          "earlyAttachedSamples": 0
+        },
+        "RM": {
+          "firstTargets": [
+            -0.9486218,
+            0.9319792,
+            -1.2648288
+          ],
+          "firstActual": [
+            7.8170886,
+            16.1109753,
+            -4.875936
+          ],
+          "firstStance": false,
+          "firstGround": 0.74,
+          "earlyContacts": 0,
+          "earlyNormalImpulse": 0,
+          "earlyAttachedSamples": 0
+        },
+        "RH": {
+          "firstTargets": [
+            0.948622763,
+            0.0,
+            0.0
+          ],
+          "firstActual": [
+            1.13510358,
+            -0.223898858,
+            -0.08611254
+          ],
+          "firstStance": true,
+          "firstGround": null,
+          "earlyContacts": 0,
+          "earlyNormalImpulse": 0,
+          "earlyAttachedSamples": 0
+        }
+      },
+      "earlyNonFootContacts": 49
+    },
+    {
+      "trial": "FORWARD_R_0_both_1",
+      "yawOnset1degSeconds": 0.26,
+      "yawAt020": 0.36661755500000004,
+      "perLeg": {
+        "LF": {
+          "firstTargets": [
+            -1.581036,
+            0.9319792,
+            -1.2648288
+          ],
+          "firstActual": [
+            1.13985229,
+            -1.26621151,
+            -0.167225674
+          ],
+          "firstStance": false,
+          "firstGround": 0.24,
+          "earlyContacts": 1,
+          "earlyNormalImpulse": 0.0100278631,
+          "earlyAttachedSamples": 0
+        },
+        "LM": {
+          "firstTargets": [
+            1.58103752,
+            0.0,
+            0.0
+          ],
+          "firstActual": [
+            -7.730835,
+            -15.21154,
+            3.64034
+          ],
+          "firstStance": true,
+          "firstGround": 0.38,
+          "earlyContacts": 0,
+          "earlyNormalImpulse": 0,
+          "earlyAttachedSamples": 0
+        },
+        "LH": {
+          "firstTargets": [
+            -1.581036,
+            0.9319792,
+            -1.2648288
+          ],
+          "firstActual": [
+            -0.42241925,
+            -0.1515887,
+            -0.313785762
+          ],
+          "firstStance": false,
+          "firstGround": 0.179999992,
+          "earlyContacts": 4,
+          "earlyNormalImpulse": 0.09864956400000001,
+          "earlyAttachedSamples": 0
+        },
+        "RF": {
+          "firstTargets": [
+            0.948622763,
+            0.0,
+            0.0
+          ],
+          "firstActual": [
+            -0.449120045,
+            1.39308083,
+            -0.3948165
+          ],
+          "firstStance": true,
+          "firstGround": null,
+          "earlyContacts": 0,
+          "earlyNormalImpulse": 0,
+          "earlyAttachedSamples": 0
+        },
+        "RM": {
+          "firstTargets": [
+            -0.9486218,
+            0.9319792,
+            -1.2648288
+          ],
+          "firstActual": [
+            7.91514444,
+            16.0516262,
+            -4.89430952
+          ],
+          "firstStance": false,
+          "firstGround": 0.76,
+          "earlyContacts": 0,
+          "earlyNormalImpulse": 0,
+          "earlyAttachedSamples": 0
+        },
+        "RH": {
+          "firstTargets": [
+            0.948622763,
+            0.0,
+            0.0
+          ],
+          "firstActual": [
+            1.15206814,
+            -0.225603983,
+            -0.107112661
+          ],
+          "firstStance": true,
+          "firstGround": null,
+          "earlyContacts": 0,
+          "earlyNormalImpulse": 0,
+          "earlyAttachedSamples": 0
+        }
+      },
+      "earlyNonFootContacts": 49
+    },
+    {
+      "trial": "FORWARD_R_0_both_2",
+      "yawOnset1degSeconds": 0.26,
+      "yawAt020": 0.389897523,
+      "perLeg": {
+        "LF": {
+          "firstTargets": [
+            -1.581036,
+            0.9319792,
+            -1.2648288
+          ],
+          "firstActual": [
+            1.16053939,
+            -1.277111,
+            -0.168359324
+          ],
+          "firstStance": false,
+          "firstGround": 0.24,
+          "earlyContacts": 1,
+          "earlyNormalImpulse": 0.0,
+          "earlyAttachedSamples": 0
+        },
+        "LM": {
+          "firstTargets": [
+            1.58103752,
+            0.0,
+            0.0
+          ],
+          "firstActual": [
+            -7.69266272,
+            -15.2595243,
+            3.66923475
+          ],
+          "firstStance": true,
+          "firstGround": 0.38,
+          "earlyContacts": 0,
+          "earlyNormalImpulse": 0,
+          "earlyAttachedSamples": 0
+        },
+        "LH": {
+          "firstTargets": [
+            -1.581036,
+            0.9319792,
+            -1.2648288
+          ],
+          "firstActual": [
+            -0.421838731,
+            -0.157135174,
+            -0.3138043
+          ],
+          "firstStance": false,
+          "firstGround": 0.179999992,
+          "earlyContacts": 4,
+          "earlyNormalImpulse": 0.4121546556,
+          "earlyAttachedSamples": 0
+        },
+        "RF": {
+          "firstTargets": [
+            0.948622763,
+            0.0,
+            0.0
+          ],
+          "firstActual": [
+            -0.4261079,
+            1.3848809,
+            -0.3946409
+          ],
+          "firstStance": true,
+          "firstGround": null,
+          "earlyContacts": 0,
+          "earlyNormalImpulse": 0,
+          "earlyAttachedSamples": 0
+        },
+        "RM": {
+          "firstTargets": [
+            -0.9486218,
+            0.9319792,
+            -1.2648288
+          ],
+          "firstActual": [
+            7.85323143,
+            16.14156,
+            -4.954103
+          ],
+          "firstStance": false,
+          "firstGround": 0.74,
+          "earlyContacts": 0,
+          "earlyNormalImpulse": 0,
+          "earlyAttachedSamples": 0
+        },
+        "RH": {
+          "firstTargets": [
+            0.948622763,
+            0.0,
+            0.0
+          ],
+          "firstActual": [
+            1.17981052,
+            -0.237948641,
+            -0.102153912
+          ],
+          "firstStance": true,
+          "firstGround": null,
+          "earlyContacts": 0,
+          "earlyNormalImpulse": 0,
+          "earlyAttachedSamples": 0
+        }
+      },
+      "earlyNonFootContacts": 49
+    },
+    {
+      "trial": "FORWARD_R_90_both_0",
+      "yawOnset1degSeconds": 0.359999985,
+      "yawAt020": -0.5842425000000162,
+      "perLeg": {
+        "LF": {
+          "firstTargets": [
+            -7.757182,
+            4.572655,
+            -6.205746
+          ],
+          "firstActual": [
+            -0.2178856,
+            -0.09365716,
+            -1.44084013
+          ],
+          "firstStance": false,
+          "firstGround": 0.56,
+          "earlyContacts": 0,
+          "earlyNormalImpulse": 0,
+          "earlyAttachedSamples": 0
+        },
+        "LM": {
+          "firstTargets": [
+            7.75718164,
+            0.0,
+            0.0
+          ],
+          "firstActual": [
+            -6.899575,
+            -15.9589758,
+            3.978662
+          ],
+          "firstStance": true,
+          "firstGround": 0.22,
+          "earlyContacts": 2,
+          "earlyNormalImpulse": 0.003577834,
+          "earlyAttachedSamples": 0
+        },
+        "LH": {
+          "firstTargets": [
+            -7.757182,
+            4.572655,
+            -6.205746
+          ],
+          "firstActual": [
+            -1.7871834,
+            0.8959968,
+            -1.52295649
+          ],
+          "firstStance": false,
+          "firstGround": 0.599999964,
+          "earlyContacts": 0,
+          "earlyNormalImpulse": 0,
+          "earlyAttachedSamples": 0
+        },
+        "RF": {
+          "firstTargets": [
+            4.65431,
+            0.0,
+            0.0
+          ],
+          "firstActual": [
+            0.5073232,
+            1.27398074,
+            -0.440226078
+          ],
+          "firstStance": true,
+          "firstGround": null,
+          "earlyContacts": 0,
+          "earlyNormalImpulse": 0,
+          "earlyAttachedSamples": 0
+        },
+        "RM": {
+          "firstTargets": [
+            -4.65431,
+            4.572655,
+            -6.205746
+          ],
+          "firstActual": [
+            6.966025,
+            17.6886883,
+            -6.046575
+          ],
+          "firstStance": false,
+          "firstGround": 3.69999981,
+          "earlyContacts": 0,
+          "earlyNormalImpulse": 0,
+          "earlyAttachedSamples": 0
+        },
+        "RH": {
+          "firstTargets": [
+            4.65431,
+            0.0,
+            0.0
+          ],
+          "firstActual": [
+            2.04051137,
+            -0.262502134,
+            -0.133282989
+          ],
+          "firstStance": true,
+          "firstGround": null,
+          "earlyContacts": 0,
+          "earlyNormalImpulse": 0,
+          "earlyAttachedSamples": 0
+        }
+      },
+      "earlyNonFootContacts": 45
+    },
+    {
+      "trial": "FORWARD_R_90_both_1",
+      "yawOnset1degSeconds": 0.38,
+      "yawAt020": -0.6766954240000018,
+      "perLeg": {
+        "LF": {
+          "firstTargets": [
+            -7.757182,
+            4.572655,
+            -6.205746
+          ],
+          "firstActual": [
+            -0.07837898,
+            -0.181660727,
+            -1.42061543
+          ],
+          "firstStance": false,
+          "firstGround": 0.58,
+          "earlyContacts": 0,
+          "earlyNormalImpulse": 0,
+          "earlyAttachedSamples": 0
+        },
+        "LM": {
+          "firstTargets": [
+            7.75718164,
+            0.0,
+            0.0
+          ],
+          "firstActual": [
+            -6.90052652,
+            -15.9788141,
+            4.018974
+          ],
+          "firstStance": true,
+          "firstGround": 0.24,
+          "earlyContacts": 1,
+          "earlyNormalImpulse": 0.07250839,
+          "earlyAttachedSamples": 0
+        },
+        "LH": {
+          "firstTargets": [
+            -7.757182,
+            4.572655,
+            -6.205746
+          ],
+          "firstActual": [
+            -1.78496039,
+            0.8996135,
+            -1.52293193
+          ],
+          "firstStance": false,
+          "firstGround": 0.599999964,
+          "earlyContacts": 0,
+          "earlyNormalImpulse": 0,
+          "earlyAttachedSamples": 0
+        },
+        "RF": {
+          "firstTargets": [
+            4.65431,
+            0.0,
+            0.0
+          ],
+          "firstActual": [
+            0.6308077,
+            1.19984829,
+            -0.4249437
+          ],
+          "firstStance": true,
+          "firstGround": null,
+          "earlyContacts": 0,
+          "earlyNormalImpulse": 0,
+          "earlyAttachedSamples": 0
+        },
+        "RM": {
+          "firstTargets": [
+            -4.65431,
+            4.572655,
+            -6.205746
+          ],
+          "firstActual": [
+            7.01213741,
+            17.6495285,
+            -6.037836
+          ],
+          "firstStance": false,
+          "firstGround": 0.16,
+          "earlyContacts": 1,
+          "earlyNormalImpulse": 0.0,
+          "earlyAttachedSamples": 0
+        },
+        "RH": {
+          "firstTargets": [
+            4.65431,
+            0.0,
+            0.0
+          ],
+          "firstActual": [
+            2.20063448,
+            -0.384427369,
+            -0.09915467
+          ],
+          "firstStance": true,
+          "firstGround": null,
+          "earlyContacts": 0,
+          "earlyNormalImpulse": 0,
+          "earlyAttachedSamples": 0
+        }
+      },
+      "earlyNonFootContacts": 45
+    },
+    {
+      "trial": "FORWARD_R_90_both_2",
+      "yawOnset1degSeconds": 0.359999985,
+      "yawAt020": -0.5822195999999735,
+      "perLeg": {
+        "LF": {
+          "firstTargets": [
+            -7.757182,
+            4.572655,
+            -6.205746
+          ],
+          "firstActual": [
+            -0.198426276,
+            -0.1313488,
+            -1.41166806
+          ],
+          "firstStance": false,
+          "firstGround": 0.56,
+          "earlyContacts": 0,
+          "earlyNormalImpulse": 0,
+          "earlyAttachedSamples": 0
+        },
+        "LM": {
+          "firstTargets": [
+            7.75718164,
+            0.0,
+            0.0
+          ],
+          "firstActual": [
+            -6.78393936,
+            -16.12489,
+            4.09799957
+          ],
+          "firstStance": true,
+          "firstGround": 0.22,
+          "earlyContacts": 2,
+          "earlyNormalImpulse": 0.000479497015,
+          "earlyAttachedSamples": 0
+        },
+        "LH": {
+          "firstTargets": [
+            -7.757182,
+            4.572655,
+            -6.205746
+          ],
+          "firstActual": [
+            -1.78647077,
+            0.8899932,
+            -1.52294874
+          ],
+          "firstStance": false,
+          "firstGround": 0.599999964,
+          "earlyContacts": 0,
+          "earlyNormalImpulse": 0,
+          "earlyAttachedSamples": 0
+        },
+        "RF": {
+          "firstTargets": [
+            4.65431,
+            0.0,
+            0.0
+          ],
+          "firstActual": [
+            0.5514381,
+            1.21976817,
+            -0.41073072
+          ],
+          "firstStance": true,
+          "firstGround": null,
+          "earlyContacts": 0,
+          "earlyNormalImpulse": 0,
+          "earlyAttachedSamples": 0
+        },
+        "RM": {
+          "firstTargets": [
+            -4.65431,
+            4.572655,
+            -6.205746
+          ],
+          "firstActual": [
+            7.006341,
+            17.6121273,
+            -5.97959852
+          ],
+          "firstStance": false,
+          "firstGround": 4.94,
+          "earlyContacts": 0,
+          "earlyNormalImpulse": 0,
+          "earlyAttachedSamples": 0
+        },
+        "RH": {
+          "firstTargets": [
+            4.65431,
+            0.0,
+            0.0
+          ],
+          "firstActual": [
+            2.07360673,
+            -0.3108826,
+            -0.102803096
+          ],
+          "firstStance": true,
+          "firstGround": null,
+          "earlyContacts": 0,
+          "earlyNormalImpulse": 0,
+          "earlyAttachedSamples": 0
+        }
+      },
+      "earlyNonFootContacts": 45
+    }
+  ],
+  "bounded": [
+    {
+      "trial": "FORWARD_L_0_both_0",
+      "yawOnset1degSeconds": 0.32,
+      "yawAt020": -0.10397541500000002,
+      "perLeg": {
+        "LF": {
+          "firstTargets": [
+            -0.9545258,
+            0.9319792,
+            -1.2648288
+          ],
+          "firstActual": [
+            1.372913,
+            -1.31733084,
+            -0.165145963
+          ],
+          "firstStance": false,
+          "firstGround": null,
+          "earlyContacts": 0,
+          "earlyNormalImpulse": 0,
+          "earlyAttachedSamples": 0
+        },
+        "LM": {
+          "firstTargets": [
+            0.9545268,
+            0.0,
+            0.0
+          ],
+          "firstActual": [
+            -7.810938,
+            -15.1170492,
+            3.59332585
+          ],
+          "firstStance": true,
+          "firstGround": 0.28,
+          "earlyContacts": 0,
+          "earlyNormalImpulse": 0,
+          "earlyAttachedSamples": 0
+        },
+        "LH": {
+          "firstTargets": [
+            -0.9545258,
+            0.9319792,
+            -1.2648288
+          ],
+          "firstActual": [
+            -0.285281539,
+            -0.1579056,
+            -0.313930035
+          ],
+          "firstStance": false,
+          "firstGround": null,
+          "earlyContacts": 0,
+          "earlyNormalImpulse": 0,
+          "earlyAttachedSamples": 0
+        },
+        "RF": {
+          "firstTargets": [
+            1.38441026,
+            0.0,
+            0.0
+          ],
+          "firstActual": [
+            -0.210776359,
+            1.29780746,
+            -0.380740762
+          ],
+          "firstStance": true,
+          "firstGround": 0.76,
+          "earlyContacts": 0,
+          "earlyNormalImpulse": 0,
+          "earlyAttachedSamples": 0
+        },
+        "RM": {
+          "firstTargets": [
+            -1.384409,
+            0.9319792,
+            -1.2648288
+          ],
+          "firstActual": [
+            7.80850267,
+            16.1587429,
+            -4.945129
+          ],
+          "firstStance": false,
+          "firstGround": 0.399999976,
+          "earlyContacts": 0,
+          "earlyNormalImpulse": 0,
+          "earlyAttachedSamples": 0
+        },
+        "RH": {
+          "firstTargets": [
+            1.38441026,
+            0.0,
+            0.0
+          ],
+          "firstActual": [
+            1.4199568,
+            -0.344510853,
+            -0.08580312
+          ],
+          "firstStance": true,
+          "firstGround": 0.26,
+          "earlyContacts": 1,
+          "earlyNormalImpulse": 0.0,
+          "earlyAttachedSamples": 0
+        }
+      },
+      "earlyNonFootContacts": 62
+    },
+    {
+      "trial": "FORWARD_L_0_both_1",
+      "yawOnset1degSeconds": 0.28,
+      "yawAt020": -0.382043302,
+      "perLeg": {
+        "LF": {
+          "firstTargets": [
+            -0.9545258,
+            0.9319792,
+            -1.2648288
+          ],
+          "firstActual": [
+            1.26914608,
+            -1.30375934,
+            -0.133878335
+          ],
+          "firstStance": false,
+          "firstGround": null,
+          "earlyContacts": 0,
+          "earlyNormalImpulse": 0,
+          "earlyAttachedSamples": 0
+        },
+        "LM": {
+          "firstTargets": [
+            0.9545268,
+            0.0,
+            0.0
+          ],
+          "firstActual": [
+            -7.659144,
+            -15.3023834,
+            3.7012403
+          ],
+          "firstStance": true,
+          "firstGround": 0.28,
+          "earlyContacts": 0,
+          "earlyNormalImpulse": 0,
+          "earlyAttachedSamples": 0
+        },
+        "LH": {
+          "firstTargets": [
+            -0.9545258,
+            0.9319792,
+            -1.2648288
+          ],
+          "firstActual": [
+            -0.284989536,
+            -0.170686185,
+            -0.313978672
+          ],
+          "firstStance": false,
+          "firstGround": null,
+          "earlyContacts": 0,
+          "earlyNormalImpulse": 0,
+          "earlyAttachedSamples": 0
+        },
+        "RF": {
+          "firstTargets": [
+            1.38441026,
+            0.0,
+            0.0
+          ],
+          "firstActual": [
+            -0.311499685,
+            1.31879389,
+            -0.353200525
+          ],
+          "firstStance": true,
+          "firstGround": 0.74,
+          "earlyContacts": 0,
+          "earlyNormalImpulse": 0,
+          "earlyAttachedSamples": 0
+        },
+        "RM": {
+          "firstTargets": [
+            -1.384409,
+            0.9319792,
+            -1.2648288
+          ],
+          "firstActual": [
+            7.89174652,
+            16.0483074,
+            -4.85818863
+          ],
+          "firstStance": false,
+          "firstGround": 0.399999976,
+          "earlyContacts": 0,
+          "earlyNormalImpulse": 0,
+          "earlyAttachedSamples": 0
+        },
+        "RH": {
+          "firstTargets": [
+            1.38441026,
+            0.0,
+            0.0
+          ],
+          "firstActual": [
+            1.28563988,
+            -0.289135754,
+            -0.06735292
+          ],
+          "firstStance": true,
+          "firstGround": 0.24,
+          "earlyContacts": 1,
+          "earlyNormalImpulse": 0.0,
+          "earlyAttachedSamples": 0
+        }
+      },
+      "earlyNonFootContacts": 57
+    },
+    {
+      "trial": "FORWARD_L_0_both_2",
+      "yawOnset1degSeconds": 0.32,
+      "yawAt020": -0.07021638699999999,
+      "perLeg": {
+        "LF": {
+          "firstTargets": [
+            -0.9545258,
+            0.9319792,
+            -1.2648288
+          ],
+          "firstActual": [
+            1.2062012,
+            -1.2091676,
+            -0.197183713
+          ],
+          "firstStance": false,
+          "firstGround": null,
+          "earlyContacts": 0,
+          "earlyNormalImpulse": 0,
+          "earlyAttachedSamples": 0
+        },
+        "LM": {
+          "firstTargets": [
+            0.9545268,
+            0.0,
+            0.0
+          ],
+          "firstActual": [
+            -7.759248,
+            -15.1617069,
+            3.584698
+          ],
+          "firstStance": true,
+          "firstGround": 0.28,
+          "earlyContacts": 0,
+          "earlyNormalImpulse": 0,
+          "earlyAttachedSamples": 0
+        },
+        "LH": {
+          "firstTargets": [
+            -0.9545258,
+            0.9319792,
+            -1.2648288
+          ],
+          "firstActual": [
+            -0.286051035,
+            -0.172619641,
+            -0.313991666
+          ],
+          "firstStance": false,
+          "firstGround": null,
+          "earlyContacts": 0,
+          "earlyNormalImpulse": 0,
+          "earlyAttachedSamples": 0
+        },
+        "RF": {
+          "firstTargets": [
+            1.38441026,
+            0.0,
+            0.0
+          ],
+          "firstActual": [
+            -0.359644681,
+            1.40153587,
+            -0.4061553
+          ],
+          "firstStance": true,
+          "firstGround": 0.76,
+          "earlyContacts": 0,
+          "earlyNormalImpulse": 0,
+          "earlyAttachedSamples": 0
+        },
+        "RM": {
+          "firstTargets": [
+            -1.384409,
+            0.9319792,
+            -1.2648288
+          ],
+          "firstActual": [
+            7.6157155,
+            16.4039021,
+            -5.089016
+          ],
+          "firstStance": false,
+          "firstGround": 0.399999976,
+          "earlyContacts": 0,
+          "earlyNormalImpulse": 0,
+          "earlyAttachedSamples": 0
+        },
+        "RH": {
+          "firstTargets": [
+            1.38441026,
+            0.0,
+            0.0
+          ],
+          "firstActual": [
+            1.23901749,
+            -0.187109247,
+            -0.128894567
+          ],
+          "firstStance": true,
+          "firstGround": 0.24,
+          "earlyContacts": 1,
+          "earlyNormalImpulse": 0.0,
+          "earlyAttachedSamples": 0
+        }
+      },
+      "earlyNonFootContacts": 57
+    },
+    {
+      "trial": "FORWARD_L_90_both_0",
+      "yawOnset1degSeconds": 0.299999982,
+      "yawAt020": 0.26582937700000003,
+      "perLeg": {
+        "LF": {
+          "firstTargets": [
+            -4.683278,
+            4.572655,
+            -6.205746
+          ],
+          "firstActual": [
+            0.542195,
+            -0.22298786,
+            -1.40508938
+          ],
+          "firstStance": false,
+          "firstGround": null,
+          "earlyContacts": 0,
+          "earlyNormalImpulse": 0,
+          "earlyAttachedSamples": 0
+        },
+        "LM": {
+          "firstTargets": [
+            4.68327761,
+            0.0,
+            0.0
+          ],
+          "firstActual": [
+            -7.2995,
+            -15.4888506,
+            3.736695
+          ],
+          "firstStance": true,
+          "firstGround": 0.24,
+          "earlyContacts": 1,
+          "earlyNormalImpulse": 0.0,
+          "earlyAttachedSamples": 0
+        },
+        "LH": {
+          "firstTargets": [
+            -4.683278,
+            4.572655,
+            -6.205746
+          ],
+          "firstActual": [
+            -1.09913671,
+            0.8479461,
+            -1.523736
+          ],
+          "firstStance": false,
+          "firstGround": null,
+          "earlyContacts": 0,
+          "earlyNormalImpulse": 0,
+          "earlyAttachedSamples": 0
+        },
+        "RF": {
+          "firstTargets": [
+            6.79245234,
+            0.0,
+            0.0
+          ],
+          "firstActual": [
+            1.02805459,
+            1.17546165,
+            -0.3995204
+          ],
+          "firstStance": true,
+          "firstGround": 1.33999991,
+          "earlyContacts": 0,
+          "earlyNormalImpulse": 0,
+          "earlyAttachedSamples": 0
+        },
+        "RM": {
+          "firstTargets": [
+            -6.792453,
+            4.572655,
+            -6.205746
+          ],
+          "firstActual": [
+            6.764076,
+            17.947403,
+            -6.2100234
+          ],
+          "firstStance": false,
+          "firstGround": 0.26,
+          "earlyContacts": 0,
+          "earlyNormalImpulse": 0,
+          "earlyAttachedSamples": 0
+        },
+        "RH": {
+          "firstTargets": [
+            6.79245234,
+            0.0,
+            0.0
+          ],
+          "firstActual": [
+            2.65881562,
+            -0.423606247,
+            -0.09522574
+          ],
+          "firstStance": true,
+          "firstGround": 0.599999964,
+          "earlyContacts": 0,
+          "earlyNormalImpulse": 0,
+          "earlyAttachedSamples": 0
+        }
+      },
+      "earlyNonFootContacts": 44
+    },
+    {
+      "trial": "FORWARD_L_90_both_1",
+      "yawOnset1degSeconds": 0.299999982,
+      "yawAt020": 0.23303744199999998,
+      "perLeg": {
+        "LF": {
+          "firstTargets": [
+            -4.683278,
+            4.572655,
+            -6.205746
+          ],
+          "firstActual": [
+            0.494145423,
+            -0.191104,
+            -1.41951239
+          ],
+          "firstStance": false,
+          "firstGround": null,
+          "earlyContacts": 0,
+          "earlyNormalImpulse": 0,
+          "earlyAttachedSamples": 0
+        },
+        "LM": {
+          "firstTargets": [
+            4.68327761,
+            0.0,
+            0.0
+          ],
+          "firstActual": [
+            -7.32008553,
+            -15.4654779,
+            3.71520162
+          ],
+          "firstStance": true,
+          "firstGround": 0.24,
+          "earlyContacts": 1,
+          "earlyNormalImpulse": 0.05427347,
+          "earlyAttachedSamples": 0
+        },
+        "LH": {
+          "firstTargets": [
+            -4.683278,
+            4.572655,
+            -6.205746
+          ],
+          "firstActual": [
+            -1.09874964,
+            0.844817162,
+            -1.523752
+          ],
+          "firstStance": false,
+          "firstGround": null,
+          "earlyContacts": 0,
+          "earlyNormalImpulse": 0,
+          "earlyAttachedSamples": 0
+        },
+        "RF": {
+          "firstTargets": [
+            6.79245234,
+            0.0,
+            0.0
+          ],
+          "firstActual": [
+            0.93844527,
+            1.2441957,
+            -0.419188052
+          ],
+          "firstStance": true,
+          "firstGround": 1.33999991,
+          "earlyContacts": 0,
+          "earlyNormalImpulse": 0,
+          "earlyAttachedSamples": 0
+        },
+        "RM": {
+          "firstTargets": [
+            -6.792453,
+            4.572655,
+            -6.205746
+          ],
+          "firstActual": [
+            6.736644,
+            17.9862347,
+            -6.239872
+          ],
+          "firstStance": false,
+          "firstGround": 0.24,
+          "earlyContacts": 1,
+          "earlyNormalImpulse": 0.0,
+          "earlyAttachedSamples": 0
+        },
+        "RH": {
+          "firstTargets": [
+            6.79245234,
+            0.0,
+            0.0
+          ],
+          "firstActual": [
+            2.55883527,
+            -0.338617176,
+            -0.124440446
+          ],
+          "firstStance": true,
+          "firstGround": 0.599999964,
+          "earlyContacts": 0,
+          "earlyNormalImpulse": 0,
+          "earlyAttachedSamples": 0
+        }
+      },
+      "earlyNonFootContacts": 46
+    },
+    {
+      "trial": "FORWARD_L_90_both_2",
+      "yawOnset1degSeconds": 0.299999982,
+      "yawAt020": 0.14489778800000003,
+      "perLeg": {
+        "LF": {
+          "firstTargets": [
+            -4.683278,
+            4.572655,
+            -6.205746
+          ],
+          "firstActual": [
+            0.4757833,
+            -0.19838573,
+            -1.404623
+          ],
+          "firstStance": false,
+          "firstGround": null,
+          "earlyContacts": 0,
+          "earlyNormalImpulse": 0,
+          "earlyAttachedSamples": 0
+        },
+        "LM": {
+          "firstTargets": [
+            4.68327761,
+            0.0,
+            0.0
+          ],
+          "firstActual": [
+            -7.27081776,
+            -15.5273867,
+            3.75525165
+          ],
+          "firstStance": true,
+          "firstGround": 0.24,
+          "earlyContacts": 1,
+          "earlyNormalImpulse": 0.05303165,
+          "earlyAttachedSamples": 0
+        },
+        "LH": {
+          "firstTargets": [
+            -4.683278,
+            4.572655,
+            -6.205746
+          ],
+          "firstActual": [
+            -1.09901059,
+            0.842249751,
+            -1.52376235
+          ],
+          "firstStance": false,
+          "firstGround": null,
+          "earlyContacts": 0,
+          "earlyNormalImpulse": 0,
+          "earlyAttachedSamples": 0
+        },
+        "RF": {
+          "firstTargets": [
+            6.79245234,
+            0.0,
+            0.0
+          ],
+          "firstActual": [
+            0.91879493,
+            1.23937774,
+            -0.4060846
+          ],
+          "firstStance": true,
+          "firstGround": 1.19999993,
+          "earlyContacts": 0,
+          "earlyNormalImpulse": 0,
+          "earlyAttachedSamples": 0
+        },
+        "RM": {
+          "firstTargets": [
+            -6.792453,
+            4.572655,
+            -6.205746
+          ],
+          "firstActual": [
+            6.79747629,
+            17.90533,
+            -6.182797
+          ],
+          "firstStance": false,
+          "firstGround": 0.24,
+          "earlyContacts": 1,
+          "earlyNormalImpulse": 0.0,
+          "earlyAttachedSamples": 0
+        },
+        "RH": {
+          "firstTargets": [
+            6.79245234,
+            0.0,
+            0.0
+          ],
+          "firstActual": [
+            2.52785683,
+            -0.3352759,
+            -0.113310747
+          ],
+          "firstStance": true,
+          "firstGround": 0.599999964,
+          "earlyContacts": 0,
+          "earlyNormalImpulse": 0,
+          "earlyAttachedSamples": 0
+        }
+      },
+      "earlyNonFootContacts": 46
+    },
+    {
+      "trial": "FORWARD_R_0_both_0",
+      "yawOnset1degSeconds": 0.299999982,
+      "yawAt020": 0.07617748300000005,
+      "perLeg": {
+        "LF": {
+          "firstTargets": [
+            -1.46183407,
+            0.9319792,
+            -1.2648288
+          ],
+          "firstActual": [
+            1.101596,
+            -1.24914563,
+            -0.150119856
+          ],
+          "firstStance": false,
+          "firstGround": 0.26,
+          "earlyContacts": 0,
+          "earlyNormalImpulse": 0,
+          "earlyAttachedSamples": 0
+        },
+        "LM": {
+          "firstTargets": [
+            1.4618355,
+            0.0,
+            0.0
+          ],
+          "firstActual": [
+            -7.542718,
+            -15.4322577,
+            3.758114
+          ],
+          "firstStance": true,
+          "firstGround": 0.359999985,
+          "earlyContacts": 0,
+          "earlyNormalImpulse": 0,
+          "earlyAttachedSamples": 0
+        },
+        "LH": {
+          "firstTargets": [
+            -1.46183407,
+            0.9319792,
+            -1.2648288
+          ],
+          "firstActual": [
+            -0.3980907,
+            -0.1684573,
+            -0.313851565
+          ],
+          "firstStance": false,
+          "firstGround": 0.179999992,
+          "earlyContacts": 4,
+          "earlyNormalImpulse": 0.19485530604999998,
+          "earlyAttachedSamples": 0
+        },
+        "RF": {
+          "firstTargets": [
+            0.877101541,
+            0.0,
+            0.0
+          ],
+          "firstActual": [
+            -0.43578127,
+            1.34186864,
+            -0.362459421
+          ],
+          "firstStance": true,
+          "firstGround": null,
+          "earlyContacts": 0,
+          "earlyNormalImpulse": 0,
+          "earlyAttachedSamples": 0
+        },
+        "RM": {
+          "firstTargets": [
+            -0.8771007,
+            0.9319792,
+            -1.2648288
+          ],
+          "firstActual": [
+            7.8292737,
+            16.1000443,
+            -4.87094164
+          ],
+          "firstStance": false,
+          "firstGround": 0.76,
+          "earlyContacts": 0,
+          "earlyNormalImpulse": 0,
+          "earlyAttachedSamples": 0
+        },
+        "RH": {
+          "firstTargets": [
+            0.877101541,
+            0.0,
+            0.0
+          ],
+          "firstActual": [
+            1.12771285,
+            -0.231988341,
+            -0.0812162161
+          ],
+          "firstStance": true,
+          "firstGround": null,
+          "earlyContacts": 0,
+          "earlyNormalImpulse": 0,
+          "earlyAttachedSamples": 0
+        }
+      },
+      "earlyNonFootContacts": 51
+    },
+    {
+      "trial": "FORWARD_R_0_both_1",
+      "yawOnset1degSeconds": 0.299999982,
+      "yawAt020": 0.09991276199999999,
+      "perLeg": {
+        "LF": {
+          "firstTargets": [
+            -1.46183407,
+            0.9319792,
+            -1.2648288
+          ],
+          "firstActual": [
+            1.146177,
+            -1.27624261,
+            -0.151633441
+          ],
+          "firstStance": false,
+          "firstGround": 0.26,
+          "earlyContacts": 0,
+          "earlyNormalImpulse": 0,
+          "earlyAttachedSamples": 0
+        },
+        "LM": {
+          "firstTargets": [
+            1.4618355,
+            0.0,
+            0.0
+          ],
+          "firstActual": [
+            -7.69031334,
+            -15.2638578,
+            3.675859
+          ],
+          "firstStance": true,
+          "firstGround": 0.359999985,
+          "earlyContacts": 0,
+          "earlyNormalImpulse": 0,
+          "earlyAttachedSamples": 0
+        },
+        "LH": {
+          "firstTargets": [
+            -1.46183407,
+            0.9319792,
+            -1.2648288
+          ],
+          "firstActual": [
+            -0.3957511,
+            -0.156770185,
+            -0.313827753
+          ],
+          "firstStance": false,
+          "firstGround": 0.179999992,
+          "earlyContacts": 4,
+          "earlyNormalImpulse": 0.0804616135,
+          "earlyAttachedSamples": 0
+        },
+        "RF": {
+          "firstTargets": [
+            0.877101541,
+            0.0,
+            0.0
+          ],
+          "firstActual": [
+            -0.486165553,
+            1.389984,
+            -0.380903333
+          ],
+          "firstStance": true,
+          "firstGround": null,
+          "earlyContacts": 0,
+          "earlyNormalImpulse": 0,
+          "earlyAttachedSamples": 0
+        },
+        "RM": {
+          "firstTargets": [
+            -0.8771007,
+            0.9319792,
+            -1.2648288
+          ],
+          "firstActual": [
+            7.9815073,
+            15.9642286,
+            -4.8335104
+          ],
+          "firstStance": false,
+          "firstGround": 1.19999993,
+          "earlyContacts": 0,
+          "earlyNormalImpulse": 0,
+          "earlyAttachedSamples": 0
+        },
+        "RH": {
+          "firstTargets": [
+            0.877101541,
+            0.0,
+            0.0
+          ],
+          "firstActual": [
+            1.10382271,
+            -0.220851824,
+            -0.09552923
+          ],
+          "firstStance": true,
+          "firstGround": null,
+          "earlyContacts": 0,
+          "earlyNormalImpulse": 0,
+          "earlyAttachedSamples": 0
+        }
+      },
+      "earlyNonFootContacts": 52
+    },
+    {
+      "trial": "FORWARD_R_0_both_2",
+      "yawOnset1degSeconds": 0.299999982,
+      "yawAt020": 0.06734383099999997,
+      "perLeg": {
+        "LF": {
+          "firstTargets": [
+            -1.46183407,
+            0.9319792,
+            -1.2648288
+          ],
+          "firstActual": [
+            1.14909422,
+            -1.29058075,
+            -0.137625948
+          ],
+          "firstStance": false,
+          "firstGround": 0.26,
+          "earlyContacts": 0,
+          "earlyNormalImpulse": 0,
+          "earlyAttachedSamples": 0
+        },
+        "LM": {
+          "firstTargets": [
+            1.4618355,
+            0.0,
+            0.0
+          ],
+          "firstActual": [
+            -7.511122,
+            -15.4982643,
+            3.81805968
+          ],
+          "firstStance": true,
+          "firstGround": 0.359999985,
+          "earlyContacts": 0,
+          "earlyNormalImpulse": 0,
+          "earlyAttachedSamples": 0
+        },
+        "LH": {
+          "firstTargets": [
+            -1.46183407,
+            0.9319792,
+            -1.2648288
+          ],
+          "firstActual": [
+            -0.399538159,
+            -0.17076081,
+            -0.313876331
+          ],
+          "firstStance": false,
+          "firstGround": 0.179999992,
+          "earlyContacts": 4,
+          "earlyNormalImpulse": 0.18545022383700002,
+          "earlyAttachedSamples": 0
+        },
+        "RF": {
+          "firstTargets": [
+            0.877101541,
+            0.0,
+            0.0
+          ],
+          "firstActual": [
+            -0.4190181,
+            1.33118629,
+            -0.356028855
+          ],
+          "firstStance": true,
+          "firstGround": null,
+          "earlyContacts": 0,
+          "earlyNormalImpulse": 0,
+          "earlyAttachedSamples": 0
+        },
+        "RM": {
+          "firstTargets": [
+            -0.8771007,
+            0.9319792,
+            -1.2648288
+          ],
+          "firstActual": [
+            7.87419558,
+            16.0524979,
+            -4.84596443
+          ],
+          "firstStance": false,
+          "firstGround": 0.76,
+          "earlyContacts": 0,
+          "earlyNormalImpulse": 0,
+          "earlyAttachedSamples": 0
+        },
+        "RH": {
+          "firstTargets": [
+            0.877101541,
+            0.0,
+            0.0
+          ],
+          "firstActual": [
+            1.16041207,
+            -0.259195864,
+            -0.0701518059
+          ],
+          "firstStance": true,
+          "firstGround": null,
+          "earlyContacts": 0,
+          "earlyNormalImpulse": 0,
+          "earlyAttachedSamples": 0
+        }
+      },
+      "earlyNonFootContacts": 51
+    },
+    {
+      "trial": "FORWARD_R_90_both_0",
+      "yawOnset1degSeconds": 0.399999976,
+      "yawAt020": -0.7359947460000171,
+      "perLeg": {
+        "LF": {
+          "firstTargets": [
+            -7.172331,
+            4.572655,
+            -6.205746
+          ],
+          "firstActual": [
+            -0.132740349,
+            -0.1141902,
+            -1.41817153
+          ],
+          "firstStance": false,
+          "firstGround": 0.56,
+          "earlyContacts": 0,
+          "earlyNormalImpulse": 0,
+          "earlyAttachedSamples": 0
+        },
+        "LM": {
+          "firstTargets": [
+            7.17233038,
+            0.0,
+            0.0
+          ],
+          "firstActual": [
+            -6.839712,
+            -16.05968,
+            4.05673456
+          ],
+          "firstStance": true,
+          "firstGround": 0.24,
+          "earlyContacts": 1,
+          "earlyNormalImpulse": 0.08220155,
+          "earlyAttachedSamples": 0
+        },
+        "LH": {
+          "firstTargets": [
+            -7.172331,
+            4.572655,
+            -6.205746
+          ],
+          "firstActual": [
+            -1.65378547,
+            0.8738096,
+            -1.52312768
+          ],
+          "firstStance": false,
+          "firstGround": 0.62,
+          "earlyContacts": 0,
+          "earlyNormalImpulse": 0,
+          "earlyAttachedSamples": 0
+        },
+        "RF": {
+          "firstTargets": [
+            4.30339956,
+            0.0,
+            0.0
+          ],
+          "firstActual": [
+            0.370519727,
+            1.29570568,
+            -0.4221547
+          ],
+          "firstStance": true,
+          "firstGround": null,
+          "earlyContacts": 0,
+          "earlyNormalImpulse": 0,
+          "earlyAttachedSamples": 0
+        },
+        "RM": {
+          "firstTargets": [
+            -4.30339956,
+            4.572655,
+            -6.205746
+          ],
+          "firstActual": [
+            7.023033,
+            17.6063461,
+            -5.9853425
+          ],
+          "firstStance": false,
+          "firstGround": 0.16,
+          "earlyContacts": 1,
+          "earlyNormalImpulse": 0.0,
+          "earlyAttachedSamples": 0
+        },
+        "RH": {
+          "firstTargets": [
+            4.30339956,
+            0.0,
+            0.0
+          ],
+          "firstActual": [
+            1.88604343,
+            -0.223515376,
+            -0.123615019
+          ],
+          "firstStance": true,
+          "firstGround": null,
+          "earlyContacts": 0,
+          "earlyNormalImpulse": 0,
+          "earlyAttachedSamples": 0
+        }
+      },
+      "earlyNonFootContacts": 47
+    },
+    {
+      "trial": "FORWARD_R_90_both_1",
+      "yawOnset1degSeconds": 0.399999976,
+      "yawAt020": -0.7580017999999882,
+      "perLeg": {
+        "LF": {
+          "firstTargets": [
+            -7.172331,
+            4.572655,
+            -6.205746
+          ],
+          "firstActual": [
+            -0.11519029,
+            -0.11846526,
+            -1.42241144
+          ],
+          "firstStance": false,
+          "firstGround": 0.56,
+          "earlyContacts": 0,
+          "earlyNormalImpulse": 0,
+          "earlyAttachedSamples": 0
+        },
+        "LM": {
+          "firstTargets": [
+            7.17233038,
+            0.0,
+            0.0
+          ],
+          "firstActual": [
+            -6.87282658,
+            -16.024456,
+            4.040591
+          ],
+          "firstStance": true,
+          "firstGround": 0.24,
+          "earlyContacts": 1,
+          "earlyNormalImpulse": 0.08377688,
+          "earlyAttachedSamples": 0
+        },
+        "LH": {
+          "firstTargets": [
+            -7.172331,
+            4.572655,
+            -6.205746
+          ],
+          "firstActual": [
+            -1.65278769,
+            0.8761904,
+            -1.523113
+          ],
+          "firstStance": false,
+          "firstGround": 0.62,
+          "earlyContacts": 0,
+          "earlyNormalImpulse": 0,
+          "earlyAttachedSamples": 0
+        },
+        "RF": {
+          "firstTargets": [
+            4.30339956,
+            0.0,
+            0.0
+          ],
+          "firstActual": [
+            0.378970921,
+            1.2983582,
+            -0.427809745
+          ],
+          "firstStance": true,
+          "firstGround": 7.18,
+          "earlyContacts": 0,
+          "earlyNormalImpulse": 0,
+          "earlyAttachedSamples": 0
+        },
+        "RM": {
+          "firstTargets": [
+            -4.30339956,
+            4.572655,
+            -6.205746
+          ],
+          "firstActual": [
+            7.014723,
+            17.6245518,
+            -6.00532627
+          ],
+          "firstStance": false,
+          "firstGround": 0.16,
+          "earlyContacts": 2,
+          "earlyNormalImpulse": 0.0,
+          "earlyAttachedSamples": 0
+        },
+        "RH": {
+          "firstTargets": [
+            4.30339956,
+            0.0,
+            0.0
+          ],
+          "firstActual": [
+            1.90424442,
+            -0.2309407,
+            -0.127250642
+          ],
+          "firstStance": true,
+          "firstGround": null,
+          "earlyContacts": 0,
+          "earlyNormalImpulse": 0,
+          "earlyAttachedSamples": 0
+        }
+      },
+      "earlyNonFootContacts": 47
+    },
+    {
+      "trial": "FORWARD_R_90_both_2",
+      "yawOnset1degSeconds": 0.38,
+      "yawAt020": -0.6826184519999856,
+      "perLeg": {
+        "LF": {
+          "firstTargets": [
+            -7.172331,
+            4.572655,
+            -6.205746
+          ],
+          "firstActual": [
+            -0.04071871,
+            -0.159930483,
+            -1.41877115
+          ],
+          "firstStance": false,
+          "firstGround": 0.56,
+          "earlyContacts": 0,
+          "earlyNormalImpulse": 0,
+          "earlyAttachedSamples": 0
+        },
+        "LM": {
+          "firstTargets": [
+            7.17233038,
+            0.0,
+            0.0
+          ],
+          "firstActual": [
+            -6.940515,
+            -15.93121,
+            3.98669863
+          ],
+          "firstStance": true,
+          "firstGround": 0.24,
+          "earlyContacts": 1,
+          "earlyNormalImpulse": 0.08215865,
+          "earlyAttachedSamples": 0
+        },
+        "LH": {
+          "firstTargets": [
+            -7.172331,
+            4.572655,
+            -6.205746
+          ],
+          "firstActual": [
+            -1.65221047,
+            0.883098543,
+            -1.52310956
+          ],
+          "firstStance": false,
+          "firstGround": 0.62,
+          "earlyContacts": 0,
+          "earlyNormalImpulse": 0,
+          "earlyAttachedSamples": 0
+        },
+        "RF": {
+          "firstTargets": [
+            4.30339956,
+            0.0,
+            0.0
+          ],
+          "firstActual": [
+            0.413864017,
+            1.28596091,
+            -0.430887818
+          ],
+          "firstStance": true,
+          "firstGround": null,
+          "earlyContacts": 0,
+          "earlyNormalImpulse": 0,
+          "earlyAttachedSamples": 0
+        },
+        "RM": {
+          "firstTargets": [
+            -4.30339956,
+            4.572655,
+            -6.205746
+          ],
+          "firstActual": [
+            7.088904,
+            17.5597858,
+            -5.986389
+          ],
+          "firstStance": false,
+          "firstGround": 2.44,
+          "earlyContacts": 0,
+          "earlyNormalImpulse": 0,
+          "earlyAttachedSamples": 0
+        },
+        "RH": {
+          "firstTargets": [
+            4.30339956,
+            0.0,
+            0.0
+          ],
+          "firstActual": [
+            1.962822,
+            -0.275036871,
+            -0.119505048
+          ],
+          "firstStance": true,
+          "firstGround": null,
+          "earlyContacts": 0,
+          "earlyNormalImpulse": 0,
+          "earlyAttachedSamples": 0
+        }
+      },
+      "earlyNonFootContacts": 47
+    }
+  ]
+}

@@ -1,0 +1,30 @@
+[
+  {
+    "action": "FORWARD_L",
+    "phase": 0,
+    "yaw2Mean": -38.722532482999995,
+    "yaw8Mean": -127.32917614966665,
+    "falls": 0
+  },
+  {
+    "action": "FORWARD_L",
+    "phase": 90,
+    "yaw2Mean": 48.730128391,
+    "yaw8Mean": 186.919775291,
+    "falls": 0
+  },
+  {
+    "action": "FORWARD_R",
+    "phase": 0,
+    "yaw2Mean": 47.03900562533333,
+    "yaw8Mean": 237.165467992,
+    "falls": 0
+  },
+  {
+    "action": "FORWARD_R",
+    "phase": 90,
+    "yaw2Mean": 36.315473848333326,
+    "yaw8Mean": 135.001817115,
+    "falls": 0
+  }
+]

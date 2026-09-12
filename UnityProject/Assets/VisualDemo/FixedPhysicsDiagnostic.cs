@@ -26,7 +26,7 @@ namespace FlyVisualDemo
         public string Trial;
         public float Elapsed;
         public bool Recording;
-        StreamWriter legs,contacts,bodyLog,resetLog,rig,pairs;
+        StreamWriter legs,contacts,bodyLog,resetLog,rig,pairs,support;
         string output,fixtures;
         float started;
         int ticks;
@@ -50,6 +50,8 @@ namespace FlyVisualDemo
         void Awake()
         {
             output=WindowsReplayDemo.Argument("-demoOutput");fixtures=WindowsReplayDemo.Argument("-fixedFixtures");Directory.CreateDirectory(output);
+            support=new StreamWriter(Path.Combine(output,"support.csv")){AutoFlush=true};
+            support.WriteLine("trial,t,stage,leg,fixedTime,lastContactFixedTime,contactAge,source,holdTicks,fresh,commandStance,adhesionFixedTime,consumedStance,consumedContact,consumedHoldTicks,attached,normalForce,shearForce,nx,ny,nz,px,py,pz,velocityMeaning,targetCoxa,targetFemur,targetTibia");
             legs=new StreamWriter(Path.Combine(output,"legs.csv")){AutoFlush=true};
             contacts=new StreamWriter(Path.Combine(output,"contacts.csv")){AutoFlush=true};
             bodyLog=new StreamWriter(Path.Combine(output,"body.csv")){AutoFlush=true};
@@ -60,7 +62,8 @@ namespace FlyVisualDemo
             contacts.WriteLine("trial,t,owner,leg,thisCollider,otherCollider,px,py,pz,nx,ny,nz,rawIx,rawIy,rawIz,ix,iy,iz,normalImpulse,tangentImpulse,rvx,rvy,rvz,yawImpulse");
             bodyLog.WriteLine("trial,t,x,y,z,yaw,vx,vy,vz,yawRate,comx,comy,comz,phase,fall,totalWorldLy,dampingYawImpulseEstimate");
             string batch=WindowsReplayDemo.Argument("-diagnosticBatch");
-            if(batch=="phase")for(int p=0;p<360;p+=45)for(int n=0;n<3;n++)cases.Add("FORWARD_L_"+p+"_both_"+n);
+            if(batch=="steering")foreach(string a in new[]{"FORWARD_L","FORWARD_R"})foreach(int p in new[]{0,90})for(int n=0;n<3;n++)cases.Add(a+"_"+p+"_both_"+n);
+            else if(batch=="phase")for(int p=0;p<360;p+=45)for(int n=0;n<3;n++)cases.Add("FORWARD_L_"+p+"_both_"+n);
             else if(batch=="ablation")foreach(string mode in new[]{"off","normal","shear","both"})for(int n=0;n<3;n++)cases.Add("FORWARD_L_90_"+mode+"_"+n);
             else if(batch=="repro")for(int n=0;n<5;n++)cases.Add("FORWARD_L_90_both_"+n);
             else foreach(string a in new[]{"TURN_L","FORWARD","FORWARD_L","TURN_R","FORWARD_R"})for(int n=0;n<5;n++)cases.Add(a+"_0_both_"+n);
@@ -76,7 +79,14 @@ namespace FlyVisualDemo
             foreach(var b in Demo.GetComponents<MonoBehaviour>())if(b!=Demo.controller && b!=Demo.replay && b!=Demo.live && b!=Demo.client)b.enabled=false;
             // The component only observes/sets explicit trial initial conditions. Production gait stays enabled.
             config=Read<FlyLocomotionConfig>(Demo.controller,"config");
+            string amplitude=WindowsReplayDemo.Argument("-diagnosticCoxaAmplitude");
+            string smoothing=WindowsReplayDemo.Argument("-diagnosticMotorSmoothing");
+            if(!string.IsNullOrEmpty(amplitude)||!string.IsNullOrEmpty(smoothing))config=Instantiate(config);
+            if(!string.IsNullOrEmpty(amplitude))config.coxaStrideAmplitudeDegrees=float.Parse(amplitude,CultureInfo.InvariantCulture);
+            if(!string.IsNullOrEmpty(smoothing))config.motorSmoothingSeconds=float.Parse(smoothing,CultureInfo.InvariantCulture);
             source=Demo.gameObject.AddComponent<FixedDiagnosticReplay>();Demo.controller.Configure(Demo.body,source,config);
+            Demo.controller.DiagnosticSeparateSteering=WindowsReplayDemo.Flag("-diagnosticSeparateSteering");
+            if (float.TryParse(WindowsReplayDemo.Argument("-diagnosticJoinSeconds"), NumberStyles.Float, CultureInfo.InvariantCulture, out float joinSeconds)) Demo.controller.DiagnosticJoinSeconds=joinSeconds;
             Time.timeScale=5;Time.fixedDeltaTime=.02f;
             if(!captured){Recording=false;StartCoroutine(CaptureInitial());return;}
             SetupTrial();
@@ -110,6 +120,9 @@ namespace FlyVisualDemo
             }
             Physics.SyncTransforms();
             resetLog.WriteLine(JsonUtility.ToJson(new ResetRow{trial=Trial,position=position,rotation=rotation,linearVelocity=root.linearVelocity,angularVelocity=root.angularVelocity,jointPositions=GetPositions(root),jointVelocities=GetVelocities(root),phase=Demo.controller.Phase,attached=Demo.body.Legs.Count(l=>l.FootAdhesion.Attached)}));
+            foreach (var leg in Demo.body.Legs)
+                leg.FootAdhesion.DiagnosticDrivenByController=WindowsReplayDemo.Flag("-diagnosticOrderedAdhesion");
+            Demo.controller.DiagnosticTargetObserved += ObserveTarget;
             ticks=0;started=Time.fixedTime;Elapsed=0;Recording=true;StartCoroutine(RecordTicks());
         }
         static float[] GetPositions(ArticulationBody root){var l=new List<float>();root.GetJointPositions(l);return l.ToArray();}
@@ -127,10 +140,22 @@ namespace FlyVisualDemo
             Recording=false;Debug.Log("FIXED_DIAGNOSTIC_DONE "+Trial);
             if(++caseIndex<cases.Count)SceneManager.LoadScene(SceneManager.GetActiveScene().path);else {Close();Application.Quit();}
         }
+        void ObserveTarget(FlyLeg leg, FlyLeg.LegDriveTarget target)
+        {
+            if (Recording) RecordSupport(leg,target.stance,target.angles,"BEFORE_APPLY");
+        }
+        void RecordSupport(FlyLeg leg,bool stance,Vector3 target,string stage)
+        {
+            var c=leg.FootContact;var a=leg.FootAdhesion;
+            var n=c.SurfaceNormal;var p=c.SurfaceContactPoint;
+            string age=float.IsNegativeInfinity(c.LastContactFixedTime)?"":F(Time.fixedTime-c.LastContactFixedTime);
+            support.WriteLine(string.Join(",",new[]{Trial,F(Time.fixedTime-started),stage,leg.LegId,F(Time.fixedTime),F(c.LastContactFixedTime),age,c.ContactObservationSource,c.RemainingContactHoldTicks.ToString(),c.HasFreshSurfaceContact?"1":"0",stance?"1":"0",F(a.LastEvaluationFixedTime),a.LastEvaluatedStance?"1":"0",a.LastEvaluatedContact?"1":"0",a.LastEvaluatedHoldTicks.ToString(),a.Attached?"1":"0",F(a.NormalForceNewtons),F(a.ShearForceNewtons),F(n.x),F(n.y),F(n.z),F(p.x),F(p.y),F(p.z),c.ContactObservationSource=="ARTICULATION_OWNER"?"OWNER_LINEAR_NOT_POINT_RELATIVE":"COLLISION_RELATIVE_NOT_POINT_VERIFIED",F(target.x),F(target.y),F(target.z)}));
+        }
         void RecordLeg(FlyLeg l)
         {
             var m=Demo.controller.CurrentMotor;float offset=l.Group==FlyLeg.TripodGroup.A?0:Mathf.PI;float ph=Demo.controller.EffectivePhase+offset;
-            float scale=config.SideScale(l.LeftSide,m.turn),unclamped=l.LeftSide?1-config.turnSign*m.turn*config.steeringGain:1+config.turnSign*m.turn*config.steeringGain;
+            float scale=config.SideScale(l.LeftSide,Demo.controller.TrajectoryTurn),unclamped=l.LeftSide?1-config.turnSign*Demo.controller.TrajectoryTurn*config.steeringGain:1+config.turnSign*Demo.controller.TrajectoryTurn*config.steeringGain;
+            RecordSupport(l,Mathf.Sin(ph)<=0,new Vector3(l.LastCorrectedCoxaTarget,l.LastCorrectedFemurTarget,l.LastCorrectedTibiaTarget),"POST_PHYSICS");
             float drive=Mathf.Max(Mathf.Abs(m.forward),Mathf.Abs(m.turn)*config.turnGaitContribution);
             var a=l.FootAdhesion;var force=a.NormalForceNewtons==0&&a.ShearForceNewtons==0?Vector3.zero:Read<Vector3>(a,"lastAdhesionForce");
             float yawImpulse=Vector3.Cross(l.FootContact.SurfaceContactPoint-Demo.body.Thorax.worldCenterOfMass,force*.02f).y;
@@ -172,7 +197,7 @@ namespace FlyVisualDemo
             public string name,type;public Vector3 position,scale,center,size;public Quaternion rotation;public float radius,height;public int direction;
             public ColliderRow(Collider c){name=c.name;type=c.GetType().Name;position=c.transform.localPosition;rotation=c.transform.localRotation;scale=c.transform.localScale;if(c is CapsuleCollider capsule){center=capsule.center;radius=capsule.radius;height=capsule.height;direction=capsule.direction;}else if(c is SphereCollider sphere){center=sphere.center;radius=sphere.radius;}else if(c is BoxCollider box){center=box.center;size=box.size;}}
         }
-        void Close(){SceneManager.sceneLoaded-=Loaded;legs?.Dispose();contacts?.Dispose();bodyLog?.Dispose();resetLog?.Dispose();rig?.Dispose();pairs?.Dispose();}
+        void Close(){SceneManager.sceneLoaded-=Loaded;legs?.Dispose();contacts?.Dispose();bodyLog?.Dispose();resetLog?.Dispose();rig?.Dispose();pairs?.Dispose();support?.Dispose();}
         void OnDestroy(){if(Current==this)Close();}
     }
     public sealed class DiagnosticContactObserver : MonoBehaviour

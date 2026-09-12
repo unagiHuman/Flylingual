@@ -48,40 +48,60 @@ namespace FlyLocomotionPoC
             footAdhesion = adhesion;
         }
 
-        public void ApplyTrajectory(float globalPhase, in FlyMotorCommand motor, FlyLocomotionConfig config,
+        public struct LegDriveTarget
+        {
+            public Vector3 baseAngles, angles;
+            public bool stance;
+            public float stanceProgress;
+        }
+
+        // Pure calculation: does not write joints or adhesion state.
+        public LegDriveTarget CalculateNominalTargets(float globalPhase, in FlyMotorCommand motor, FlyLocomotionConfig config,
                                     float coxaOffsetDegrees = 0f, float femurOffsetDegrees = 0f, float tibiaOffsetDegrees = 0f,
-                                    float stanceCoxaMultiplier = 1f)
+                                    float stanceCoxaMultiplier = 1f, float steeringTurn = float.NaN)
         {
             float legPhase = group == TripodGroup.A ? globalPhase : globalPhase + Mathf.PI;
             float strideWave = Mathf.Sin(legPhase);
-            if (footAdhesion != null)
-            {
-                float stanceProgress = strideWave <= 0f
-                    ? Mathf.Clamp01(Mathf.Repeat(legPhase - Mathf.PI, 2f * Mathf.PI) / Mathf.PI)
-                    : 0f;
-                footAdhesion.SetStance(strideWave <= 0f, stanceProgress);
-            }
+            bool stance = strideWave <= 0f;
+            float stanceProgress = stance ? Mathf.Clamp01(Mathf.Repeat(legPhase - Mathf.PI, 2f * Mathf.PI) / Mathf.PI) : 0f;
             float swingWave = Mathf.Max(0f, strideWave);
-            float sideScale = config.SideScale(leftSide,motor.turn);
-
-            // Turning must still produce a tripod gait when forward is zero.
-            // The differential side scale supplies the yaw bias.
+            float sideScale = config.SideScale(leftSide,float.IsNaN(steeringTurn) ? motor.turn : steeringTurn);
             float gaitDrive = Mathf.Max(Mathf.Abs(motor.forward), Mathf.Abs(motor.turn) * config.turnGaitContribution);
             float stride = -strideWave * config.coxaStrideAmplitudeDegrees * gaitDrive * sideScale;
-            LastBaseCoxaTarget = stride;
-            if (strideWave <= 0f)
-            {
-                stride *= Mathf.Max(1f, stanceCoxaMultiplier);
-            }
-            LastCorrectedCoxaTarget = stride + coxaOffsetDegrees;
+            float baseCoxa = stride;
+            if (stance) stride *= Mathf.Max(1f, stanceCoxaMultiplier);
             float lift = swingWave * gaitDrive;
+            float femurBase = lift * config.femurLiftAmplitudeDegrees;
+            float tibiaBase = -lift * config.tibiaLiftAmplitudeDegrees;
+            return new LegDriveTarget {
+                baseAngles = new Vector3(baseCoxa, femurBase, tibiaBase),
+                angles = new Vector3(stride + coxaOffsetDegrees, femurBase + femurOffsetDegrees, tibiaBase + tibiaOffsetDegrees),
+                stance = stance, stanceProgress = stanceProgress
+            };
+        }
+
+        // Single owner of stance and articulation command writes.
+        public void ApplyDriveTargets(in LegDriveTarget target)
+        {
+            if (footAdhesion != null) footAdhesion.SetStance(target.stance, target.stanceProgress);
+            LastBaseCoxaTarget = target.baseAngles.x;
+            LastCorrectedCoxaTarget = target.angles.x;
             coxa.SetTarget(LastCorrectedCoxaTarget);
-            LastBaseFemurTarget = lift * config.femurLiftAmplitudeDegrees;
-            LastCorrectedFemurTarget = LastBaseFemurTarget + femurOffsetDegrees;
-            LastBaseTibiaTarget = -lift * config.tibiaLiftAmplitudeDegrees;
-            LastCorrectedTibiaTarget = LastBaseTibiaTarget + tibiaOffsetDegrees;
+            LastBaseFemurTarget = target.baseAngles.y;
+            LastCorrectedFemurTarget = target.angles.y;
+            LastBaseTibiaTarget = target.baseAngles.z;
+            LastCorrectedTibiaTarget = target.angles.z;
             femur.SetTarget(LastCorrectedFemurTarget);
             tibia.SetTarget(LastCorrectedTibiaTarget);
+        }
+
+        public void ApplyTrajectory(float globalPhase, in FlyMotorCommand motor, FlyLocomotionConfig config,
+                                    float coxaOffsetDegrees = 0f, float femurOffsetDegrees = 0f, float tibiaOffsetDegrees = 0f,
+                                    float stanceCoxaMultiplier = 1f, float steeringTurn = float.NaN)
+        {
+            var target = CalculateNominalTargets(globalPhase, motor, config, coxaOffsetDegrees, femurOffsetDegrees,
+                                                tibiaOffsetDegrees, stanceCoxaMultiplier, steeringTurn);
+            ApplyDriveTargets(target);
         }
     }
 }

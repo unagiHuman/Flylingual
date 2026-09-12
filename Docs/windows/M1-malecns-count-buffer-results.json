@@ -1,0 +1,269 @@
+{
+  "exactWindows": 168,
+  "seeds": [
+    20270101,
+    20270102,
+    20270103
+  ],
+  "complete": true,
+  "baselineMeanMs": 646.7441499996875,
+  "candidateMeanMs": 460.7186714295364,
+  "unity": {
+    "frames": 136,
+    "errors": [],
+    "sequenceIncreasing": true,
+    "metadataMismatch": 0,
+    "actions": [
+      {
+        "action": "STOP",
+        "sentUtc": "2026-09-12T01:29:25.3289591Z",
+        "frames": 1,
+        "firstCorrespondingMs": null,
+        "firstZeroMotorMs": 496.682
+      },
+      {
+        "action": "FORWARD",
+        "sentUtc": "2026-09-12T01:29:25.8276445Z",
+        "frames": 13,
+        "firstCorrespondingMs": 1124.82,
+        "firstZeroMotorMs": null
+      },
+      {
+        "action": "STOP",
+        "sentUtc": "2026-09-12T01:29:33.8429919Z",
+        "frames": 10,
+        "firstCorrespondingMs": 996.168,
+        "firstZeroMotorMs": 3378.424
+      },
+      {
+        "action": "TURN_R",
+        "sentUtc": "2026-09-12T01:29:39.9595396Z",
+        "frames": 14,
+        "firstCorrespondingMs": 810.858,
+        "firstZeroMotorMs": null
+      },
+      {
+        "action": "STOP",
+        "sentUtc": "2026-09-12T01:29:47.9707582Z",
+        "frames": 10,
+        "firstCorrespondingMs": 1141.246,
+        "firstZeroMotorMs": 2311.18
+      },
+      {
+        "action": "TURN_L",
+        "sentUtc": "2026-09-12T01:29:54.2803414Z",
+        "frames": 14,
+        "firstCorrespondingMs": 629.2370000000001,
+        "firstZeroMotorMs": null
+      },
+      {
+        "action": "STOP",
+        "sentUtc": "2026-09-12T01:30:02.2946897Z",
+        "frames": 9,
+        "firstCorrespondingMs": 742.15,
+        "firstZeroMotorMs": 2380.902
+      },
+      {
+        "action": "FORWARD_R",
+        "sentUtc": "2026-09-12T01:30:07.0962360Z",
+        "frames": 13,
+        "firstCorrespondingMs": 1128.853,
+        "firstZeroMotorMs": null
+      },
+      {
+        "action": "STOP",
+        "sentUtc": "2026-09-12T01:30:15.1102407Z",
+        "frames": 10,
+        "firstCorrespondingMs": 887.98,
+        "firstZeroMotorMs": 3664.147
+      },
+      {
+        "action": "FORWARD_L",
+        "sentUtc": "2026-09-12T01:30:20.6732839Z",
+        "frames": 14,
+        "firstCorrespondingMs": 872.899,
+        "firstZeroMotorMs": null
+      },
+      {
+        "action": "STOP",
+        "sentUtc": "2026-09-12T01:30:28.6839993Z",
+        "frames": 27,
+        "firstCorrespondingMs": 777.74,
+        "firstZeroMotorMs": 3434.444
+      }
+    ],
+    "staleSamples": 0,
+    "motionSamples": 1302,
+    "maxFrameAgeSeconds": 0.7025716,
+    "events": [
+      "2026-09-12T01:29:24.7884577Z t=2.09770632 START endpoint=127.0.0.1:18766",
+      "2026-09-12T01:29:25.3259515Z t=2.634599 INPUT STOP",
+      "2026-09-12T01:29:25.8266427Z t=3.13602376 INITIAL_STOP_PASS",
+      "2026-09-12T01:29:25.8276445Z t=3.13625121 INPUT FORWARD",
+      "2026-09-12T01:29:33.8419813Z t=11.151248 FORWARD_OBSERVED distance=0.6930535",
+      "2026-09-12T01:29:33.8419813Z t=11.1514359 INPUT STOP",
+      "2026-09-12T01:29:39.9595396Z t=17.26808 PHYSICAL_STOP_CONFIRMED elapsed=6.116438 criterion=pose_0.01_yaw_1deg",
+      "2026-09-12T01:29:39.9595396Z t=17.26826 BASIC_GATE_PASS",
+      "2026-09-12T01:29:39.9595396Z t=17.268343 INPUT TURN_R",
+      "2026-09-12T01:29:47.9692212Z t=25.27867 TURN_R_OBSERVED distance=0.142829761",
+      "2026-09-12T01:29:47.9702345Z t=25.2792053 INPUT STOP",
+      "2026-09-12T01:29:54.2793352Z t=31.5885811 PHYSICAL_STOP_CONFIRMED elapsed=6.309099 criterion=pose_0.01_yaw_1deg",
+      "2026-09-12T01:29:54.2803414Z t=31.588789 INPUT TURN_L",
+      "2026-09-12T01:30:02.2946897Z t=39.60316 TURN_L_OBSERVED distance=-0.882470548",
+      "2026-09-12T01:30:02.2946897Z t=39.603302 INPUT STOP",
+      "2026-09-12T01:30:07.0962360Z t=44.40549 PHYSICAL_STOP_CONFIRMED elapsed=4.80197525 criterion=pose_0.01_yaw_1deg",
+      "2026-09-12T01:30:07.0962360Z t=44.4056664 INPUT FORWARD_R",
+      "2026-09-12T01:30:15.1102407Z t=52.41888 FORWARD_R_OBSERVED distance=0.321760565",
+      "2026-09-12T01:30:15.1102407Z t=52.4191132 INPUT STOP",
+      "2026-09-12T01:30:20.6732839Z t=57.982193 PHYSICAL_STOP_CONFIRMED elapsed=5.5628624 criterion=pose_0.01_yaw_1deg",
+      "2026-09-12T01:30:20.6732839Z t=57.98235 INPUT FORWARD_L",
+      "2026-09-12T01:30:28.6834952Z t=65.9921951 FORWARD_L_OBSERVED distance=2.54792738",
+      "2026-09-12T01:30:28.6839993Z t=65.99235 INPUT STOP",
+      "2026-09-12T01:30:43.6876243Z t=80.99672 FAIL physical_stop_timeout"
+    ],
+    "bodyResponses": [
+      {
+        "action": "STOP",
+        "inputTime": 2.634599,
+        "observedSeconds": 0.5013389999999998,
+        "onsetPoseThresholdSeconds": null,
+        "stopPoseWindowStartSeconds": null,
+        "displacement": 0.0,
+        "yawDelta": 0
+      },
+      {
+        "action": "FORWARD",
+        "inputTime": 3.13625121,
+        "observedSeconds": 8.01493379,
+        "onsetPoseThresholdSeconds": 0.13211464999999967,
+        "stopPoseWindowStartSeconds": null,
+        "displacement": 1.072965294194423,
+        "yawDelta": 38.39680700000002
+      },
+      {
+        "action": "STOP",
+        "inputTime": 11.1514359,
+        "observedSeconds": 6.0999088000000015,
+        "onsetPoseThresholdSeconds": null,
+        "stopPoseWindowStartSeconds": 3.9020141000000006,
+        "displacement": 0.4301195548421534,
+        "yawDelta": 18.193302700000004
+      },
+      {
+        "action": "TURN_R",
+        "inputTime": 17.268343,
+        "observedSeconds": 7.976524299999998,
+        "onsetPoseThresholdSeconds": 3.5728530999999997,
+        "stopPoseWindowStartSeconds": null,
+        "displacement": 0.43138595356892945,
+        "yawDelta": 54.652256200000004
+      },
+      {
+        "action": "STOP",
+        "inputTime": 25.2792053,
+        "observedSeconds": 6.276086799999998,
+        "onsetPoseThresholdSeconds": null,
+        "stopPoseWindowStartSeconds": 4.1083526999999975,
+        "displacement": 0.13959692123693793,
+        "yawDelta": 38.55924200000001
+      },
+      {
+        "action": "TURN_L",
+        "inputTime": 31.588789,
+        "observedSeconds": 8.014301000000003,
+        "onsetPoseThresholdSeconds": 1.6553973999999982,
+        "stopPoseWindowStartSeconds": null,
+        "displacement": 1.2375644790201539,
+        "yawDelta": -83.227406
+      },
+      {
+        "action": "STOP",
+        "inputTime": 39.603302,
+        "observedSeconds": 4.768425000000001,
+        "onsetPoseThresholdSeconds": null,
+        "stopPoseWindowStartSeconds": 2.5886780000000016,
+        "displacement": 0.28376144059077124,
+        "yawDelta": -20.167695099999996
+      },
+      {
+        "action": "FORWARD_R",
+        "inputTime": 44.4056664,
+        "observedSeconds": 7.963211000000001,
+        "onsetPoseThresholdSeconds": 2.114440899999998,
+        "stopPoseWindowStartSeconds": null,
+        "displacement": 2.058939117517735,
+        "yawDelta": 29.039623300000002
+      },
+      {
+        "action": "STOP",
+        "inputTime": 52.4191132,
+        "observedSeconds": 5.529659200000005,
+        "onsetPoseThresholdSeconds": null,
+        "stopPoseWindowStartSeconds": 3.716140700000004,
+        "displacement": 1.6569413170237426,
+        "yawDelta": 62.10688999999999
+      },
+      {
+        "action": "FORWARD_L",
+        "inputTime": 57.98235,
+        "observedSeconds": 7.97672,
+        "onsetPoseThresholdSeconds": 1.1706232000000014,
+        "stopPoseWindowStartSeconds": null,
+        "displacement": 4.591586019730892,
+        "yawDelta": 33.302520000000015
+      },
+      {
+        "action": "STOP",
+        "inputTime": 65.99235,
+        "observedSeconds": 14.95447,
+        "onsetPoseThresholdSeconds": null,
+        "stopPoseWindowStartSeconds": null,
+        "displacement": 561.006131761226,
+        "yawDelta": -32.55606
+      }
+    ],
+    "poseSegments": [
+      {
+        "stage": "0",
+        "rows": 2,
+        "startTime": 2.63120461,
+        "endTime": 3.135938,
+        "displacement": {
+          "x": 0.0003097838881,
+          "y": -0.008768679999999973,
+          "z": -0.0020053579899999997
+        },
+        "yawDelta": -0.007019000000013875
+      },
+      {
+        "stage": "1",
+        "rows": 668,
+        "startTime": 3.20170617,
+        "endTime": 65.95907,
+        "displacement": {
+          "x": 7.508746967947,
+          "y": -4.0235381199999996,
+          "z": -0.119405474
+        },
+        "yawDelta": 173.45884700000005
+      },
+      {
+        "stage": "2",
+        "rows": 632,
+        "startTime": 11.2177258,
+        "endTime": 80.94682,
+        "displacement": {
+          "x": 11.019963438000001,
+          "y": -564.8321044,
+          "z": -2.8804887999999997
+        },
+        "yawDelta": 102.43498269999998
+      }
+    ]
+  },
+  "hashes": {
+    "Brain\\MaleCNS\\shiu_compatible.py": "65b874655bf8c817adfe9ffa8a90e83a713d36d4e01f0c2e5cfc4606ab5efb9c",
+    "Brain\\MaleCNS\\analog_controller.py": "a8cc72d9395a843a022ead1f28687d3e230a98208bd111626e1e0fbf47a1a2e6",
+    "UnityProject\\Assets\\Config\\FlyGameplayPreset.asset": "5cb400204cacf8b7a36f6a181f4c679e055179b04c3d961f56916eaee9eff94d"
+  }
+}

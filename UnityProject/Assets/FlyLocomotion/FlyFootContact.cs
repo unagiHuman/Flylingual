@@ -17,6 +17,9 @@ namespace FlyLocomotionPoC
         private int stayCount;
         private int exitCount;
         private int contactHoldTicks;
+        public int RemainingContactHoldTicks => contactHoldTicks;
+        public float LastContactFixedTime { get; private set; } = float.NegativeInfinity;
+        public string ContactObservationSource { get; private set; } = "NONE";
 
         public string LegId => legId;
         public bool TouchingGround => HasFreshSurfaceContact;
@@ -71,6 +74,8 @@ namespace FlyLocomotionPoC
             if (other == null || !IsAdhesiveSurface(other) || collision.contactCount == 0) return false;
 
             ContactPoint contact = collision.GetContact(0);
+            LastContactFixedTime = Time.fixedTime;
+            ContactObservationSource = "DIRECT_COLLISION";
             hasSurfaceContact = true;
             contactHoldTicks = 3;
             surfaceContactPoint = contact.point;
@@ -93,6 +98,8 @@ namespace FlyLocomotionPoC
                 Collider other = footIsFirst ? contact.otherCollider : contact.thisCollider;
                 if (other == null || !IsAdhesiveSurface(other)) continue;
 
+                LastContactFixedTime = Time.fixedTime;
+                ContactObservationSource = "ARTICULATION_OWNER";
                 hasSurfaceContact = true;
                 contactHoldTicks = 3;
                 surfaceContactPoint = contact.point;

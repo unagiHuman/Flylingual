@@ -42,6 +42,13 @@ namespace FlyLocomotionPoC
         private float contactLostStanceProgressSum;
         private int contactLostStanceProgressCount;
 
+        public bool DiagnosticDrivenByController { get; set; }
+
+        // Read-only diagnostics of the inputs actually consumed by adhesion this tick.
+        public float LastEvaluationFixedTime { get; private set; } = float.NegativeInfinity;
+        public bool LastEvaluatedStance { get; private set; }
+        public bool LastEvaluatedContact { get; private set; }
+        public int LastEvaluatedHoldTicks { get; private set; }
         public bool Attached => attached;
         public float NormalForceNewtons => normalForceNewtons;
         public float ShearForceNewtons => shearForceNewtons;
@@ -92,11 +99,25 @@ namespace FlyLocomotionPoC
 
         private void FixedUpdate()
         {
+            if (!DiagnosticDrivenByController) EvaluateAdhesion();
+        }
+
+        public void EvaluateDiagnosticTick()
+        {
+            if (DiagnosticDrivenByController && isActiveAndEnabled) EvaluateAdhesion();
+        }
+
+        private void EvaluateAdhesion()
+        {
             normalForceNewtons = 0f;
             shearForceNewtons = 0f;
             gripUtilization = 0f;
 
             bool validContact = footContact != null && footContact.HasFreshSurfaceContact;
+            LastEvaluationFixedTime = Time.fixedTime;
+            LastEvaluatedStance = stanceActive;
+            LastEvaluatedContact = validContact;
+            LastEvaluatedHoldTicks = footContact == null ? 0 : footContact.RemainingContactHoldTicks;
             if (footContact != null) footContact.AdvanceAdhesionTick();
             if (validContact) contactTickCount++;
             if (stanceActive) stanceTickCount++;
