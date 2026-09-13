@@ -30,6 +30,9 @@ namespace FlyLocomotionPoC
         }
         private FlyMotorCommand currentMotor;
         private FlyMotorCommand targetMotor;
+        private FlyTerrainTraversal terrainTraversal;
+
+        public void SetTerrainTraversal(FlyTerrainTraversal traversal) => terrainTraversal = traversal;
 
         public FlyMotorSource MotorSource => motorSource;
         public FlyLocalReflexLayer ReflexLayer => reflexLayer;
@@ -105,7 +108,8 @@ namespace FlyLocomotionPoC
             float activity = config.groundedTripodGait
                 ? Mathf.Max(Mathf.Abs(currentMotor.forward), Mathf.Abs(currentMotor.turn) * config.turnGaitContribution)
                 : Mathf.Max(currentMotor.forward, Mathf.Abs(currentMotor.turn) * 0.5f);
-            if (activity > config.gaitStartThreshold)
+            bool terrainHold = terrainTraversal != null && terrainTraversal.BeginStep(rawMotor, currentMotor, phase, config, Time.fixedDeltaTime);
+            if (activity > config.gaitStartThreshold && !terrainHold)
             {
                 phase += 2f * Mathf.PI * config.gaitFrequencyHz * Time.fixedDeltaTime;
                 phase = Mathf.Repeat(phase, 2f * Mathf.PI);
@@ -140,6 +144,8 @@ namespace FlyLocomotionPoC
                     var target = leg.CalculateNominalTargets(trajectoryPhase, currentMotor, config, coxaOffset, femurOffset, tibiaOffset, stanceCoxaMultiplier, TrajectoryTurn);
                     if (DiagnosticJoinSeconds > 0f && joinOrigins.TryGetValue(leg, out var origin))
                         target.angles = BlendStartup(origin, target.angles, joinElapsed, DiagnosticJoinSeconds);
+                    if (terrainTraversal != null)
+                        target = terrainTraversal.Adjust(leg, target, trajectoryPhase, currentMotor, config, Time.fixedDeltaTime);
                     DiagnosticTargetObserved?.Invoke(leg, target);
                     leg.ApplyDriveTargets(target);
                 }

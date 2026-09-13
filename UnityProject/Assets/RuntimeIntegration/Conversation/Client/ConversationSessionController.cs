@@ -633,6 +633,23 @@ namespace Flylingual.Conversation
             return true;
         }
 
+        public void SendLocalSafetyObservation(int sequence, float ageMs, bool groundPresent, string leftEdge, string rightEdge, bool forwardBlocked, bool bodyUnsafe)
+        {
+            if (!Ready || ConversationInteraction != "control" || ConversationGeneration < 0 ||
+                sequence <= 0 || float.IsNaN(ageMs) || ageMs < 0f || ageMs > 750f) return;
+            Send(new LocalSafetyMessage { sequence = sequence, ageMs = ageMs, controlEpoch = ControlEpoch,
+                conversationGeneration = ConversationGeneration, groundPresent = groundPresent,
+                leftEdge = leftEdge, rightEdge = rightEdge, forwardBlocked = forwardBlocked, bodyUnsafe = bodyUnsafe });
+        }
+        [Serializable] sealed class LocalSafetyMessage
+        {
+            public string type = "local_safety_observation";
+            public int controlEpoch, conversationGeneration, sequence;
+            public float ageMs;
+            public bool groundPresent, forwardBlocked, bodyUnsafe;
+            public string leftEdge, rightEdge;
+        }
+
         void Send(object message)
         {
             try { transport.Enqueue(JsonUtility.ToJson(message)); }
