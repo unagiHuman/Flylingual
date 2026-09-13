@@ -23,6 +23,10 @@ namespace FlyBrainVisualization
         private readonly HashSet<string> seen = new HashSet<string>(StringComparer.Ordinal);
         private NeuralAtlas atlas;
         private BrainTcpClient subscribedSource;
+        private Flylingual.Conversation.ConversationSessionController conversation;
+        private int conversationEpoch = -1;
+        private string expectedDataset;
+        public bool IsSchematic { get; private set; }
         private float[] spikes, delta;
         private bool[] observed;
         private string identity;
@@ -52,6 +56,16 @@ namespace FlyBrainVisualization
         public bool IsFresh => fresh;
         public event Action FrameApplied;
 
+        public void ConfigureConversation(Flylingual.Conversation.ConversationSessionController value)
+        {
+            if (conversation == value) return;
+            if (conversation != null) conversation.BrainObservationReceived -= Receive;
+            Unsubscribe();
+            conversation = value; conversationEpoch = -1;
+            if (conversation != null) conversation.BrainObservationReceived += Receive;
+            Invalidate("WAITING FOR BRAIN");
+        }
+
         public void Configure(BrainTcpClient client, TextAsset data, NeuralPointCloud cloud)
         {
             Unsubscribe();
@@ -68,7 +82,7 @@ namespace FlyBrainVisualization
 
         private void LoadAtlas()
         {
-            atlas = null; indices.Clear(); ResetIdentity();
+            atlas = null; IsSchematic = false; indices.Clear(); ResetIdentity();
             if (pointCloud == null) pointCloud = GetComponentInChildren<NeuralPointCloud>(true);
             if (pointCloud != null) pointCloud.SetPoints(null);
             if (atlasAsset == null) atlasAsset = Resources.Load<TextAsset>("BrainVisualization/malecns-atlas");
@@ -103,6 +117,7 @@ namespace FlyBrainVisualization
 
         private void Subscribe()
         {
+            if (conversation != null) return;
             if (subscribedSource == source && subscribedSource != null) return;
             Unsubscribe();
             if (source == null && bindSingleExistingClient)
@@ -129,8 +144,13 @@ namespace FlyBrainVisualization
 
         private void Update()
         {
-            if (subscribedSource != source || (source == null && Time.unscaledTime >= nextSourceSearch))
+            if (conversation == null && (subscribedSource != source || (source == null && Time.unscaledTime >= nextSourceSearch)))
             { nextSourceSearch = Time.unscaledTime + 1; Subscribe(); }
+            if (conversation != null && (conversation.Status != "connected" || !conversation.BrainConnected))
+            {
+                lock (incomingLock) incoming.Clear();
+                ResetIdentity(); Invalidate("DISCONNECTED"); return;
+            }
             if (subscribedSource != null && subscribedSource.ConnectionState != "CONNECTED")
             {
                 lock (incomingLock) incoming.Clear();
@@ -172,19 +192,31 @@ namespace FlyBrainVisualization
 
         private void Process(Received item)
         {
-            if (atlas == null) return;
             try
             {
                 var frame = JsonUtility.FromJson<NeuralEnvelope>(item.line);
                 if (frame == null) { Invalidate("INVALID FRAME"); return; }
+                if (frame.type == "bridge_state")
+                {
+                    if (frame.epoch < conversationEpoch) return;
+                    if (!frame.brainConnected || frame.switching || frame.releaseUnknown || string.IsNullOrEmpty(frame.instanceId) || string.IsNullOrEmpty(frame.sessionId))
+                    { ResetIdentity(); Invalidate("WAITING FOR SESSION IDENTITY"); return; }
+                    if (conversationEpoch != frame.epoch || expectedInstance != frame.instanceId || expectedSession != frame.sessionId || expectedDataset != frame.dataset)
+                    {
+                        ResetIdentity(); conversationEpoch = frame.epoch;
+                        expectedInstance = frame.instanceId; expectedSession = frame.sessionId; expectedDataset = frame.dataset;
+                        Invalidate("WAITING FOR BRAIN");
+                    }
+                    return;
+                }
                 if (frame.type == "status")
                 {
                     // Repeated status/heartbeats must not make the same frame eligible again.
-                    if (string.IsNullOrEmpty(frame.instanceId) || string.IsNullOrEmpty(frame.sessionId) || frame.datasetId != atlas.datasetId)
+                    if (string.IsNullOrEmpty(frame.instanceId) || string.IsNullOrEmpty(frame.sessionId) || (atlas != null && !IsSchematic && frame.datasetId != atlas.datasetId))
                     { ResetIdentity(); Invalidate("WAITING FOR SESSION IDENTITY"); return; }
                     if (expectedInstance != frame.instanceId || expectedSession != frame.sessionId)
                     {
-                        ResetIdentity(); expectedInstance = frame.instanceId; expectedSession = frame.sessionId;
+                        ResetIdentity(); expectedInstance = frame.instanceId; expectedSession = frame.sessionId; expectedDataset = frame.datasetId;
                         Invalidate("WAITING FOR BRAIN");
                     }
                     return;
@@ -192,12 +224,17 @@ namespace FlyBrainVisualization
                 if (frame.type == "error") { Invalidate("BRAIN ERROR"); return; }
                 if (frame.type != "brain_frame") return;
                 var meta = frame.metadata;
-                if (meta == null || meta.datasetId != atlas.datasetId || string.IsNullOrEmpty(meta.backendId) ||
+                if (meta == null || string.IsNullOrEmpty(meta.datasetId) || (atlas != null && !IsSchematic && meta.datasetId != atlas.datasetId) || string.IsNullOrEmpty(meta.backendId) ||
                     string.IsNullOrEmpty(meta.instanceId) || string.IsNullOrEmpty(meta.sessionId) ||
                     (meta.mode != "LIVE" && meta.mode != "REPLAY" && meta.mode != "MOCK"))
                 { Invalidate("DATASET / IDENTITY MISMATCH"); return; }
                 if (meta.instanceId != expectedInstance || meta.sessionId != expectedSession)
                 { Invalidate("WAITING FOR MATCHING SESSION STATUS"); return; }
+                if (meta.datasetId != expectedDataset) { Invalidate("DATASET MISMATCH"); return; }
+                if (atlas == null || (IsSchematic && (atlas.datasetId != meta.datasetId || !SameRawIds(frame.raw))))
+                {
+                    if (!CreateSchematic(frame.raw, meta.datasetId)) { Invalidate("NO ATLAS / NO RAW VOLTAGE"); return; }
+                }
                 string nextIdentity = meta.instanceId + "/" + meta.sessionId + "/" + meta.datasetId + "/" + meta.mode;
                 if (identity != null && identity != nextIdentity) { Invalidate("SESSION MODE CHANGED"); return; }
                 identity = nextIdentity;
@@ -213,7 +250,7 @@ namespace FlyBrainVisualization
                 Array.Clear(spikes, 0, spikes.Length); Array.Clear(observed, 0, observed.Length);
                 for (int i = 0; i < delta.Length; i++) delta[i] = float.NaN;
                 int measured = 0, active = 0; long total = 0;
-                bool hasSpikes = frame.visualization != null;
+                bool hasSpikes = !IsSchematic && frame.visualization != null;
                 float window = 50;
                 if (hasSpikes)
                 {
@@ -250,7 +287,7 @@ namespace FlyBrainVisualization
                 if (measured == 0) { Invalidate("NO NEURON TELEMETRY"); return; }
                 lastSequence = frame.sequence; lastBrainTime = frame.brainTimeMs; receivedAt = item.time;
                 ObservedCount = measured; ActiveCount = active; SpikeCount = total; WindowMs = hasSpikes ? window : 0;
-                fresh = true; State = hasSpikes ? "WINDOW SPIKES + VOLTAGE" : "VOLTAGE ONLY / NO SPIKE STREAM";
+                fresh = true; State = hasSpikes ? "WINDOW SPIKES + VOLTAGE" : IsSchematic ? "RAW VOLTAGE / SCHEMATIC (NO ATLAS)" : "VOLTAGE ONLY / NO SPIKE STREAM";
                 pointCloud.SetActivity(hasSpikes ? spikes : null, delta, observed, window);
                 FrameApplied?.Invoke();
             }
@@ -261,10 +298,35 @@ namespace FlyBrainVisualization
         }
 
         private static bool Finite(float v) => !float.IsNaN(v) && !float.IsInfinity(v);
+        private bool SameRawIds(NeuralRawVoltage raw)
+        {
+            if (raw?.bodyIds == null || raw.bodyIds.Length != indices.Count) return false;
+            foreach (long id in raw.bodyIds) if (!indices.ContainsKey(id.ToString(CultureInfo.InvariantCulture))) return false;
+            return true;
+        }
+        // Positions in this fallback are explicitly a grid of measured IDs, never anatomical coordinates.
+        private bool CreateSchematic(NeuralRawVoltage raw, string dataset)
+        {
+            if (pointCloud == null || raw?.bodyIds == null || raw.deltaV == null || raw.bodyIds.Length == 0 || raw.bodyIds.Length > 4096 || raw.bodyIds.Length != raw.deltaV.Length) return false;
+            var unique = new HashSet<long>();
+            for (int i = 0; i < raw.bodyIds.Length; i++) if (!unique.Add(raw.bodyIds[i]) || !Finite(raw.deltaV[i])) return false;
+            indices.Clear(); int count = raw.bodyIds.Length, columns = Mathf.CeilToInt(Mathf.Sqrt(count));
+            var positions = new Vector3[count];
+            atlas = new NeuralAtlas { datasetId = dataset, neurons = new NeuralAtlasPoint[count] };
+            for (int i = 0; i < count; i++)
+            {
+                string id = raw.bodyIds[i].ToString(CultureInfo.InvariantCulture); indices.Add(id, i);
+                float spacing = 1.6f / Mathf.Max(1, columns);
+                positions[i] = new Vector3((i % columns - (columns - 1) * .5f) * spacing, ((columns - 1) * .5f - i / columns) * spacing, 0);
+                atlas.neurons[i] = new NeuralAtlasPoint { id = id };
+            }
+            spikes = new float[count]; delta = new float[count]; observed = new bool[count];
+            IsSchematic = true; pointCloud.SetPoints(positions); return true;
+        }
         private void ResetIdentity()
         {
             identity = null; lastSequence = -1; lastBrainTime = -1; receivedAt = -1;
-            expectedInstance = expectedSession = null;
+            expectedInstance = expectedSession = expectedDataset = null;
             Backend = "UNKNOWN"; Mode = "UNKNOWN"; Ready = false;
         }
         private void Invalidate(string reason)
@@ -282,6 +344,8 @@ namespace FlyBrainVisualization
         }
         private void OnDisable()
         {
+            if (conversation != null) conversation.BrainObservationReceived -= Receive;
+            conversation = null;
             lock (incomingLock) accepting = false;
             Unsubscribe(); Invalidate("DISABLED");
         }

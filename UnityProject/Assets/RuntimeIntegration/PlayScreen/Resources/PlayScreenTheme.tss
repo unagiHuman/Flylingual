@@ -1,0 +1,11 @@
+@import url("unity-theme://default");
+
+.unity-base-field__input, .unity-base-popup-field__input {
+    background-color: rgb(25, 43, 56);
+    color: rgb(245, 235, 204);
+    border-color: rgb(90, 113, 125);
+    border-radius: 4px;
+}
+.unity-base-field { margin-bottom: 7px; }
+.unity-disabled { opacity: 0.48; }
+.unity-scroller { width: 16px; }

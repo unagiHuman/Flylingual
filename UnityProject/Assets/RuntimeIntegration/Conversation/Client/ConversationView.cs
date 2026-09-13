@@ -19,6 +19,7 @@ namespace Flylingual.Conversation
 
         void OnGUI()
         {
+            if (Flylingual.PlayScreen.PlayScreenRuntime.Active) return;
             if (Controller == null) return;
             if (skin == null)
             {

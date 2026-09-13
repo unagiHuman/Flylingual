@@ -40,6 +40,7 @@ _CHILD_KEYS = {
     "brain": {
         "host", "port", "expectedBackend", "expectedDataset", "expectedConfigHash",
         "expectedGraphHash", "expectedSourceHash", "graph", "config", "python",
+        "visualizationAtlas",
     },
     "conversation": {"mode", "model", "intentModel", *DEFAULT_SETTINGS},
     "control": {"owner", "maxActionMs", "defaultActionMs", "staleMs", "stopTimeoutMs"},
@@ -55,6 +56,7 @@ _DEFAULT: dict[str, Any] = {
         "graph": "artifacts/neuron_checkpoint",
         "config": "Brain/MaleCNS/config/analog_temporal_v1.json",
         "python": sys.executable,
+        "visualizationAtlas": None,
     },
     "conversation": {
         "mode": "off", "model": "gpt-live-1", "intentModel": "gpt-5.6-luna",
@@ -214,6 +216,13 @@ def _validate(config: dict[str, Any]) -> None:
         for key in keys:
             if not isinstance(config[group][key], str) or not config[group][key]:
                 raise ConfigError(f"{group}.{key} must be a non-empty string")
+    atlas = config["brain"]["visualizationAtlas"]
+    if atlas is not None:
+        if not isinstance(atlas, str) or not atlas:
+            raise ConfigError("brain.visualizationAtlas must be null or a non-empty string")
+        atlas_path = Path(atlas)
+        if not atlas_path.is_file():
+            raise ConfigError(f"brain.visualizationAtlas file is missing: {atlas_path}")
     if not isinstance(config["logPath"], str) or not config["logPath"]:
         raise ConfigError("logPath must be a non-empty string")
 
@@ -272,6 +281,8 @@ def load_config(
     config["profile"] = profile
     for key in ("graph", "config", "python"):
         config["brain"][key] = _resolve_path(config["brain"][key])
+    if config["brain"]["visualizationAtlas"] is not None:
+        config["brain"]["visualizationAtlas"] = _resolve_path(config["brain"]["visualizationAtlas"])
     config["logPath"] = _resolve_path(config["logPath"])
     _set_default_expected_hashes(config)
     _validate(config)

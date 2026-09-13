@@ -78,7 +78,7 @@
     "Brain/MaleCNS/temporal_motor_decoder.py": "eba1bd6c807d7b50191b533401554eec3867999507e2d8f71455b6f71bc3e409",
     "Brain/MaleCNS/brain_server_analog.py": "a776f03718175ab1c7ac254837e3aca7666d737fb3197e28f61c84b72b482518",
     "Brain/MaleCNS/brain_server_malecns.py": "702d272d390082cf83abdf75d556e7ebad88bc44ba21f1157ef462b37bf60996",
-    "Brain/MaleCNS/lif_kernels.py": "adfb3ab1f18e82a9b4cc2c3883f95e789e583fd094df19a1afa1128d68f3cbce",
+    "Brain/MaleCNS/lif_kernels.py": "d0bb9c3fc7ef40ccd01769a1119f19ac92046672d2976f30a9a21ce5e172b116",
     "Brain/MaleCNS/neural_visualization.py": "284c7a773a409c69148d1fcccaadca7457db30c73c01a47bf53e59dee924c344",
     "Brain/MaleCNS/requirements-runtime.txt": "1958099dc29d2e8a11503d2e4bc029639114bbd653e64b812c7dacfef564b56b"
   },
@@ -98,5 +98,8 @@
     "Brain/MaleCNS/shiu_compatible.py": "323b968fe5bfd692d0deee80031d1a728367163760446a1b0763fccd9a3758c0",
     "Brain/MaleCNS/lif_kernels.py": "0cec8979a0147743a478403260211d83400cd6ba7f90e0e475e6288de441b7d8",
     "Brain/MaleCNS/analog_controller.py": "f3362d6b66c14c64415b9e021f4ef57839df7de9852f86c4cd73ecd8e4752745"
+  },
+  "preFixedPointRepoFileHashes": {
+    "Brain/MaleCNS/lif_kernels.py": "adfb3ab1f18e82a9b4cc2c3883f95e789e583fd094df19a1afa1128d68f3cbce"
   }
 }

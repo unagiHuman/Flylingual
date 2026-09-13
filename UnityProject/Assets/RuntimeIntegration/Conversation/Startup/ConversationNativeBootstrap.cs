@@ -10,6 +10,7 @@ using UnityEngine;
 namespace Flylingual.Conversation
 {
     /// <summary>Starts the Windows-local Bridge only when -flyConversation is present.</summary>
+    [DefaultExecutionOrder(-10000)]
     public sealed class ConversationNativeBootstrap : MonoBehaviour
     {
         private static ConversationNativeBootstrap instance;
@@ -114,7 +115,7 @@ namespace Flylingual.Conversation
 
         private void OnGUI()
         {
-            if (running || String.IsNullOrEmpty(visibleStatus)) return;
+            if (Flylingual.PlayScreen.PlayScreenRuntime.Active || running || String.IsNullOrEmpty(visibleStatus)) return;
             GUI.Box(new Rect(14, Math.Max(14, Screen.height - 64), Math.Min(Screen.width - 28, 760), 48), visibleStatus);
         }
 

@@ -23,6 +23,9 @@ namespace FlyBrainVisualization
         public long sequence = -1;
         public double brainTimeMs = -1;
         public string datasetId, instanceId, sessionId;
+        public string dataset;
+        public int epoch;
+        public bool brainConnected, switching, releaseUnknown;
         public NeuralMetadata metadata;
         public NeuralSpikeWindow visualization;
         public NeuralRawVoltage raw;

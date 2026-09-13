@@ -23,6 +23,22 @@ namespace FlyBrainVisualization
         private Vector2 angles = new Vector2(0, 12);
         private float zoom = 1.25f;
         private bool dragging;
+        private bool embedded;
+        public Texture DisplayTexture => target;
+        public NeuralActivityObserver Observer => observer;
+        public float DisplayGain { get => pointCloud == null ? 1f : pointCloud.DisplayGain; set { if (pointCloud != null) pointCloud.DisplayGain = value; } }
+        public void SetEmbedded(bool value) { embedded = value; dragging = false; }
+        public void Rotate(Vector2 delta)
+        {
+            if (!allowOrbit || displayRoot == null) return;
+            angles.x = Mathf.Clamp(angles.x + delta.y * .35f, -65, 65); angles.y += delta.x * .35f;
+            displayRoot.localRotation = Quaternion.Euler(angles.x, angles.y, 0);
+        }
+        public void Zoom(float delta)
+        {
+            zoom = Mathf.Clamp(zoom + delta * .035f, .45f, 2.5f);
+            if (brainCamera != null) brainCamera.orthographicSize = zoom;
+        }
         private readonly Color ink = new Color(.025f, .044f, .072f, .98f);
         private readonly Color muted = new Color(.42f, .59f, .66f);
         private readonly Color cyan = new Color(.20f, .88f, .88f);
@@ -60,7 +76,7 @@ namespace FlyBrainVisualization
 
         private void OnGUI()
         {
-            if (!visible || observer == null) return;
+            if (embedded || !visible || observer == null) return;
             InitStyles();
             Color oldColor = GUI.color;
             int oldDepth = GUI.depth; GUI.depth = -20;

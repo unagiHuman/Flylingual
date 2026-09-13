@@ -29,7 +29,7 @@ public static class NativeConversationBuilder
         string player = Path.Combine(root, "artifacts/windows-native-conversation/unity/FlylingualConversation.exe");
         Directory.CreateDirectory(Path.GetDirectoryName(player));
         var report = BuildPipeline.BuildPlayer(new BuildPlayerOptions {
-            scenes = new[] { "Assets/VisualDemo/SessionRealism/FlyGroundedRealismDemo.unity" },
+            scenes = new[] { PlayScreenBuilder.ScenePath },
             locationPathName = player, target = BuildTarget.StandaloneWindows64,
             extraScriptingDefines = new[] { "FLY_NATIVE_CONVERSATION" },
             options = BuildOptions.Development

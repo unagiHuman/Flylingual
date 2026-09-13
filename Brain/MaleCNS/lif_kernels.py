@@ -16,6 +16,28 @@ for _import_directory in (_module_directory, _module_directory.parents[1]):
         sys.path.insert(0, str(_import_directory))
 
 from numba import njit
+import numpy as np
+
+
+@njit(cache=True, fastmath=False, inline="always")
+def _fixed_point_updates_enabled(a, b, c):
+    """Check the actual coefficients and floating-point environment once.
+
+    With the validated coefficients and gradual nearest rounding, signed
+    subnormal magnitudes 1..25 retain their bits under multiplication by b,
+    and multiplication by c rounds to signed zero. Probe the boundary in
+    both signs and compare integer bits, so FTZ/DAZ or incompatible rounding
+    cannot make a floating-point comparison silently accept flushed values.
+    Unsupported coefficients/environments use the original update path.
+    """
+    positive = np.uint64(25).view(np.float64)
+    negative = np.uint64(0x8000000000000019).view(np.float64)
+    magnitude_mask = np.uint64(0x7fffffffffffffff)
+    return (np.isfinite(a)
+            and np.float64(positive * b).view(np.uint64) == np.uint64(25)
+            and np.float64(negative * b).view(np.uint64) == np.uint64(0x8000000000000019)
+            and (np.float64(positive * c).view(np.uint64) & magnitude_mask) == 0
+            and (np.float64(negative * c).view(np.uint64) & magnitude_mask) == 0)
 
 
 @njit(cache=True, fastmath=False, nogil=True)
@@ -27,17 +49,31 @@ def update_state_and_extract_fired(v, g, last, rfc, tick, a, b, c,
     synapse delivery.  The scalar statements deliberately match the existing
     NumPy operation order.
     """
+    fixed_points = _fixed_point_updates_enabled(a, b, c)
+    g_bits = g.view(np.uint64)
+    c_bits = np.float64(c).view(np.uint64)
     fired_count = 0
     for neuron in range(v.size):
         is_active = (tick - last[neuron]) >= rfc[neuron]
         active[neuron] = is_active
         if is_active:
+            # Preserve g, including signed zero and the subnormal tail. Only
+            # skip arithmetic whose rounded v/g result is already unchanged.
+            fixed_g = fixed_points and (g_bits[neuron] & np.uint64(0x7fffffffffffffff)) <= 25
+            if fixed_g and v[neuron] == -52.:
+                continue
             x = v[neuron] + 52
             x = x * a
             x = -52 + x
-            y = g[neuron] * c
+            if fixed_g:
+                # IEEE multiplication's signed zero, without a subnormal
+                # operand. Keep the ordinary voltage decay for non-rest v.
+                y = np.uint64((g_bits[neuron] ^ c_bits) & np.uint64(0x8000000000000000)).view(np.float64)
+            else:
+                y = g[neuron] * c
             v[neuron] = x + y
-            g[neuron] = g[neuron] * b
+            if not fixed_g:
+                g[neuron] = g[neuron] * b
             if v[neuron] > -45:
                 fired[fired_count] = neuron
                 fired_count += 1
@@ -54,6 +90,9 @@ def run_window(v, g, last, rfc, indptr, post, weights, tick, ticks, a, b, c,
     order.  ``pending_indices`` is a 19-slot firing ring; its per-slot count
     permits duplicate entries supplied through the public pending lists.
     """
+    fixed_points = _fixed_point_updates_enabled(a, b, c)
+    g_bits = g.view(np.uint64)
+    c_bits = np.float64(c).view(np.uint64)
     for row in range(sums.shape[0]):
         for column in range(sums.shape[1]):
             sums[row, column] = 0.0
@@ -64,12 +103,19 @@ def run_window(v, g, last, rfc, indptr, post, weights, tick, ticks, a, b, c,
             is_active = (k - last[neuron]) >= rfc[neuron]
             active[neuron] = is_active
             if is_active:
+                fixed_g = fixed_points and (g_bits[neuron] & np.uint64(0x7fffffffffffffff)) <= 25
+                if fixed_g and v[neuron] == -52.:
+                    continue
                 x = v[neuron] + 52
                 x = x * a
                 x = -52 + x
-                y = g[neuron] * c
+                if fixed_g:
+                    y = np.uint64((g_bits[neuron] ^ c_bits) & np.uint64(0x8000000000000000)).view(np.float64)
+                else:
+                    y = g[neuron] * c
                 v[neuron] = x + y
-                g[neuron] = g[neuron] * b
+                if not fixed_g:
+                    g[neuron] = g[neuron] * b
                 if v[neuron] > -45:
                     fired[fired_count] = neuron
                     fired_count += 1

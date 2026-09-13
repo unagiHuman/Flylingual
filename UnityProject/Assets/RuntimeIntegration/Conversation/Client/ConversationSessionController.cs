@@ -84,6 +84,9 @@ namespace Flylingual.Conversation
         public bool ReplyPlaying => replyAudio != null && replyAudio.IsPlaying;
         public long PlayedNonzeroSamples => replyAudio == null ? 0L : replyAudio.PlayedNonzeroSamples;
         public bool VoiceActionsAvailable { get; private set; }
+        // Passive local observers share the existing control socket; they never acquire control.
+        public event Action<string> BrainObservationReceived;
+        public bool BrainConnected => bridgeConnected;
         public bool EnablingVoiceActions { get; private set; }
         public string BrainSessionId { get; private set; }
         public string BrainInstanceId { get; private set; }
@@ -330,6 +333,8 @@ namespace Flylingual.Conversation
                 case "brain_frame": HandleFrame(JsonUtility.FromJson<BrainFrameMessage>(json)); break;
                 case "command_result": HandleCommandResult(JsonUtility.FromJson<CommandResult>(json)); break;
             }
+            if (header.type == "bridge_state" || header.type == "brain_frame")
+                BrainObservationReceived?.Invoke(json);
         }
 
         void HandleBridgeState(BridgeState state)

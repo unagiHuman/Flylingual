@@ -1,3 +1,5 @@
+Codexにそのまま渡せる形で、実装境界まで含めて整理します。
+
 # Blind Sugar Run
 
 ## Flylingual プロトステージ実装設計書
@@ -865,4 +867,750 @@ Action = NONE
 
 ハエ：
 
->
+> 「右へ動くってことでいい？」
+
+---
+
+# 22. Safety
+
+曖昧な指示で勝手に進ませない。
+
+以下の場合、
+
+```text
+STOP
+```
+
+または現在Actionを更新しない。
+
+* speech parse失敗
+* GPT timeout
+* connection loss
+* unknown command
+* stale response
+
+古いGPT Actionを遅れて適用しない。
+
+Actionにはrequest ID / timestampを持たせることを推奨。
+
+---
+
+# 23. 緊急停止
+
+Normal STOPとは別。
+
+UIに：
+
+```text
+EMERGENCY MOTOR CUT
+```
+
+を用意する。
+
+Keyboard fallback例：
+
+```text
+Space
+```
+
+Emergency Motor Cut：
+
+* motor requestを即STOPへ
+* 新Action送信抑止
+* 身体位置固定は禁止
+* velocity zero強制禁止
+* teleport禁止
+* Grip強制成功禁止
+
+つまり物理的な慣性・落下は残す。
+
+---
+
+# 24. Memory
+
+プロトでは非常に小さくする。
+
+保存対象：
+
+```text
+lastFallLocation
+lastActionBeforeFall
+lastFailureObservation
+chosenRoute
+playerNamedLandmarks
+```
+
+最初のプロトでは、
+
+```text
+lastFallLocation
+lastActionBeforeFall
+```
+
+だけでもよい。
+
+落下後：
+
+> 「さっきは橋の上で右に曲がってる途中で落ちた。」
+
+のように一度だけ使う。
+
+---
+
+# 25. Fall Detection
+
+新規Component候補：
+
+```text
+FlyFallTracker
+```
+
+検出：
+
+* sudden Y decrease
+* Kill/Recovery Trigger
+* Catch Platform Trigger
+
+落下時に記録：
+
+```text
+position
+lastAction
+lastObservation
+timestamp
+```
+
+GPTへ渡せる。
+
+---
+
+# 26. Failure後の会話
+
+原因を断定しない。
+
+悪い例：
+
+> 「右脚の摩擦不足が原因だよ。」
+
+測定していないなら禁止。
+
+良い例：
+
+> 「右側に寄っていて、曲がっている途中で落ちた。」
+
+観測事実だけ。
+
+または：
+
+> 「橋の上で曲がるのは難しそう。入口で向きを合わせて試す？」
+
+---
+
+# 27. Debug / Spectator Camera
+
+開発中はステージが見えないとデバッグ不能なので、
+
+```text
+Developer Spectator Mode
+```
+
+を必ず作る。
+
+例：
+
+```text
+F1 = Blind Player View
+F2 = Spectator View
+F3 = Sensor Debug View
+```
+
+本番デフォルト：
+
+```text
+Blind Player View
+```
+
+---
+
+# 28. Sensor Debug
+
+Scene View / Game Viewで以下を可視化可能にする。
+
+* raycasts
+* edge detections
+* landmark range
+* current observation text
+* current Action
+* BrainFrame forward/turn
+
+本番ではOFF。
+
+---
+
+# 29. Scene Hierarchy案
+
+新規Scene：
+
+```text
+BlindSugarRunPrototype.unity
+```
+
+概念Hierarchy：
+
+```text
+BlindSugarRunPrototype
+├─ Systems
+│  ├─ GameFlowController
+│  ├─ ConversationController
+│  ├─ ObservationController
+│  ├─ ActionIntentRouter
+│  ├─ BrainIntegration
+│  └─ PrototypeMemory
+│
+├─ Fly
+│  ├─ ExistingPhysicsRig
+│  ├─ ExternalVisionSensor
+│  ├─ FallTracker
+│  └─ LandmarkSensor
+│
+├─ Level
+│  ├─ StartArea
+│  ├─ AlignArea
+│  ├─ RulerBridge
+│  ├─ OpenBookCatch
+│  ├─ BookPlatform
+│  ├─ NarrowRoute
+│  ├─ WideRoute
+│  └─ SugarPlate
+│
+├─ Cameras
+│  ├─ HiddenWorldCamera
+│  └─ SpectatorCamera
+│
+└─ UI
+   ├─ BlindPlayerHUD
+   ├─ SubtitlePanel
+   ├─ PlayerTranscript
+   ├─ CurrentIntent
+   ├─ NeuralLinkStatus
+   └─ EmergencyStop
+```
+
+既存のFly/Brain prefabがある場合、新規コピーを作らず可能な限り再利用する。
+
+---
+
+# 30. 推奨スクリプト構成
+
+新規コードは可能なら：
+
+```text
+UnityProject/Assets/Flylingual/PrototypeBlindRun/
+```
+
+以下へ分離。
+
+```text
+Runtime/
+├─ BlindRunGameFlowController.cs
+├─ FlyExternalVisionSensor.cs
+├─ FlyWorldObservation.cs
+├─ FlyLandmark.cs
+├─ FlyFallTracker.cs
+├─ BlindRunMemory.cs
+├─ ActionIntentRouter.cs
+└─ BlindRunGoal.cs
+
+UI/
+├─ BlindRunHud.cs
+├─ ObservationDebugHud.cs
+└─ BlindRunViewModeController.cs
+
+Editor/
+└─ BlindRunSensorGizmos.cs
+```
+
+既存project structureが明確に異なる場合は、それに従う。
+
+---
+
+# 31. Game Flow State
+
+状態を明示する。
+
+```text
+BOOT
+↓
+CONNECTED
+↓
+INTRO
+↓
+PLAYING
+↓
+FALL_RECOVERY
+↓
+PLAYING
+↓
+GOAL
+↓
+REVEAL
+↓
+COMPLETE
+```
+
+Brain disconnected時：
+
+```text
+PLAYING
+→ CONNECTION_ERROR
+```
+
+勝手にMockへfallbackしない。
+
+実Brain利用中であることを明確にする。
+
+---
+
+# 32. Conversation状態
+
+少なくとも：
+
+```text
+LISTENING
+THINKING
+SPEAKING
+ACTION_PENDING
+```
+
+をUIへ出せるようにする。
+
+プレイヤーが、
+
+> 「聞き取られたのか」
+> 「Brainがまだ動いているのか」
+
+を区別できるようにする。
+
+---
+
+# 33. Neural Link演出
+
+通常画面の中央または背景に、
+
+* pulse
+* node graph
+* waveform
+* MaleCNS activity
+
+の簡易ビジュアルを表示してよい。
+
+ただし実データと演出データを混同しない。
+
+実値を出せる部分：
+
+* current Action
+* BrainFrame forward
+* BrainFrame turn
+* sequence
+* backend
+* connection
+
+演出のみの場合、
+
+```text
+decorative visualization
+```
+
+としてコード上も分離する。
+
+---
+
+# 34. 音
+
+最小限必要：
+
+* fly footsteps
+* ruler footsteps
+* book footsteps
+* falling
+* landing
+* neural link connect
+* sugar goal
+
+Bridgeでは音で危険感を補助する。
+
+プレイヤーは画面が見えないため、音響の重要度が通常ゲームより高い。
+
+---
+
+# 35. 空間音響
+
+可能ならハエの環境音を左右定位する。
+
+例：
+
+右側にedge → 小さな環境音ではなく、足音や接触音の反射を利用。
+
+ただしハッカソンでは後回し。
+
+最初は会話＋字幕で成立させる。
+
+---
+
+# 36. MVP実装順
+
+## Phase 1：Worldだけ作る
+
+GPTなし。
+
+MaleCNSなしでもよい。
+
+Spectator Viewで：
+
+```text
+Start
+→ Ruler
+→ Branch
+→ Sugar
+```
+
+を既存Flyで歩けることを確認。
+
+---
+
+## Phase 2：実Brain
+
+Live MaleCNS接続。
+
+6 Actionで、
+
+```text
+Start
+→ Ruler
+→ Goal
+```
+
+を人間がDebug viewを見ながら操作できることを確認。
+
+ここで物理成立性を先に取る。
+
+---
+
+## Phase 3：External Vision
+
+Raycast sensor追加。
+
+Debug画面に：
+
+```text
+RIGHT EDGE: 0.03m
+LEFT EDGE: 0.10m
+FORWARD: RULER
+```
+
+等を表示。
+
+正しいかSpectatorで比較。
+
+---
+
+## Phase 4：Blind UI
+
+World Cameraを消す。
+
+テキストObservationだけで開発者自身が進めるか確認。
+
+この時点ではGPT不要。
+
+ルールベースで：
+
+```text
+「右側が近い」
+「前に定規がある」
+```
+
+を表示してよい。
+
+---
+
+## Phase 5：GPT Live
+
+ObservationをGPT Liveへ渡す。
+
+自然な会話へ変換。
+
+同時にplayer speech → 6 Action conversionを接続。
+
+---
+
+## Phase 6：Memory
+
+1回の落下を記憶。
+
+再挑戦時だけ、
+
+> 「さっきは〜」
+
+を追加。
+
+---
+
+## Phase 7：Reveal
+
+Goal後に初めてworld cameraを表示。
+
+---
+
+# 37. 最初にGPTへ渡すSystem Rule
+
+概念として以下を守らせる。
+
+```text
+You are a small fruit fly connected to an external visual module.
+
+You can only know the local observations explicitly supplied to you.
+
+Never invent distant terrain, hidden routes, or the correct path.
+
+Describe nearby terrain briefly and concretely.
+
+The player cannot see the world and must rely on your descriptions.
+
+During movement, keep responses extremely short.
+
+When asked a question, answer only from observed data.
+
+Never claim that your biological brain itself sees Unity camera data.
+The external vision module provides this information.
+
+Do not directly control the body.
+Only return one of the allowed action intents when the player gives a clear movement command.
+
+Allowed actions:
+STOP
+FORWARD
+TURN_R
+TURN_L
+FORWARD_R
+FORWARD_L
+NONE
+
+Questions, speculation, and discussion must return NONE.
+
+When uncertain about a command, ask for confirmation rather than moving.
+```
+
+最終prompt wordingは既存GPT Live実装へ合わせる。
+
+---
+
+# 38. Action response contract
+
+可能なら自然言語だけで解析しない。
+
+GPTから構造化結果を得る。
+
+概念：
+
+```json
+{
+  "speech": "少し右を向くね。",
+  "action": "TURN_R"
+}
+```
+
+質問の場合：
+
+```json
+{
+  "speech": "右側はかなり近いよ。",
+  "action": "NONE"
+}
+```
+
+Unityは`action`だけをActionIntentRouterへ渡す。
+
+---
+
+# 39. Prototype Acceptance Criteria
+
+以下をすべて満たせばプロト成立。
+
+## Physics
+
+* StartからSugarまで実Brainで到達可能
+* TURN_L/Rに恒常的な逆旋回がない
+* STOP可能
+* Ruler上で操作可能
+* 落下後に継続可能
+
+## External Vision
+
+プレイヤー映像OFF状態で、
+
+* 前方足場を説明できる
+* 左右edgeを説明できる
+* 分岐を説明できる
+* Sugar近辺を説明できる
+
+## Conversation
+
+プレイヤーが、
+
+> 「右は？」
+
+と聞いても移動しない。
+
+プレイヤーが、
+
+> 「右を向いて。」
+
+と言った場合のみTURN_R。
+
+曖昧入力では勝手に動かない。
+
+## Blind Play
+
+開発者がSpectator Viewを見ずに、
+
+```text
+Start
+→ Ruler
+→ Branch
+→ Sugar
+```
+
+を最低1回クリアできる。
+
+## Core Game Test
+
+Rulerで一度失敗した後、
+
+ハエの説明・振り返りによって二度目の行動が変化する。
+
+これが最重要。
+
+---
+
+# 40. ハッカソン用完成条件
+
+以下が揃えば十分。
+
+```text
+[必須]
+✓ MaleCNS Live
+✓ Physical Fly
+✓ Blind Player View
+✓ External Vision
+✓ Voice conversation
+✓ Ruler challenge
+✓ One route decision
+✓ Fall + retry
+✓ Sugar goal
+✓ Final reveal
+```
+
+以下は後回し。
+
+```text
+[非必須]
+× 長期人格成長
+× 6区間フルコース
+× Unity映像のGPT Vision解析
+× 完全な空間認識
+× Fly biological visual system simulation
+× 動的風
+× 壁歩行
+× 天井歩行
+× 飛行
+× procedural stage
+```
+
+---
+
+# 41. Codexへの重要な判断基準
+
+迷った場合は以下を優先する。
+
+1. 既存MaleCNS integrationを壊さない
+2. プレイヤーにはステージを見せない
+3. ハエは局所情報しか知らない
+4. GPTに正解ルートを教えない
+5. 操作は既存6 Actionだけ
+6. まず定規橋を面白くする
+7. 技術的に複雑な画像認識よりRaycastを選ぶ
+8. 落下をバグ扱いせずゲームプレイにする
+9. ただし通信・AI障害による落下はゲーム失敗扱いにしない
+10. 最後のRevealを必ず残す
+
+---
+
+# 42. このプロトの完成イメージ
+
+プレイヤー画面は世界が見えない。
+
+ハエ：
+
+> 「前に細い板がある。右側が落ちてる。」
+
+プレイヤー：
+
+> 「少し左。」
+
+ハエ：
+
+> 「うん。」
+
+MaleCNSが反応し、物理身体が旋回する。
+
+ハエ：
+
+> 「今は真ん中に近い。」
+
+プレイヤー：
+
+> 「前へ。」
+
+橋を進む。
+
+ハエ：
+
+> 「待って、右に寄ってる。」
+
+プレイヤー：
+
+> 「止まって！」
+
+身体は少し余動する。
+
+落ちる。
+
+ハエ：
+
+> 「……落ちた。」
+
+プレイヤー：
+
+> 「何が悪かった？」
+
+ハエ：
+
+> 「橋の上で右に寄ってた。次は入る前にもう少し左を向く？」
+
+再挑戦。
+
+今度は成功する。
+
+最後に：
+
+> 「甘い匂いがする。」
+
+Sugar到達。
+
+そして初めてカメラが開き、
+
+**プレイヤーは自分がどんな場所をハエと一緒に進んできたのかを見る。**
+
+これをBlind Sugar Runプロトの完成形とする。
+
+この設計なら、Codexにはまず **Phase 1〜4までを一気に実装させ、GPT Liveは後から載せる**のが安全です。これにより「ステージ自体が面白いか」と「AI会話が動くか」を分離して検証できます。

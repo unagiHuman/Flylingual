@@ -245,6 +245,9 @@ async def _up(config: dict[str, Any], launch_brain: bool) -> None:
                 config["brain"]["python"], str(source), "--graph", str(graph), "--config", str(brain_config),
                 "--host", "127.0.0.1", "--port", str(config["brain"]["port"]), "--window-ms", "50",
             ]
+            visualization_atlas = config["brain"].get("visualizationAtlas")
+            if visualization_atlas is not None:
+                command += ["--visualization-atlas", str(visualization_atlas)]
             launched_at = time.monotonic()
             process = subprocess.Popen(
                 command, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
