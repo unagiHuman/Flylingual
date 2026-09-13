@@ -300,7 +300,13 @@ public static class BlindSugarRunStageBuilder
     }
     static bool RulerSidesClear(){for(int i=5;i<=15;i++){Vector3 p=Vector3.Lerp(new Vector3(0,0,29),new Vector3(9,0,53),i/20f);Vector3 d=(new Vector3(9,0,24)).normalized;Vector3 side=Vector3.Cross(Vector3.up,d);for(int k=-1;k<=1;k+=2)if(Physics.Raycast(p+side*k*5+Vector3.up,Vector3.down,2f,Physics.DefaultRaycastLayers,QueryTriggerInteraction.Ignore))return false;}return true;}
     static bool DimensionsValid(){return Size("RulerBridge",8)&&Size("NarrowRoute",6)&&Size("WideRouteA",12)&&Size("WideRouteB",12)&&Size("WideRouteC",12);}
-    static bool Size(string n,float expected){var o=GameObject.Find(n);return o!=null&&Mathf.Abs(o.transform.localScale.x-expected)<.01f&&Mathf.Abs(o.transform.position.y+.4f)<.01f;}
+    static bool Size(string name, float expected)
+    {
+        var root = GameObject.Find("BlindSugarRunEnvironment");
+        var geometry = root == null ? null : root.transform.Find("EnvironmentGeometry/" + name);
+        return geometry != null && Mathf.Abs(geometry.localScale.x - expected) < .01f &&
+            Mathf.Abs(geometry.position.y + .4f) < .01f;
+    }
     static int MissingScripts(){int n=0;foreach(var t in UnityEngine.Object.FindObjectsByType<Transform>(FindObjectsSortMode.None))foreach(var c in t.GetComponents<Component>())if(c==null)n++;return n;}
     static bool PrefabReadback()
     {
@@ -326,6 +332,7 @@ public static class BlindSugarRunStageBuilder
         RenderTexture oldTarget = camera.targetTexture;
         RenderTexture oldActive = RenderTexture.active;
         float oldAspect = camera.aspect;
+        bool oldAsyncCompilation = ShaderUtil.allowAsyncCompilation;
         var rt = new RenderTexture(width, height, 24);
         Texture2D texture = null;
         try
@@ -333,6 +340,9 @@ public static class BlindSugarRunStageBuilder
             rt.Create();
             camera.targetTexture = rt;
             camera.aspect = width / (float)height;
+            ShaderUtil.allowAsyncCompilation = false;
+            // The first URP render initializes the pipeline and shader variants.
+            camera.Render();
             camera.Render();
             RenderTexture.active = rt;
             texture = new Texture2D(width, height, TextureFormat.RGB24, false);
@@ -347,6 +357,7 @@ public static class BlindSugarRunStageBuilder
             RenderTexture.active = oldActive;
             camera.targetTexture = oldTarget;
             camera.aspect = oldAspect;
+            ShaderUtil.allowAsyncCompilation = oldAsyncCompilation;
             if (texture != null) UnityEngine.Object.DestroyImmediate(texture);
             rt.Release();
             UnityEngine.Object.DestroyImmediate(rt);

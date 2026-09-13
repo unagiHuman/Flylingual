@@ -5,7 +5,7 @@
 
 ## 通常の起動方法
 
-このPCでは正式プレイ画面のWindows Playerをビルド済みです。`artifacts/windows-native-conversation/unity/FlylingualConversation.exe` をダブルクリックすると、Unityアプリ自身がBrain・Bridge・GPT Live会話を自動起動します。先に別のサービスや起動スクリプトを実行する必要はありません。
+このPCではBlind Sugar RunのStart Areaから始まるWindows Playerをビルド済みです。`artifacts/windows-native-conversation/unity/FlylingualConversation.exe` をダブルクリックすると、新しいプロトステージが開き、Unityアプリ自身がBrain・Bridge・GPT Live会話を自動起動します。先に別のサービスや起動スクリプトを実行する必要はありません。現在は開発用に3Dを表示し、Blind UI・新Goalのクリア判定・Final Revealは後続Phaseです。
 
 PowerShellでexeを直接起動する場合：
 
@@ -80,28 +80,30 @@ uv pip install --python .venv-bridge/Scripts/python.exe -r tools/requirements-wi
 3. `Flylingual > Play Screen > Build Windows Player` を実行する。
 4. ビルド成功後、`Start-UnityConversation.cmd`で起動する。
 
-ビルド対象は `Assets/RuntimeIntegration/PlayScreen/FlylingualPlay.unity`、出力先は `artifacts/windows-native-conversation/unity/FlylingualConversation.exe` です。`PlayScreenBuilder.Build()`がシーンを明示指定し、Windows x64、`FLY_NATIVE_CONVERSATION`、Development Buildで生成します。Player用の文字描画データを含むPanelSettingsアセットも用意します。
+ビルド対象は `Assets/BlindSugarRunPrototype/BlindSugarRunPlay.unity`、出力先は `artifacts/windows-native-conversation/unity/FlylingualConversation.exe` です。`PlayScreenBuilder.Build()`がシーンを明示指定し、Windows x64、`FLY_NATIVE_CONVERSATION`、Development Buildで生成します。Player用の文字描画データを含むPanelSettingsアセットも用意します。
 
 従来の `Flylingual > Conversation > Build Windows conversation Player` も現在は同じ正式シーンを対象としますが、通常の再ビルド手順は上記のPlay Screenメニューです。既存exeはソース編集だけでは更新されません。
 
 ## Editorで正式プレイ画面を確認する
 
-1. Playerを終了してからUnityで `Assets/RuntimeIntegration/PlayScreen/FlylingualPlay.unity` を開く。
+1. Playerを終了してからUnityで `Assets/BlindSugarRunPrototype/BlindSugarRunPlay.unity` を開く。
 2. `Play`を押す。
 3. シーン内の `ConversationNativeBootstrap` がEditor用のScene opt-inとして動作し、Playerと同じlocal設定を読む。
 4. 3領域、接続状態、字幕、設定と診断を確認する。
 5. 確認後はPlay Modeを停止する。
 
-正式シーンは既存の3D身体シーンを元に生成済みです。毎回の起動で `Create formal play scene` を実行する必要はありません。
+起動シーンは既存の正式プレイシーンの身体・会話・Brain連携を保持し、地形を置換して生成済みです。毎回の起動で生成メニューを実行する必要はありません。`Create formal play scene` は旧シーンを再生成するメニューなので、新ステージの起動には使いません。新規起動シーンの初回生成用は `Flylingual > Blind Sugar Run > Create startup scene` で、既存の起動シーンがある場合は上書きせず停止します。
 
 | 用途 | シーン／方法 |
 |---|---|
-| 正式プレイ画面（Player・Editor） | `Assets/RuntimeIntegration/PlayScreen/FlylingualPlay.unity` |
+| 正式プレイ画面（Player・Editor） | `Assets/BlindSugarRunPrototype/BlindSugarRunPlay.unity` |
+| 環境のみの独立プロトScene | `Assets/BlindSugarRunPrototype/BlindSugarRunPrototype.unity`。Fly・会話は含まない |
+| 起動シーンの身体・統合機能の複製元 | `Assets/RuntimeIntegration/PlayScreen/FlylingualPlay.unity`。元シーンは保持 |
 | 会話部品の独立検証 | `Assets/RuntimeIntegration/Conversation/NativeConversationTest.unity`。正式3Dプレイ画面の確認用ではない |
 | 正式シーンの生成元 | `Assets/VisualDemo/SessionRealism/FlyGroundedRealismDemo.unity` |
 | 基礎移動用シーン | `Assets/Scenes/FlyLocomotionSandbox.unity`。正式Playerの起動先ではない |
 
-Build Settingsの先頭シーンを変更しても、専用ビルダーの起動シーンは変わりません。
+EditorBuildSettingsの先頭も新しい起動シーンに設定済みです。専用ビルダーは別途シーンを明示指定するため、今後起動先を変更するときは両方をそろえます。
 
 ## 起動確認とトラブル時
 

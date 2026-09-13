@@ -25,6 +25,21 @@ from .conversation_settings import SettingsError, options_message, validate_sett
 from .translation import message_text, summarize
 
 
+VOICE_TEST_EVENTS = frozenset({
+    'voice_intent_dispatch', 'intent_classified', 'intent_rejected',
+    'command_submitted', 'command_applied', 'command_accepted', 'command_superseded',
+    'command_expired', 'output_inhibited', 'plan_started', 'plan_step_submitted',
+    'plan_stopped', 'audio_fixture_sent', 'delegation_observed',
+})
+VOICE_TEST_FIELDS = frozenset({
+    'commandId', 'requestId', 'sequence', 'action', 'source', 'kind', 'plan',
+    'planId', 'name', 'step', 'outcome', 'reason', 'proposalValidForMs',
+    'interpretationMs', 'continuedListening', 'e2eMs', 'accepted',
+    'fixtureId', 'fixtureChunkIndex', 'audioStartMs', 'audioEndMs',
+    'delegationId', 'startMs', 'endMs', 'offsetMs',
+})
+
+
 class Bridge:
     def __init__(self, config):
         self.config = config
@@ -66,12 +81,19 @@ class Bridge:
         self.brain_identity = None
         self.closed = False
         self.log_file = None
+        self.voice_test_observation = False
 
     def log(self, event, **fields):
+        stamp = round(time.monotonic()*1000, 3)
         if self.log_file:
-            self.log_file.info(json.dumps({'event': event, 'monotonicMs': round(time.monotonic()*1000, 3),
+            self.log_file.info(json.dumps({'event': event, 'monotonicMs': stamp,
                                             'epoch': self.arbiter.epoch, **fields},
                                            ensure_ascii=False, allow_nan=False))
+        if self.voice_test_observation and event in VOICE_TEST_EVENTS:
+            self.emit({'type': 'voice_test_diagnostic', 'event': event,
+                       'monotonicMs': stamp, 'epoch': self.arbiter.epoch,
+                       'conversationGeneration': self.conversation_generation,
+                       **{k: v for k, v in fields.items() if k in VOICE_TEST_FIELDS}})
 
     def task(self, coroutine, intent=False):
         task = asyncio.create_task(coroutine)
@@ -323,6 +345,10 @@ class Bridge:
             self.emit(self.state())
 
     async def conversation_event(self, event):
+        if event['type'] == 'voice_test_diagnostic':
+            if self.voice_test_observation and event.get('event') in VOICE_TEST_EVENTS:
+                self.log(event['event'], **{k: v for k, v in event.items() if k in VOICE_TEST_FIELDS})
+            return
         if event['type'] in ('audio', 'conversation_text') and not self.conversation_accepting:
             return
         if event['type'] == 'error':
@@ -358,7 +384,8 @@ class Bridge:
             command_id = 'voice-' + str(uuid.uuid4())
             try:
                 self.start_intent(text, command_id, self.arbiter.epoch, delegation_id)
-                self.log('voice_intent_dispatch', outcome='started', commandId=command_id)
+                self.log('voice_intent_dispatch', outcome='started', commandId=command_id,
+                         delegationId=delegation_id)
             except ControlError as exc:
                 self.log('voice_intent_dispatch', outcome='rejected', reason=str(exc))
                 self.emit({'type': 'error', 'error': str(exc)})
@@ -552,7 +579,14 @@ class Bridge:
         if not isinstance(event, dict):
             raise ControlError('invalid_message')
         kind = event.get('type')
-        if kind == 'configure_conversation':
+        if kind == 'voice_test_observation':
+            if (set(event) != {'type', 'enabled'} or type(event['enabled']) is not bool
+                    or self.control_ws is None):
+                raise ControlError('invalid_voice_test_observation')
+            self.voice_test_observation = event['enabled']
+            self.conversation.voice_test_observation = event['enabled']
+            self.emit({'type': 'voice_test_observation', 'enabled': event['enabled']})
+        elif kind == 'configure_conversation':
             self.task(self.configure_conversation(event))
         elif kind == 'blind_run_cue':
             await self.blind_run_cue(event)
@@ -646,7 +680,19 @@ class Bridge:
                         or event['conversationGeneration'] != self.conversation_generation
                         or not self.conversation_accepting):
                     raise ControlError('old_conversation_generation')
-            await self.conversation.input_audio(event.get('audio'))
+            tag = None
+            if 'fixtureId' in event or 'fixtureChunkIndex' in event:
+                fid, index = event.get('fixtureId'), event.get('fixtureChunkIndex')
+                if (not self.voice_test_observation or not isinstance(fid, str)
+                        or not 1 <= len(fid) <= 64
+                        or any(c not in 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-' for c in fid)
+                        or type(index) is not int or not 0 <= index <= 100000):
+                    raise ControlError('invalid_voice_fixture_tag')
+                tag = {'fixtureId': fid, 'fixtureChunkIndex': index}
+            if tag is None:
+                await self.conversation.input_audio(event.get('audio'))
+            else:
+                await self.conversation.input_audio(event.get('audio'), tag)
         else:
             raise ControlError('unknown_message')
 
@@ -825,6 +871,8 @@ class Bridge:
                 await asyncio.gather(sender, return_exceptions=True)
             if self.control_ws is ws:
                 self.control_ws = self.control_queue = None
+                self.voice_test_observation = False
+                self.conversation.voice_test_observation = False
                 if not self.closed:
                     await self.inhibit('control_client_disconnected')
                     self.stop_conversation_session()

@@ -32,6 +32,7 @@ namespace Flylingual.Conversation
         string lastControlEndpoint;
         double nextRecoveryAt, nextMicrophoneRetryAt;
         bool captureAttempted;
+        bool fixtureInputEnabled;
         string expectedSettingsRequestId;
         string selectedDevice;
         string captionRole;
@@ -81,6 +82,13 @@ namespace Flylingual.Conversation
         public long ReceivedTranscriptDeltas { get; private set; }
         public long SentAudioChunks { get; private set; }
         public long SentAudioChunksDuringReply { get; private set; }
+        /// <summary>True when this process was explicitly launched for synthetic fixture input.</summary>
+        public bool FixtureInputEnabled => fixtureInputEnabled;
+        /// <summary>The sole selected input path. Fixture mode never opens a physical microphone.</summary>
+        public string InputSource => fixtureInputEnabled ? "synthetic_fixture" : "microphone";
+        /// <summary>Whether a fixture chunk may currently be sent through the live conversation.</summary>
+        public bool FixtureInputTransmitting => fixtureInputEnabled && CanTransmit();
+        public long SentFixtureAudioChunks { get; private set; }
         public bool MicrophoneMuted { get; private set; }
         public bool MicrophoneCaptureDisabled { get; private set; }
         public bool MicrophoneCapturing => microphone != null && microphone.IsCapturing;
@@ -88,6 +96,8 @@ namespace Flylingual.Conversation
         public bool ReplyPlaying => replyAudio != null && replyAudio.IsPlaying;
         public long PlayedNonzeroSamples => replyAudio == null ? 0L : replyAudio.PlayedNonzeroSamples;
         public bool VoiceActionsAvailable { get; private set; }
+        // Raw messages are exposed only to passive local observers of this existing control socket.
+        public event Action<string> ControlEventReceived;
         // Passive local observers share the existing control socket; they never acquire control.
         public event Action<string> BrainObservationReceived;
         public bool BrainConnected => bridgeConnected;
@@ -112,9 +122,13 @@ namespace Flylingual.Conversation
 
         void Awake()
         {
-            startChatOnly = Array.IndexOf(Environment.GetCommandLineArgs(), "-flyConversationChatOnly") >= 0;
+            var commandLine = Environment.GetCommandLineArgs();
+            startChatOnly = Array.IndexOf(commandLine, "-flyConversationChatOnly") >= 0;
             if (startChatOnly) ActionFeedback = "会話のみ。身体操作は停止しています";
-            MicrophoneCaptureDisabled = Array.IndexOf(Environment.GetCommandLineArgs(), "-flyConversationNoMicrophone") >= 0;
+            // The switch itself selects fixture input. A missing or invalid manifest must not
+            // silently turn on physical capture.
+            fixtureInputEnabled = Array.IndexOf(commandLine, "-flyVoiceFixtures") >= 0;
+            MicrophoneCaptureDisabled = Array.IndexOf(commandLine, "-flyConversationNoMicrophone") >= 0;
             MicrophoneMuted = MicrophoneCaptureDisabled;
             if (FindAnyObjectByType<AudioListener>() == null)
             {
@@ -347,6 +361,14 @@ namespace Flylingual.Conversation
             StopCapture();
         }
 
+        /// <summary>Enables Bridge-side fixture timing diagnostics on the existing control socket.</summary>
+        public bool EnableVoiceTestObservation()
+        {
+            if (!fixtureInputEnabled || !Ready || transport == null || !transport.IsConnected) return false;
+            Send(new VoiceTestObservation { type = "voice_test_observation", enabled = true });
+            return true;
+        }
+
         public void SetVolume(float value)
         {
             if (replyAudio == null) return;
@@ -355,6 +377,8 @@ namespace Flylingual.Conversation
 
         void HandleMessage(string json)
         {
+            try { ControlEventReceived?.Invoke(json); }
+            catch (Exception exception) { Debug.LogWarning("Control event observer failed: " + exception.Message); }
             try { HandleMessageCore(json); }
             catch (ArgumentException) { Disconnected("control_protocol_invalid"); }
         }
@@ -503,6 +527,16 @@ namespace Flylingual.Conversation
 
         void UpdateMicrophone()
         {
+            if (fixtureInputEnabled)
+            {
+                // Fixture chunks are injected explicitly through TrySendFixturePcm. Do not
+                // claim a microphone state or allow an adapter to begin physical capture.
+                MicrophoneTransmitting = false;
+                microphone?.SetTransmitting(false);
+                if (MicrophoneCapturing) microphone.StopCapture();
+                captureAttempted = false;
+                return;
+            }
             bool active = CanTransmit();
             if (!active)
             {
@@ -547,10 +581,56 @@ namespace Flylingual.Conversation
         }
         void OnPcmChunk(byte[] pcm)
         {
-            if (!MicrophoneTransmitting || !CanTransmit() || pcm == null || pcm.Length == 0) return;
+            if (!MicrophoneTransmitting) return;
+            if (!TrySendPcm(pcm, ControlEpoch, ConversationGeneration)) return;
             SentAudioChunks++;
             if (ReplyPlaying) SentAudioChunksDuringReply++;
-            Send(new AudioOutbound { type = "audio", conversationGeneration = ConversationGeneration, controlEpoch = ControlEpoch, audio = Convert.ToBase64String(pcm) });
+        }
+
+        /// <summary>
+        /// Sends one converted 24 kHz mono, 100 ms fixture chunk through the same outbound
+        /// conversation path as microphone PCM. Stale generations and muted/live boundaries
+        /// are rejected instead of replaying fixture audio across a control boundary.
+        /// </summary>
+        public bool TrySendFixturePcm(byte[] pcm, int expectedEpoch, int expectedGeneration,
+            string fixtureId = null, int fixtureChunkIndex = -1)
+        {
+            if (!fixtureInputEnabled || !FixtureInputTransmitting) return false;
+            if (!IsFixtureTagValid(fixtureId, fixtureChunkIndex)) return false;
+            if (!TrySendPcm(pcm, expectedEpoch, expectedGeneration, fixtureId, fixtureChunkIndex)) return false;
+            SentFixtureAudioChunks++;
+            return true;
+        }
+
+        bool TrySendPcm(byte[] pcm, int expectedEpoch, int expectedGeneration,
+            string fixtureId = null, int fixtureChunkIndex = -1)
+        {
+            if (!CanTransmit() || expectedEpoch != ControlEpoch || expectedGeneration != ConversationGeneration)
+                return false;
+            if (pcm == null || pcm.Length != PcmStreamConverter.ChunkSamples * sizeof(short)) return false;
+            string audio = Convert.ToBase64String(pcm);
+            if (fixtureId == null)
+                Send(new AudioOutbound { type = "audio", conversationGeneration = ConversationGeneration, controlEpoch = ControlEpoch, audio = audio });
+            else
+                Send(new FixtureAudioOutbound
+                {
+                    type = "audio", conversationGeneration = ConversationGeneration, controlEpoch = ControlEpoch, audio = audio,
+                    fixtureId = fixtureId, fixtureChunkIndex = fixtureChunkIndex,
+                });
+            return true;
+        }
+
+        static bool IsFixtureTagValid(string fixtureId, int fixtureChunkIndex)
+        {
+            if (fixtureId == null && fixtureChunkIndex == -1) return true; // untagged silence
+            if (string.IsNullOrEmpty(fixtureId) || fixtureId.Length > 64 || fixtureChunkIndex < 0) return false;
+            for (int i = 0; i < fixtureId.Length; i++)
+            {
+                char value = fixtureId[i];
+                if (!((value >= 'a' && value <= 'z') || (value >= 'A' && value <= 'Z')
+                    || (value >= '0' && value <= '9') || value == '_' || value == '-')) return false;
+            }
+            return true;
         }
 
         void Send(object message)
@@ -666,6 +746,8 @@ namespace Flylingual.Conversation
         [Serializable] sealed class ConversationStop { public string type; }
         [Serializable] sealed class EmergencyStopMessage { public string type; }
         [Serializable] sealed class AudioOutbound { public string type; public int conversationGeneration, controlEpoch; public string audio; }
+        [Serializable] sealed class FixtureAudioOutbound { public string type; public int conversationGeneration, controlEpoch; public string audio; public string fixtureId; public int fixtureChunkIndex; }
+        [Serializable] sealed class VoiceTestObservation { public string type; public bool enabled; }
         [Serializable] sealed class ConfigureConversation { public string type; public string requestId; public int controlEpoch; public int expectedRevision; public ConversationSettings settings; }
         [Serializable] public sealed class ConversationOptions { public string[] languages; public string[] voices; public string[] personas; public int maxPersonaTextLength; }
         [Serializable] sealed class BrainFrameMessage { public long sequence; public int appliedRequestId; public FlyBrainPoC.BackendMetadata metadata; public FlyBrainPoC.MotorOutput motor; }

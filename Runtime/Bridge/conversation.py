@@ -105,6 +105,8 @@ class ConversationAdapter:
         self.audio_sender = None
         self.resolved_voice = None
         self._diagnostics = self._new_diagnostics()
+        self.voice_test_observation = False
+        self.sent_audio_samples = 0
 
     @staticmethod
     def _new_diagnostics():
@@ -145,6 +147,7 @@ class ConversationAdapter:
 
     def _reset_diagnostics(self):
         self._diagnostics = self._new_diagnostics()
+        self.sent_audio_samples = 0
 
     def _record_error(self, code):
         if not self.closing:
@@ -314,8 +317,15 @@ class ConversationAdapter:
                         continue
                     self.delegations.append(did)
                     self._diagnostics['delegationCount'] += 1
-                    text = ''.join(t for start, end, t in self.fragments
-                                   if start > self.last_offset and end <= offset)[-2000:].strip()
+                    selected = [(start, end, t) for start, end, t in self.fragments
+                                if start > self.last_offset and end <= offset]
+                    text = ''.join(t for _, _, t in selected)[-2000:].strip()
+                    if self.voice_test_observation:
+                        await self.on_event({'type': 'voice_test_diagnostic',
+                            'event': 'delegation_observed', 'delegationId': did,
+                            'startMs': min((start for start, _, _ in selected), default=-1),
+                            'endMs': max((end for _, end, _ in selected), default=-1),
+                            'offsetMs': offset})
                     self.last_offset = max(self.last_offset, offset)
                     # An event has no task text. Never invent one from its ID.
                     # The callback schedules interpretation; audio reading stays live.
@@ -358,7 +368,7 @@ class ConversationAdapter:
                                  'event_id': str(uuid.uuid4()), 'delegation_id': delegation_id,
                                  'content': content[:380]})
 
-    async def input_audio(self, encoded):
+    async def input_audio(self, encoded, fixture_tag=None):
         if self.state != 'live':
             raise ConversationError('live_audio_not_connected')
         if not isinstance(encoded, str) or len(encoded) > 65536:
@@ -372,7 +382,7 @@ class ConversationAdapter:
         self._diagnostics['inputChunks'] += 1
         self._diagnostics['inputBytes'] += len(raw)
         try:
-            self.audio_queue.put_nowait(raw)
+            self.audio_queue.put_nowait((raw, dict(fixture_tag)) if fixture_tag is not None else raw)
         except asyncio.QueueFull:
             self._diagnostics['audioBackpressureCount'] += 1
             self._record_error('audio_backpressure')
@@ -407,8 +417,19 @@ class ConversationAdapter:
                 except asyncio.QueueEmpty:
                     raw = silence
                     player_audio = False
+                tag = None
+                if isinstance(raw, tuple):
+                    raw, tag = raw
+                audio_start = self.sent_audio_samples / 24
+                context_generation = self.context_generation
                 await self._send_event({'type': 'session.input_audio.append',
                                         'audio': base64.b64encode(raw).decode('ascii')})
+                self.sent_audio_samples += len(raw) // 2
+                if (tag is not None and self.voice_test_observation
+                        and context_generation == self.context_generation):
+                    await self.on_event({'type': 'voice_test_diagnostic',
+                        'event': 'audio_fixture_sent', **tag,
+                        'audioStartMs': audio_start, 'audioEndMs': self.sent_audio_samples / 24})
                 if player_audio:
                     self._diagnostics['sentInputChunks'] += 1
                     self._diagnostics['sentInputBytes'] += len(raw)

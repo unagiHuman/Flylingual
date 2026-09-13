@@ -9,7 +9,8 @@ using UnityEngine;
 
 public static class PlayScreenBuilder
 {
-    public const string ScenePath = "Assets/RuntimeIntegration/PlayScreen/FlylingualPlay.unity";
+    public const string LegacyScenePath = "Assets/RuntimeIntegration/PlayScreen/FlylingualPlay.unity";
+    public const string ScenePath = "Assets/BlindSugarRunPrototype/BlindSugarRunPlay.unity";
 
     [MenuItem("Flylingual/Play Screen/Create formal play scene")]
     public static void CreateScene()
@@ -21,13 +22,14 @@ public static class PlayScreenBuilder
         services.AddComponent<ConversationNativeBootstrap>();
         var presentation = new GameObject("Flylingual Play Screen").AddComponent<PlayScreenRuntime>();
         presentation.neuralShader = AssetDatabase.LoadAssetAtPath<Shader>("Assets/BrainVisualization/Rendering/NeuralPointCloud.shader");
-        EditorSceneManager.SaveScene(scene, ScenePath);
-        Debug.Log("PLAY_SCREEN_SCENE_SAVED " + ScenePath);
+        EditorSceneManager.SaveScene(scene, LegacyScenePath);
+        Debug.Log("PLAY_SCREEN_SCENE_SAVED " + LegacyScenePath);
     }
 
     [MenuItem("Flylingual/Play Screen/Build Windows Player")]
     public static void Build()
     {
+        if (!File.Exists(ScenePath)) BlindSugarRunPlayBuilder.CreateScene();
         const string settingsPath = "Assets/RuntimeIntegration/PlayScreen/Resources/PlayScreenPanelSettings.asset";
         if (AssetDatabase.LoadAssetAtPath<UnityEngine.UIElements.PanelSettings>(settingsPath) == null)
         {
