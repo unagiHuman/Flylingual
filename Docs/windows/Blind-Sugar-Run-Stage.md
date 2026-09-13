@@ -107,4 +107,35 @@ Windows実Brain `127.0.0.1:18766`、Unity側Bridge motor `127.0.0.1:18770` の�
 
 Scene生成時に身体の171コンポーネントのserialization不変、旧環境64 rootの置換、開始位置と支持面高さを検査した。保護対象65ファイルのSHA-256は変更なし（[照合記録](../../artifacts/blind-sugar-run-startup/protected-after.json)）。既存Fly・Brain・会話・音声コードおよび複製元Sceneは保持した。検証Playerは終了し、所有するBrain／Bridgeも `stopped`、使用ポートの待受なしを確認済み。Editorは新Sceneを開いたEdit Modeで、未保存変更なし。
 
-**未実施：既存Flyの歩行・停止余動・実Brain完走・局所Sensor・Blind UI・ステージ観測を用いた会話・落下復帰・Final Reveal再生。** 環境作成、起動Scene統合、通常exeからの起動は確認したが、Phase 1の通行検証およびPhase 2以降の完了判定は残る。現在の寸法と10〜15分という所要時間は、統合後の実測で調整する。
+**起動統合時点で未実施：既存Flyの歩行・停止余動・実Brain完走・局所Sensor・Blind UI・ステージ観測を用いた会話・落下復帰・Final Reveal再生。** 落下復帰の追加実装・検証は次節に記載する。環境作成、起動Scene統合、通常exeからの起動は確認したが、Phase 1の通行検証およびPhase 2以降の完了判定は残る。現在の寸法と10〜15分という所要時間は、統合後の実測で調整する。
+
+## ゲームオーバーとリトライ接合
+
+[BlindSugarRunSession.cs](../../UnityProject/Assets/BlindSugarRunPrototype/BlindSugarRunSession.cs) は、Fly位置が `y < -2` または `KillVolume` 内に入った時点で状態を判定する。`HasFreshBrain`、`BodyControlActive`、`NativeConversationBody.BodyActive` が揃っている健康な実Brain中の落下は `GameOver`、接続・Brain状態を確認できない落下は `Interrupted` とする。どちらも `EmergencyStop()`、NativeBody無効化、motor source切断、timeScale停止を行う。
+
+[BlindSugarRunGameOverView.cs](../../UnityProject/Assets/BlindSugarRunPrototype/BlindSugarRunGameOverView.cs) は初期非表示の全画面overlayを表示し、本文・挑戦回数・Retryボタンを提供する。クリック直後にボタンを無効化して連打を拒否し、Session側の状態ラッチも二重開始を拒否する。
+
+Retryは同じ `BlindSugarRunPlay.unity` を再読込してFly/CPG/接触状態を初期化する。`ConversationSessionController` とBootstrapは `DontDestroyOnLoad` で保持し、Scene-boundな `NativeConversationBody` と `NativeConversationReaction` は破棄後、新SceneのFlyを参照するインスタンスとして再作成する。Startに配置された新Flyとfresh Brain frameを確認した後、既存 `EnableVoiceActions()` のSTOP/resume経路で再開する。通常Windows exeにはこの接合コードが含まれる。
+
+2026-09-13、通常Windows exeを再ビルドし、実Brain `127.0.0.1:18766`／Bridge motor `127.0.0.1:18770` で物理落下から2回連続のリトライに成功した。診断は開始床のColliderだけを一時的に無効化して重力落下を起こす。身体の移動・motor値の直接注入・Replay・mockは使用していない。再読込で床も元に戻る。診断コードは [BlindSugarRunRetryProbe.cs](../../UnityProject/Assets/BlindSugarRunPrototype/Diagnostics/BlindSugarRunRetryProbe.cs) にあり、Development buildの明示引数時だけ実行される。
+
+- 落下位置は `y=-2.063` と `-2.148`。各回でGameOver、死亡数加算、timeScale=0、身体制御停止、画面表示、1秒間の停止保持を確認。
+- 実際のRetryボタンへUI submitを送り、二重リトライが拒否されることを確認。両回とも新Flyが `(0,1.45,0)` に復帰し、新NativeBodyとReactionへ接続。Controllerは同一、各コンポーネントは1個のまま。
+- 再開後のTCP sequenceは51→70、122→126。backendは `MALECNS_EXPERIMENTAL`、raw `brainReady` はfalseのままで、ready=trueには扱っていない。2回目の復帰中に既存の `voice_control_stopped_or_stale` が1回記録されたが、既存再接続処理を通って復帰した。通信エラー皆無の試験とはしていない。
+- [実測JSON](../../artifacts/blind-sugar-run-retry/player-02/retry-probe.json)、[起動引数](../../artifacts/blind-sugar-run-retry/player-02/launch.json)、[Playerログ](../../artifacts/blind-sugar-run-retry/player-02/player.log) を保存。実RuntimeのUIパネルをRenderTextureへ描画した [ゲームオーバー画面](../../artifacts/blind-sugar-run-retry/player-02/game-over.png) で日本語とボタン表示を確認した。画面全体のOSキャプチャやマウスによる手動クリックではない。
+
+最初の試験では「止めるまで前に進み続けて」の送信後、既存接続監視の停止・再接続が発生してFORWARD適用待ちがtimeoutした（[失敗記録](../../artifacts/blind-sugar-run-retry/player-01/retry-probe.json)）。2回目は `-blindSugarRetryProbeSkipMovement` を明示し、実Brain接続のSTOP状態から落下と復帰を独立検証した。**継続移動中の落下、旧移動命令の持ち越し防止のE2E、音声による再指示、通信断を起こしたInterrupted分岐は未検証。** Goal／Final Reveal／会話への落下記憶利用はこの追加範囲に含めていない。
+
+通常Playerの最終ビルドは成功（[ビルド記録](../../artifacts/blind-sugar-run-retry/build-report.json)）。操作・Brain・物理の既存コードは本作業では変更していない。保護対象80ファイルのうち79はSHA-256不変、並行作業の `NativeVoiceFixtureProbe.cs` だけ変化を検出したが保持した（[照合記録](../../artifacts/blind-sugar-run-retry/protected-after.json)）。
+
+## 接合部のZ-fighting修正（2026-09-13）
+
+歩行経路を連続させるために重ねていた支持ブロックの上面が同じ高さにあり、二重描画されていた。`EnvironmentGeometry`の12支持物について、他のBoxColliderの内部に入る描画面を切り取り、同一平面の重複部分は階層順で後の支持物だけに残した。側面・底面も同じ処理で整理している。描画Meshだけを `SurfaceMeshes/` のアセットへ差し替え、Collider、Transform、Material、支持面高さ、Anchor、既存Fly・操作・Brain処理は維持した。
+
+処理本体は [BlindSugarRunSurfaceMesh.cs](../../UnityProject/Assets/BlindSugarRunPrototype/Editor/BlindSugarRunSurfaceMesh.cs)。既存環境への適用と静的検証は [BlindSugarRunSurfaceRepair.cs](../../tools/authoring/BlindSugarRunSurfaceRepair.cs)。環境の新規生成コードも同じ処理を呼ぶため、再生成時にも重複面が復活しない。Mesh assetのGUIDは再実行時も保持する。Colliderを編集した場合はメッシュを再生成する必要がある。
+
+上面三角形の重複は30組から0組へ減少し、支持面内12,551点で描画の欠落なしを確認した。Collider等のserializationも不変。[初回幾何検証](../../artifacts/blind-sugar-run-surfaces/geometry-first-pass.json) と [最終検証](../../artifacts/blind-sugar-run-surfaces/geometry-validation.json) を保存した。定規橋と分岐を同じカメラから修正前後で静止描画し、接合部の見た目を確認した。初回のMesh複製では描画バッファが更新されず支持面が非表示になったため、Mesh APIによる頂点・三角形・法線・UV・接線の設定に修正している。
+
+正式Windows Playerも再ビルド済み。24.69秒、結果 `Succeeded`、error 0、warning 1（[BuildReport](../../artifacts/blind-sugar-run-surfaces/build-report.json)）。保存したSceneを再読込しても正常に表示されることを確認した。[修正後の定規橋](../../artifacts/blind-sugar-run-surfaces/after-ruler.png)／[修正後の分岐](../../artifacts/blind-sugar-run-surfaces/after-branch.png)。既存コード・Scene等の保護対象81ファイルはSHA-256不変（[照合記録](../../artifacts/blind-sugar-run-surfaces/protected-after.json)）。
+
+この確認は描画・静的形状・ビルドの検証であり、歩行や実Brainの再試験ではない。

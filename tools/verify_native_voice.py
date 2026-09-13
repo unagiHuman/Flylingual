@@ -38,7 +38,8 @@ def collect_hashes(manifest: Path, config: dict | None = None, exe: Path | None 
         "source": ["Brain/MaleCNS/brain_server_analog.py", "Brain/MaleCNS/shiu_compatible.py",
                    "Brain/MaleCNS/analog_controller.py", "Brain/MaleCNS/lif_kernels.py",
                    "Runtime/Bridge/server.py", "Runtime/Bridge/conversation.py",
-                   "Runtime/Bridge/action_plans.py", "tools/windows_native.py"],
+                   "Runtime/Bridge/action_plans.py", "Runtime/Bridge/control.py",
+                   "Runtime/Bridge/conversation_prompts.py", "tools/verify_native_voice.py", "tools/windows_native.py"],
         "config": ["Runtime/Config/local.json", "Runtime/Config/windows-stack.local.json",
                    "Runtime/Config/profiles/windows-local.json", "Brain/MaleCNS/requirements-runtime.txt"],
         "data": [],
@@ -120,7 +121,9 @@ def evaluate_status(report, *, timeout, remaining, ports_free, exit_code, except
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--fixtures", required=True, type=Path, help="manifest.json")
-    ap.add_argument("--suite", choices=("smoke", "full", "plans", "soak"), default="smoke")
+    ap.add_argument("--suite", choices=("smoke", "full", "duration", "plans", "soak", "persistent", "handoff"), default="smoke")
+    ap.add_argument("--capture-test-transcript", action="store_true",
+                    help="opt-in recognized text for synthetic fixtures only; never enables the microphone")
     ap.add_argument("--seconds", type=int, default=None)
     ap.add_argument("--output", required=True, type=Path)
     ap.add_argument("--exe", type=Path,
@@ -165,10 +168,12 @@ def main() -> int:
                    "-screen-fullscreen", "0", "-screen-width", "1280", "-screen-height", "800"]
         if args.seconds is not None:
             command.extend(("-flyVoiceFixtureSeconds", str(args.seconds)))
+        if args.capture_test_transcript:
+            command.append("-flyVoiceFixtureTextDiagnostics")
         event("launch", suite=args.suite)
         started = time.monotonic()
         stdout_path = output / "player-stdout.log"
-        deadline_seconds = args.seconds if args.seconds is not None else {"smoke": 240, "full": 900, "plans": 240, "soak": 300}[args.suite]
+        deadline_seconds = args.seconds if args.seconds is not None else {"smoke": 240, "full": 900, "duration": 180, "plans": 240, "soak": 300, "persistent": 180, "handoff": 120}[args.suite]
         timeout = False; process = None; owned = None; peak_rss = 0; runner_exception = None
         try:
             with stdout_path.open("w", encoding="utf-8", newline="\n") as player_output:

@@ -32,19 +32,41 @@ PLAN_REPLY = {
 def validate_intent(result, max_ms):
     """Validate the complete model proposal before any authority is consulted."""
     keys = {'kind', 'action', 'plan', 'validForMs', 'reply'}
-    if (not isinstance(result, dict) or set(result) != keys
+    extension = {'operation', 'executionMode', 'targetExecutionId'}
+    if (not isinstance(result, dict) or set(result) not in (keys, keys | extension)
             or not isinstance(result['kind'], str)
-            or result['kind'] not in ('action', 'plan', 'question', 'clarify')
-            or type(result['validForMs']) is not int or not 0 < result['validForMs'] <= max_ms
+            or result['kind'] not in ('action', 'plan', 'question', 'clarify', 'update')
             or not isinstance(result['reply'], str) or len(result['reply']) > 1000):
         raise ControlError('invalid_intent')
     kind, action, plan = result['kind'], result['action'], result['plan']
+    operation = result.get('operation', 'new')
+    mode = result.get('executionMode', 'timed')
+    target = result.get('targetExecutionId')
+    duration = result['validForMs']
+    timed = type(duration) is int and 0 < duration <= max_ms
+    if (mode not in ('timed', 'until_next_command', 'inherit')
+            or (mode == 'timed' and not timed)
+            or (mode != 'timed' and duration is not None)):
+        raise ControlError('invalid_intent')
+    if kind == 'update':
+        valid = (set(result) == keys | extension and action is None and plan is None
+                 and operation in ('continue', 'modify_conditions')
+                 and isinstance(target, str) and 1 <= len(target) <= 128
+                 and target.strip() != ''
+                 and (operation != 'modify_conditions' or mode == 'inherit'))
+        if not valid:
+            raise ControlError('invalid_intent')
+        return result
+    if operation != 'new' or target is not None or mode == 'inherit':
+        raise ControlError('invalid_intent')
     if kind == 'action':
-        valid = isinstance(action, str) and action in ACTIONS and plan is None
+        valid = (isinstance(action, str) and action in ACTIONS and plan is None
+                 and (action != 'STOP' or mode == 'timed'))
     elif kind == 'plan':
-        valid = action is None and isinstance(plan, str) and plan in PLAN_STEPS
+        valid = (action is None and isinstance(plan, str) and plan in PLAN_STEPS
+                 and (not plan.startswith('nudge_') or mode == 'timed'))
     else:
-        valid = action is None and plan is None
+        valid = action is None and plan is None and mode == 'timed'
     if not valid:
         raise ControlError('invalid_intent')
     return result
@@ -125,7 +147,7 @@ class BoundedPlanRunner:
 
     def guard(self, epoch, generation, deadline):
         b = self.bridge
-        if time.monotonic() >= deadline:
+        if deadline is not None and time.monotonic() >= deadline:
             return 'plan_expired'
         if epoch != b.arbiter.epoch or generation != b.conversation_generation:
             return 'plan_old_generation'
@@ -139,10 +161,28 @@ class BoundedPlanRunner:
             return 'plan_brain_stale'
         return b.local_observation.concern()
 
-    async def begin(self, name, command_id, epoch, generation, deadline):
-        reason = self.guard(epoch, generation, deadline)
+    def admission_reason(self, epoch, generation, intent_deadline, revision):
+        if revision != self.bridge.intent_revision:
+            return 'stale_intent'
+        if time.monotonic() >= intent_deadline:
+            return 'expired_intent'
+        return self.guard(epoch, generation, intent_deadline)
+
+    async def begin(self, name, command_id, epoch, generation, duration_ms, *, intent_deadline, revision,
+                    execution_mode='timed', delegation_id=None, admission_check=None, notify_live=False):
+        if not isinstance(name, str) or name not in PLAN_STEPS:
+            raise ControlError('invalid_intent')
+        if (execution_mode not in ('timed', 'until_next_command')
+                or (execution_mode == 'timed' and (type(duration_ms) is not int
+                    or not 0 < duration_ms <= self.bridge.config['control']['maxActionMs']))
+                or (execution_mode == 'until_next_command'
+                    and (duration_ms is not None or name.startswith('nudge_')))):
+            raise ControlError('invalid_command_duration')
+        reason = self.admission_reason(epoch, generation, intent_deadline, revision)
         if reason:
             raise ControlError(reason)
+        if admission_check is not None:
+            admission_check()
         replaced = self.active is not None
         try:
             await self.cancel_and_wait()
@@ -150,21 +190,33 @@ class BoundedPlanRunner:
             if replaced:
                 await self.bridge.inhibit('plan_replacement_cancelled')
             raise
-        reason = self.guard(epoch, generation, deadline)
+        reason = self.admission_reason(epoch, generation, intent_deadline, revision)
         if reason:
             if replaced:
                 await self.bridge.inhibit('plan_replacement_failed')
             raise ControlError(reason)
+        if admission_check is not None:
+            try:
+                admission_check()
+            except ControlError:
+                if replaced:
+                    await self.bridge.inhibit('plan_replacement_failed')
+                raise
+        deadline = time.monotonic() + duration_ms/1000 if execution_mode == 'timed' else None
         plan = {'planId': 'plan-' + str(uuid.uuid4()), 'commandId': command_id,
-                'name': name, 'step': 0, 'requestId': None, 'deadline': deadline}
+                'executionId': command_id, 'executionMode': execution_mode, 'delegationId': delegation_id,
+                'notifyLive': notify_live,
+                'name': name, 'step': 0, 'requestId': None, 'deadline': deadline,
+                'phaseSent': False, 'appliedAt': None, 'submittedAt': None, 'applyDeadline': None}
+        self.bridge.activate_execution(command_id, PLAN_STEPS[name][0], execution_mode, deadline,
+                                       plan=name, monitor_hazards=True)
         self.active = plan
-        self.bridge.log('plan_started', planId=plan['planId'], commandId=command_id, name=name)
+        self.bridge.log('plan_started', planId=plan['planId'], commandId=command_id, name=name,
+                        executionDurationMs=duration_ms)
         self.task = self.bridge.task(self.run(plan, epoch, generation))
 
     async def run(self, plan, epoch, generation):
         b = self.bridge
-        applied_at = None
-        phase_sent = False
         try:
             while self.active is plan:
                 reason = self.guard(epoch, generation, plan['deadline'])
@@ -176,34 +228,51 @@ class BoundedPlanRunner:
                     await b.inhibit(reason)
                     return
                 steps = PLAN_STEPS[plan['name']]
-                if not phase_sent:
+                if not plan['phaseSent']:
                     action = steps[plan['step']]
                     command_id = plan['planId'] + '-' + str(plan['step'])
-                    remaining_ms = (plan['deadline'] - time.monotonic()) * 1000
-                    b.arbiter.accept('gpt', action, command_id, epoch, remaining_ms)
-                    plan['requestId'] = await b.submit(action, 'gpt', command_id)
-                    phase_sent = True
+                    remaining_ms = ((plan['deadline'] - time.monotonic()) * 1000
+                                    if plan['deadline'] is not None else None)
+                    b.arbiter.accept('gpt', action, command_id, epoch, remaining_ms,
+                                     execution_mode=plan['executionMode'])
+                    b.update_execution_step(plan['executionId'], action, plan['step'])
+                    plan['submittedAt'] = time.monotonic()
+                    timeout = b.config['control']['stopTimeoutMs']/1000
+                    plan['applyDeadline'] = plan['submittedAt'] + timeout
+                    delegation = ({'delegation_id': plan['delegationId']} if plan['delegationId'] is not None else {})
+                    if plan['notifyLive']:
+                        delegation['notify_live'] = True
+                    plan['requestId'] = await asyncio.wait_for(b.submit(action, 'gpt', command_id, **delegation), timeout)
+                    if self.active is not plan:
+                        return
+                    plan['phaseSent'] = True
                     b.log('plan_step_submitted', planId=plan['planId'], step=plan['step'],
                           requestId=plan['requestId'], action=action)
                 item = b.requests.get(plan['requestId'], {})
                 if item.get('rejected') or item.get('superseded'):
                     await b.inhibit('plan_step_not_applied')
                     return
+                if plan['appliedAt'] is None and time.monotonic() >= plan['applyDeadline']:
+                    await b.inhibit('plan_apply_timeout')
+                    return
                 if item.get('applied'):
-                    if applied_at is None:
-                        applied_at = time.monotonic()
+                    if plan['appliedAt'] is None:
+                        plan['appliedAt'] = time.monotonic()
                     short_turn = (len(steps) == 2 and plan['step'] == 0) or plan['name'].startswith('nudge_')
-                    if short_turn and time.monotonic() - applied_at >= .5:
+                    if short_turn and time.monotonic() - plan['appliedAt'] >= .5:
                         if plan['step'] + 1 == len(steps):
                             await b.finish_plan(plan, 'plan_finished')
                             return
                         plan['step'] += 1
-                        phase_sent = False
-                        applied_at = None
+                        plan['phaseSent'] = False
+                        plan['appliedAt'] = None
                         continue  # Recheck observations/ownership before the next Action.
                 await asyncio.sleep(.05)
         except asyncio.CancelledError:
             raise  # Cancellation is paired with replacement or the existing inhibit path.
+        except (asyncio.TimeoutError, TimeoutError):
+            if self.active is plan:
+                await b.inhibit('plan_submit_timeout')
         except Exception:
             b.log('plan_stopped', planId=plan['planId'], reason='plan_execution_failed')
             if self.active is plan:

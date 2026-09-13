@@ -42,6 +42,7 @@ public static class BlindSugarRunStageBuilder
         Scene scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
         GameObject root = new GameObject("BlindSugarRunEnvironment");
         BuildEnvironment(root.transform);
+        BlindSugarRunSurfaceMesh.Bake(root, Root + "/SurfaceMeshes");
         CreateDevelopmentCamera();
         CreateLighting();
         PrefabUtility.SaveAsPrefabAssetAndConnect(root, PrefabPath, InteractionMode.UserAction);

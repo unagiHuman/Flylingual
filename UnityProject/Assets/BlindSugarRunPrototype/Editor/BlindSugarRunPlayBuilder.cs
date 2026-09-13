@@ -76,6 +76,7 @@ public static class BlindSugarRunPlayBuilder
         framing.stageCamera = demo.view;
         demo.view.transform.position = framing.follow.position + framing.offset;
         demo.view.transform.LookAt(framing.follow.position + framing.lookAhead);
+        ConfigureGameSession(demo.body, environment);
 
         foreach (var entry in bodySnapshot)
             if (entry.Key == null || EditorJsonUtility.ToJson(entry.Key) != entry.Value)
@@ -102,5 +103,27 @@ public static class BlindSugarRunPlayBuilder
     {
         CreateScene();
         PlayScreenBuilder.Build();
+    }
+
+    static void ConfigureGameSession(FlyBody body, GameObject environment)
+    {
+        var session = UnityEngine.Object.FindFirstObjectByType<BlindSugarRunSession>();
+        if (session == null) session = new GameObject("Blind Sugar Run Game Session").AddComponent<BlindSugarRunSession>();
+        session.fly = body;
+        session.killVolume = environment.transform.Find("Volumes/KillVolume").GetComponent<BoxCollider>();
+        session.fallHeight = -2f;
+    }
+
+    [MenuItem("Flylingual/Blind Sugar Run/Install game over and retry")]
+    public static void InstallGameOver()
+    {
+        if (EditorApplication.isPlaying || EditorSceneManager.GetActiveScene().isDirty)
+            throw new InvalidOperationException("Stop Play Mode and save the scene first.");
+        var scene = EditorSceneManager.OpenScene(PlayScreenBuilder.ScenePath);
+        var demo = UnityEngine.Object.FindFirstObjectByType<WindowsReplayDemo>();
+        var environment = scene.GetRootGameObjects().Single(root => root.name == "BlindSugarRunEnvironment");
+        ConfigureGameSession(demo.body, environment);
+        if (!EditorSceneManager.SaveScene(scene)) throw new IOException("Could not save game over integration.");
+        Debug.Log("BLIND_SUGAR_GAME_OVER_INSTALLED threshold=-2 retry=scene_reload_with_adapter_rebind");
     }
 }

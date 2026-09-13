@@ -85,7 +85,7 @@ append送信成功は発話完了・プレイヤーが聞いた証明ではな�
   Blind Sugar Run専用Sceneは今回の調査では見つかっていない。
 - 音声は既存 `ConversationAdapter` とUnity `ConversationSessionController`／`BridgeConversationSocket`。
 - Actionは既存 `player_intent → ControlArbiter → submit → BrainAdapter → MaleCNS`。
-- External Vision／Blind用GameFlowからの通知producerはまだない。この受信口へ繋がるまで自動場面発話は作動しない。
+- Unity側producerの追加状況は末尾の「Unity通知の接続」を参照。以下の未実装・検証記録はBackend初版時点のもの。
 - World非表示、センサー、落下判定、Goal安定判定、Final Revealの実装・操作は今回の変更対象外。
   Revealを削ったのではなく、実際のReveal開始後に発話する台本を準備した。
 
@@ -99,3 +99,27 @@ append送信成功は発話完了・プレイヤーが聞いた証明ではな�
 サーバー再起動・Git commit/pushは行わず、稼働中への反映は未確認。`ready=false`を維持。
 最新指示のPhase 1〜4の実ステージ／センサー／Blind UI検証後、Phase 5でこの通知口を接続して音声を検証する。
 今回の成果は台本とBackend受信準備であり、Phase 1〜7を通過したという報告ではない。
+
+## Unity通知の接続（2026-09-13）
+
+既存BlindSugarRunSessionが[BlindSugarRunNarrator](../../UnityProject/Assets/BlindSugarRunPrototype/BlindSugarRunNarrator.cs)を自動追加し、同じConversationSessionControllerとcontrol WebSocketへ場面通知を送る。Sceneへの手作業でのコンポーネント追加は不要。
+台本本文・全cue一覧・地図はUnityから送らず、Backendの台本JSONを引き続き正本とする。
+voice／custom personaの設定は保持し、同じ場面の一言を現在の声色で表現する。
+
+- 開始と操作練習は現在の会話・ゲーム進行に合わせる。局所観測は既存FlyTerrainSensorと実身体の状態を使う。
+- 定規は身体前方0.75／1.5 Reachの2地点から下向き2 Reachの局所Raycastで実際に検出する。検出したBoxColliderの長軸から左右／正面を選び、不明形状や45度を超える横向きは方向を断定しない。
+- 古い通知は送信待ち時間を含めて750msで破棄する。introのqueued応答を待ってから後続通知を送り、未確認の場合は現在の開始状態を新sequenceで再通知する。
+- 新しい会話ではrun・観測・一度きりの台詞をリセットする。epochだけの変更ではBackendと同様run／sequenceを維持し、観測を破棄する。
+- 落下時の緊急停止と既存Retryを優先する。停止に伴う音声終了で落下の一言が再生されない場合があり、発話のために停止を遅延しない。
+- 既存Retryは会話を再開するため、Backendの同一会話内retry記憶を跨いで復元しない。
+- Goal安定判定とFinal Revealは後続のゲーム側実装で接続した（[Goal／Reveal](../windows/Blind-Sugar-Run-Goal-Reveal.md)）。分岐・砂糖の意味的な局所検出は未実装。確認していない地形のセリフは送らない。
+
+`tools/test_blind_run_script.py` は台本選択器の純粋な回帰検査であり、Unity／Brain／GPT Liveの代替試験ではない。
+26定型cueのja/enと型付きevidence、intro順序、観測期限、旧run/sequence、余分な地図キー、
+発話頻度、fall/retryの記憶破棄、障害と落下の区別、Goal前Reveal拒否を確認する。
+
+検証結果：上記回帰5件に合格（26定型cue×2言語のsubtestを含む）。Unity 6000.5.9f1の既存Editor用response fileを使い、同梱Roslynで新規Narratorを含むAssembly-CSharpを別出力先へコンパイルして終了コード0、error 0。既存コードの非推奨API等のwarningは残る。
+記録は `artifacts/blind-run-script-integration/compile-result.json` と `compile.log`。
+これはライブEditorでの再コンパイルやPlayerビルドではない。
+
+対象プロジェクトを使用する既存Unityプロセスがあり、この作業の所有プロセスとは確認できないため停止・再起動・ビルド操作はしていない。Windows実Brain／GPT Live／Unityでの場面発話、発話のタイミングと聴感は未検証。既存exeは再ビルドしていないため、配布Playerへの反映にはこのソースでのビルドが必要。

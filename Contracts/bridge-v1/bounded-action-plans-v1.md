@@ -1,5 +1,8 @@
 # bounded_action_plans_v1
 
+明示継続・現在操作の更新は [persistent_intents_v1](persistent-intents-v1.md) を併用する。
+以下の5項目proposalと全体期限は従来の有限操作の契約。新8項目proposalでは継続modeと参照executionIdを明示する。
+
 BackendとUnity地形センサーproducerはソース上で接続済み。Windows実機の音声計画受入れは未完了。
 `bridge_state.capabilities`に`bounded_action_plans_v1`を追加。
 Brain側の6 ActionとBrainFrameは変更しない。
@@ -13,6 +16,7 @@ Brain側の6 ActionとBrainFrameは変更しない。
 - kind=plan：action=null、planはforward_until_concern/right_then_forward/left_then_forward/nudge_right/nudge_left。
 - kind=question/clarify：action=null、plan=null。
 - validForMsは整数、0超、既存maxActionMs以下。未知fieldと不正な組合せは拒否。
+- 指示の受付期限は解釈開始からmaxIntentAgeMs（既定8000ms）未満。旧Planの取消待ち後にも再検査する。Planの実行期限は受付時からvalidForMsとし、解釈時間を差し引かない。複数step全体で一つの期限を共有し、更新で延長しない。
 
 これはBrainへの新Actionではない。control clientからplanの直接実行messageも追加しない。
 既存player_text／有効なclient delegationを介して意図翻訳が提案する。

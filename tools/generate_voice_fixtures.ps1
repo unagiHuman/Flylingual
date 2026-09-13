@@ -16,8 +16,14 @@ $scenarios = @(
     @{ id='left8'; utterance='8秒間左に曲がって'; expectedAction='TURN_L'; expectedKind='action'; expectedPlan=$null },
     @{ id='forward_right8'; utterance='8秒間右前に進んで'; expectedAction='FORWARD_R'; expectedKind='action'; expectedPlan=$null },
     @{ id='forward_left8'; utterance='8秒間左前に進んで'; expectedAction='FORWARD_L'; expectedKind='action'; expectedPlan=$null },
+    @{ id='forward_default'; utterance='前に進んで'; expectedAction='FORWARD'; expectedKind='action'; expectedPlan=$null },
+    @{ id='right_default'; utterance='右に曲がって'; expectedAction='TURN_R'; expectedKind='action'; expectedPlan=$null },
+    @{ id='left_default'; utterance='左に曲がって'; expectedAction='TURN_L'; expectedKind='action'; expectedPlan=$null },
     @{ id='ambiguous_forward'; utterance='もう少し前に進んで'; expectedAction='FORWARD'; expectedKind='action'; expectedPlan=$null },
     @{ id='ambiguous_right'; utterance='軽く右を向いて'; expectedAction='TURN_R'; expectedKind='action'; expectedPlan=$null },
+    @{ id='persistent_forward'; utterance='ずっと前に進んで'; expectedAction='FORWARD'; expectedKind='action'; expectedPlan=$null },
+    @{ id='persistent_continue'; utterance='そのまま'; expectedAction='FORWARD'; expectedKind='update'; expectedPlan=$null },
+    @{ id='persistent_conditions'; utterance='そのまま、危険なら止まって'; expectedAction='FORWARD'; expectedKind='update'; expectedPlan=$null },
     @{ id='plan_nudge_right'; utterance='ちょっと右'; expectedAction=$null; expectedKind='plan'; expectedPlan='nudge_right' },
     @{ id='plan_right_then_forward'; utterance='右側に進んで'; expectedAction=$null; expectedKind='plan'; expectedPlan='right_then_forward' },
     @{ id='plan_forward_concern'; utterance='前に進んで、違和感があったら止まれ'; expectedAction=$null; expectedKind='plan'; expectedPlan='forward_until_concern' }
@@ -44,7 +50,7 @@ function Get-WavDurationSeconds([string]$Path) {
 
 if (Test-Path -LiteralPath $out) {
     $old = Get-Manifest $manifestPath
-    $valid = $null -ne $old -and $old.schemaVersion -eq 1 -and @($old.fixtures).Count -eq $scenarios.Count
+    $valid = $null -ne $old -and $old.schemaVersion -eq 2 -and @($old.fixtures).Count -eq $scenarios.Count
     $valid = $valid -and $old.voice -eq $Voice -and [int]$old.rate -eq $Rate -and [int]$old.sampleRate -eq 24000 -and [int]$old.channels -eq 1 -and [int]$old.bitsPerSample -eq 16
     if ($valid) {
         for ($i=0; $i -lt $scenarios.Count; $i++) {
@@ -79,7 +85,7 @@ try {
         $wav = Get-Item -LiteralPath $path
         $items += [ordered]@{ id=$scenario.id; file=$name; sha256=(Get-FileHashHex $path); expectedAction=$scenario.expectedAction; expectedKind=$scenario.expectedKind; expectedPlan=$scenario.expectedPlan; utterance=$scenario.utterance; durationSeconds=(Get-WavDurationSeconds $path) }
     }
-    [ordered]@{ schemaVersion=1; voice=$Voice; rate=$Rate; sampleRate=24000; channels=1; bitsPerSample=16; format='PCM16LE'; fixtures=$items } |
+    [ordered]@{ schemaVersion=2; voice=$Voice; rate=$Rate; sampleRate=24000; channels=1; bitsPerSample=16; format='PCM16LE'; fixtures=$items } |
         ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $manifestPath -Encoding UTF8
 } finally { $synth.Dispose() }
 Write-Output "Generated voice fixture manifest: $manifestPath"

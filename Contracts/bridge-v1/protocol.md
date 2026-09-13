@@ -71,8 +71,21 @@ switch/resume. TCP close alone is not release evidence.
 Allowed actions are `STOP`, `FORWARD`, `TURN_R`, `TURN_L`, `FORWARD_R`, and
 `FORWARD_L`. Control accepts an owner (`manual`, `gpt`, or `observer`), monotonic
 `controlEpoch`, unique `commandId`, and `validForMs`. `observer` cannot control.
-Commands must belong to the current owner/epoch and have a positive finite TTL
+Legacy commands must belong to the current owner/epoch and have a positive finite TTL
 not exceeding `maxActionMs` (default 8000 ms). Default action TTL is 4000 ms.
+For interpreted player instructions, `maxIntentAgeMs` (default 8000 ms,
+positive and at most 8000 ms) independently bounds admission age from the start
+of interpretation. Age equal to the limit is expired. Check it again after
+awaiting cancellation of an older plan. An admitted action receives its full
+`validForMs` from arbiter acceptance; interpretation latency is not subtracted.
+STOP retains no movement deadline. This does not promise immediate physical
+motion or change Brain-applied confirmation, the timed execution cap, or stale guards.
+The opt-in [persistent_intents_v1](persistent-intents-v1.md) capability allows
+interpreted GPT movement to use `until_next_command` with no execution deadline.
+It retains the independent admission-age limit and all fault/ownership guards.
+Continuation and condition updates target a current execution ID and preserve
+the current phase; implicit continuation does not reset a timed deadline.
+This does not extend manual `set_action` or change the Brain wire protocol.
 Epoch changes discard pending intents and delayed responses; they are never
 replayed after reconnect or target switch.
 

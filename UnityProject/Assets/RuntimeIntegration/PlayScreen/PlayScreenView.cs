@@ -25,6 +25,7 @@ namespace Flylingual.PlayScreen
         ConversationSessionController controller;
         ConversationNativeBootstrap bootstrap;
         Image gameImage, neuralImage;
+        Label blindMessage;
         Label statusLabel, controlModeLabel, actionFeedbackLabel, captionLabel, portraitSource, portraitObservation, neuralStatus, diagnostics, transcriptLabel;
         FlyPortraitElement portrait;
         TextField textInput, personaText;
@@ -70,6 +71,13 @@ namespace Flylingual.PlayScreen
             UpdateGameImageRect();
         }
 
+        public void SetBlindMode(bool blind)
+        {
+            if (gameImage == null || blindMessage == null) return;
+            gameImage.style.display = blind ? DisplayStyle.None : DisplayStyle.Flex;
+            blindMessage.style.display = blind ? DisplayStyle.Flex : DisplayStyle.None;
+        }
+
         void Build()
         {
             if (built) return;
@@ -97,6 +105,9 @@ namespace Flylingual.PlayScreen
             gameFrame = Card(); gameFrame.style.flexGrow = 7; gameFrame.style.flexBasis = 0; gameFrame.style.marginRight = 12; main.Add(gameFrame);
             var gameTitle = Label("ゲーム画面 / GAME VIEW", 13, amber, FontStyle.Bold); gameTitle.style.marginLeft = 14; gameTitle.style.marginTop = 12; gameFrame.Add(gameTitle);
             gameImage = new Image { scaleMode = ScaleMode.ScaleToFit }; gameImage.style.flexGrow = 1; gameImage.style.marginLeft = gameImage.style.marginRight = 10; gameImage.style.marginBottom = 10; gameFrame.Add(gameImage);
+            blindMessage = Label("BLIND SUGAR RUN\n\n声を頼りに、砂糖を探そう。\nたどり着いたら、歩いてきた世界が見える。", 22, cream);
+            blindMessage.style.flexGrow = 1; blindMessage.style.unityTextAlign = TextAnchor.MiddleCenter;
+            blindMessage.style.whiteSpace = WhiteSpace.Normal; blindMessage.style.display = DisplayStyle.None; gameFrame.Add(blindMessage);
             gameFrame.RegisterCallback<GeometryChangedEvent>(_ => UpdateGameImageRect());
 
             var side = new VisualElement(); side.style.flexGrow = 3; side.style.flexBasis = 0; side.style.minWidth = 260; side.style.flexDirection = FlexDirection.Column; main.Add(side);

@@ -23,6 +23,7 @@ New-Item -ItemType Directory -Path (Join-Path $authorAssetsPath 'Editor') -Force
 New-Item -ItemType Directory -Path (Join-Path $authorProjectPath 'Packages') -Force | Out-Null
 New-Item -ItemType Directory -Path (Join-Path $authorProjectPath 'ProjectSettings') -Force | Out-Null
 Copy-Item -LiteralPath $builderPath -Destination (Join-Path $authorAssetsPath 'Editor/BlindSugarRunStageBuilder.cs')
+Copy-Item -LiteralPath (Join-Path $mainProjectPath 'Assets/BlindSugarRunPrototype/Editor/BlindSugarRunSurfaceMesh.cs') -Destination (Join-Path $authorAssetsPath 'Editor/BlindSugarRunSurfaceMesh.cs')
 foreach ($settingsFile in @('ProjectVersion.txt', 'GraphicsSettings.asset', 'QualitySettings.asset')) {
     Copy-Item -LiteralPath (Join-Path $mainProjectPath "ProjectSettings/$settingsFile") -Destination (Join-Path $authorProjectPath "ProjectSettings/$settingsFile")
 }

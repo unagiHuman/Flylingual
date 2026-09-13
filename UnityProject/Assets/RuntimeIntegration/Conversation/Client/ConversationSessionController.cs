@@ -96,6 +96,7 @@ namespace Flylingual.Conversation
         public bool ReplyPlaying => replyAudio != null && replyAudio.IsPlaying;
         public long PlayedNonzeroSamples => replyAudio == null ? 0L : replyAudio.PlayedNonzeroSamples;
         public bool VoiceActionsAvailable { get; private set; }
+        public bool BlindRunScriptAvailable { get; private set; }
         // Raw messages are exposed only to passive local observers of this existing control socket.
         public event Action<string> ControlEventReceived;
         // Passive local observers share the existing control socket; they never acquire control.
@@ -424,6 +425,7 @@ namespace Flylingual.Conversation
             OutputInhibited = state.outputInhibited;
             ConversationInteraction = string.IsNullOrEmpty(state.conversationInteraction) ? "chat_only" : state.conversationInteraction;
             Ready = HasCapability(state.capabilities, "conversation_only_v1");
+            BlindRunScriptAvailable = HasCapability(state.capabilities, "blind_run_script_v1");
             if (Ready) Status = "connected";
             Backend = state.backend;
             BrainReady = state.brainReady;
@@ -631,6 +633,26 @@ namespace Flylingual.Conversation
                     || (value >= '0' && value <= '9') || value == '_' || value == '-')) return false;
             }
             return true;
+        }
+
+        // Stage observations only: does not acquire control or submit an Action.
+        internal bool TrySendBlindRunCue(string runId, int attempt, long sequence, string cue, string evidenceJson, float ageMs)
+        {
+            if (!Ready || !BlindRunScriptAvailable || !ConversationLive || ConversationInteraction != "control"
+                || !bridgeConnected || conversationStopping || (cue != "link_error" && !HasFreshBrain)
+                || transport == null || !transport.IsConnected || ConversationGeneration < 0) return false;
+            var envelope = new BlindRunEnvelope { controlEpoch = ControlEpoch, conversationGeneration = ConversationGeneration,
+                runId = runId, attempt = attempt, sequence = sequence, cue = cue };
+            string json = JsonUtility.ToJson(envelope);
+            json = json.Substring(0, json.Length - 1) + ",\"ageMs\":__OBSERVATION_AGE__,\"evidence\":" + evidenceJson + "}";
+            try { transport.EnqueueFresh(json, ageMs); return true; }
+            catch (ConversationTransportException) { return false; }
+        }
+        [Serializable] sealed class BlindRunEnvelope
+        {
+            public string type = "blind_run_cue", runId, cue;
+            public int controlEpoch, conversationGeneration, attempt;
+            public long sequence;
         }
 
         public void SendLocalSafetyObservation(int sequence, float ageMs, bool groundPresent, string leftEdge, string rightEdge, bool forwardBlocked, bool bodyUnsafe)

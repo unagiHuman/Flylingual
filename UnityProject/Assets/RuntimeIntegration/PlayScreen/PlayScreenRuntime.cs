@@ -48,6 +48,9 @@ namespace Flylingual.PlayScreen
             neural.SetEmbedded(true);
             view = GetComponent<PlayScreenView>() ?? gameObject.AddComponent<PlayScreenView>();
             view.Configure(gameTexture, neural);
+            bool blindStage = FindAnyObjectByType<Flylingual.BlindSugarRun.BlindSugarRunSession>() != null;
+            bool developerView = System.Array.IndexOf(System.Environment.GetCommandLineArgs(), "-blindSugarDeveloperView") >= 0;
+            view.SetBlindMode(blindStage && !developerView);
             configured = Active = true;
             Debug.Log("PLAY_SCREEN_READY game=1600x900 layout=three-panel");
         }

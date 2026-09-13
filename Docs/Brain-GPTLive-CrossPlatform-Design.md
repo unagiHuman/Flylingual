@@ -88,18 +88,24 @@ manual と GPT の操作権は明示的に排他切替する。observer は解�
 「違和感があれば止まる」は局所センサーの定義済み危険条件でSTOPとする。
 質問、移動意思が不明な相談、方向の矛盾、未対応の停止条件は推測実行しない。
 計画の監視・中断はBridge側。局所観測が欠損／古い場合は計画を拒否・停止し、
-既存期限、操作権、epoch、明示resume、Brain経路を維持する。
+有限動作の既存期限、操作権、epoch、明示resume、Brain経路を維持する。
 Unity地形センサーの新鮮な局所安全観測と現在有効な操作を解釈の根拠へ接続する。
 大まかな表現・丁寧な依頼・明確な言い直しは受け付けるが、未観測の経路を推測しない。
 Native音声controlでは通常の計画完了／期限を通常Actionと同じSTOP＋待受継続に揃える。
 これは危険時の抑止解除ではなく、危険・観測失効・接続障害・STOP送信失敗は引き続きfull inhibitとする。
 詳細と未検証事項は[限定行動計画](integration/Bounded-Action-Plans.md)を参照する。
 
-操作提案は action、commandId、controlEpoch、validForMs を持ち、Bridge の単調時計で期限・上限を管理する。重複、期限切れ、旧 session、非所有者の要求を拒否し、切替・再接続で未適用要求を自動再送しない。GPT 操作中の接続断、明示的な会話終了、緊急停止、または期限切れによる安全停止では Unity 出力も抑止する。Native音声controlの通常TTL期限切れは epoch、session、TCP、待受を維持し、次の新音声Actionをそのまま受け付ける。音声STOPは `source=gpt` の通常STOPであり、safety STOPとは区別する。Unity motor TCP、制御WS、Live、一時的 staleのfaultでは古い motor 出力を抑止し、新しい voice session／fresh STOP／`resume` で自動復旧する。上流Bridge→Brain TCPの物理断やBrainサービス終了は自動復旧を保証しない。明示的な緊急停止、会話終了、mute、chat_only、アプリ終了はユーザー指定を優先する。manual 中は会話障害だけで操作権を奪わない。Legacy非nativeの抑止規則は維持する。
+同日の合意により、明示的な「止めるまで」「次の指示まで」の操作は終了期限を設けず保持する。
+「そのまま」は現在の段階・期限・監視条件を維持し、条件だけの追加も段階や期限をリセットしない。
+明示的な期間指定・継続への変更だけを現在実行IDに適用し、STOP・終了・置換・旧世代の操作は復活させない。
+短いnudgeは無期限化せず、質問は操作を変更しない。障害・危険停止では指示を破棄し、復旧後は新しい指示を待つ。
+詳細は[指示の保持・継続](integration/Persistent-Intents.md)。これは受付鮮度・Brain適用待ち・安全監視の無期限化ではない。
+
+操作要求は action、commandId、controlEpochと終了modeを持ち、有限動作のvalidForMsによる期限・上限をBridgeの単調時計で管理する。継続動作はvalidForMsと実行期限をnullとする。重複、期限切れ、旧 session、非所有者の要求を拒否し、切替・再接続で未適用要求を自動再送しない。GPT 操作中の接続断、明示的な会話終了、緊急停止、または期限切れによる安全停止では Unity 出力も抑止する。Native音声controlの通常TTL期限切れは epoch、session、TCP、待受を維持し、次の新音声Actionをそのまま受け付ける。音声STOPは `source=gpt` の通常STOPであり、safety STOPとは区別する。Unity motor TCP、制御WS、Live、一時的 staleのfaultでは古い motor 出力を抑止し、新しい voice session／fresh STOP／`resume` で自動復旧する。上流Bridge→Brain TCPの物理断やBrainサービス終了は自動復旧を保証しない。明示的な緊急停止、会話終了、mute、chat_only、アプリ終了はユーザー指定を優先する。manual 中は会話障害だけで操作権を奪わない。Legacy非nativeの抑止規則は維持する。
 
 BrainFrame からの翻訳は、観測 → 決定的な要約／変化検知 → キャラ表現の順とする。要求 Action だけで実応答を断定しない。「気持ち」は神経活動に根拠を置く擬人的表現であり、実際の感情を読み取ったとは主張しない。実移動、崖、接触などは Unity 観測という別入力を根拠として区別する。不明・stale は不明・stale と表示する。frame 要約、変化検知、発話頻度制限を設ける。
 
-「指示受付」「appliedRequestId による Brain 適用確認」「神経応答」「Unity で観測した身体動作」を区別し、受付 ack だけで動作完了と説明しない。Brain 計算と Bridge／会話通信は別プロセスとし、音声デバイスは Unity の AudioAdapter で OS 差を吸収する。会話実装は公式資料に基づきGPT-Live primary WebSocket／client delegationとResponsesによる意図翻訳を選定し、`ConversationAdapter` に隔離した。モデル・依存・イベントは統合手順を参照する。選定・実装と実API受入れは区別する。GPT-Live と Realtime API を名前だけで同一視しない。
+「指示受付」「appliedRequestId による Brain 適用確認」「神経応答」「Unity で観測した身体動作」を区別し、受付 ack だけで動作完了と説明しない。指示の鮮度は解釈開始からmaxIntentAgeMs（既定8000ms）未満で判定し、取消待ち後にも再検査する。受理した有限Action/Planの実行時間validForMsは受付から計測し、解釈時間を差し引かない。有限動作の既存最大実行時間・旧世代拒否・stale停止は維持する。Brain 計算と Bridge／会話通信は別プロセスとし、音声デバイスは Unity の AudioAdapter で OS 差を吸収する。会話実装は公式資料に基づきGPT-Live primary WebSocket／client delegationとResponsesによる意図翻訳を選定し、`ConversationAdapter` に隔離した。モデル・依存・イベントは統合手順を参照する。選定・実装と実API受入れは区別する。GPT-Live と Realtime API を名前だけで同一視しない。
 
 ## 4. 安全な Brain 切替
 

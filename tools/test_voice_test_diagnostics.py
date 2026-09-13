@@ -159,10 +159,11 @@ class VoiceTestDiagnosticTests(unittest.IsolatedAsyncioTestCase):
         ])
         await adapter._read()
         diagnostic = next(call.args[0] for call in events.await_args_list
-                          if call.args[0].get('type') == 'voice_test_diagnostic')
+                          if call.args[0].get('type') == 'voice_test_diagnostic'
+                          and call.args[0].get('event') == 'delegation_observed')
         self.assertEqual(diagnostic, {'type': 'voice_test_diagnostic', 'event': 'delegation_observed',
                                       'delegationId': 'delegation-01', 'startMs': 120,
-                                      'endMs': 240, 'offsetMs': 240})
+                                      'endMs': 240, 'offsetMs': 240, 'transcriptChars': 13})
         self.assertNotIn('text', diagnostic)
         self.assertNotIn('private words', json.dumps(diagnostic))
 

@@ -164,16 +164,33 @@ class NativeContinuousControlTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(b.arbiter.inhibited)
         self.assertEqual(b.arbiter.owner, 'observer')
 
-    async def interpret_after(self, action, proposed_ms, elapsed_seconds):
+    async def interpret_after(self, action, proposed_ms, elapsed_seconds, *,
+                              cancel_wait_seconds=0, change_epoch=False,
+                              change_revision=False):
         b = self.bridge
-        b.conversation.interpret = AsyncMock(return_value={
-            'kind': 'action', 'action': action, 'validForMs': proposed_ms, 'reply': ''})
-        # Replace only server.py's clock binding; leave asyncio/control clocks real.
-        clock = SimpleNamespace(monotonic=Mock(side_effect=[100, 100 + elapsed_seconds,
-                                                          100 + elapsed_seconds]))
-        with patch('Runtime.Bridge.server.time', clock):
+        clock = SimpleNamespace(now=100.0)
+        clock.monotonic = lambda: clock.now
+
+        async def interpret(*_):
+            clock.now += elapsed_seconds
+            return {'kind': 'action', 'action': action, 'plan': None,
+                    'validForMs': proposed_ms, 'reply': ''}
+
+        async def cancel_previous():
+            clock.now += cancel_wait_seconds
+            if change_epoch:
+                b.arbiter.epoch += 1
+            if change_revision:
+                b.intent_revision += 1
+
+        b.conversation.interpret = AsyncMock(side_effect=interpret)
+        b.plans.cancel_and_wait = AsyncMock(side_effect=cancel_previous)
+        # Replace module bindings, never the global time module used by asyncio.
+        # The same clock makes the actual arbiter deadline measurable exactly.
+        with patch('Runtime.Bridge.server.time', clock), patch('Runtime.Bridge.control.time', clock):
             await b.player_intent('protocol request', 'fresh-voice', b.arbiter.epoch,
                                   b.intent_revision, 'delegation')
+        return clock.now
 
     async def test_stop_zero_proposed_duration_uses_freshness_and_submits(self):
         await self.interpret_after('STOP', 0, .25)
@@ -196,17 +213,77 @@ class NativeContinuousControlTests(unittest.IsolatedAsyncioTestCase):
     async def test_stop_exactly_at_freshness_deadline_is_rejected(self):
         await self.interpret_after('STOP', 0, 8)
         self.bridge.adapter.send_action.assert_not_awaited()
-        self.bridge.log.assert_any_call('intent_rejected', commandId='fresh-voice', reason='invalid_command_duration')
+        self.bridge.log.assert_any_call('intent_rejected', commandId='fresh-voice', reason='expired_intent')
 
     async def test_movement_zero_duration_still_rejected(self):
         await self.interpret_after('FORWARD', 0, .25)
         self.bridge.adapter.send_action.assert_not_awaited()
         self.bridge.log.assert_any_call('intent_rejected', commandId='fresh-voice', reason='invalid_command_duration')
 
-    async def test_movement_proposed_duration_still_subtracts_interpretation(self):
-        await self.interpret_after('FORWARD', 4000, 4.5)
+    async def test_real_failure_4766ms_interpretation_gets_full_four_second_movement(self):
+        accepted_at = await self.interpret_after('FORWARD', 4000, 4.766)
+        self.bridge.adapter.send_action.assert_awaited_once_with('FORWARD', 1)
+        self.assertEqual(self.bridge.arbiter.deadline, accepted_at + 4)
+        self.assertFalse(self.bridge.arbiter.inhibited)
+        self.assertEqual(self.bridge.requests[1]['source'], 'gpt')
+
+    async def test_movement_just_before_freshness_limit_gets_full_duration(self):
+        accepted_at = await self.interpret_after('FORWARD', 4000, 7.999)
+        self.bridge.adapter.send_action.assert_awaited_once_with('FORWARD', 1)
+        self.assertEqual(self.bridge.arbiter.deadline, accepted_at + 4)
+
+    async def test_movement_at_freshness_limit_is_not_submitted(self):
+        await self.interpret_after('FORWARD', 4000, 8)
+        self.bridge.adapter.send_action.assert_not_awaited()
+        self.bridge.log.assert_any_call('intent_rejected', commandId='fresh-voice', reason='expired_intent')
+
+    async def test_movement_after_freshness_limit_is_not_submitted(self):
+        await self.interpret_after('FORWARD', 4000, 8.001)
+        self.bridge.adapter.send_action.assert_not_awaited()
+        self.bridge.log.assert_any_call('intent_rejected', commandId='fresh-voice', reason='expired_intent')
+
+    async def test_movement_over_maximum_duration_is_still_rejected(self):
+        await self.interpret_after('FORWARD', 8001, .25)
         self.bridge.adapter.send_action.assert_not_awaited()
         self.bridge.log.assert_any_call('intent_rejected', commandId='fresh-voice', reason='invalid_command_duration')
+
+    async def test_freshness_limit_is_independent_of_shorter_action_limit(self):
+        self.bridge.config['control']['maxActionMs'] = 2000
+        self.bridge.arbiter.max_ms = 2000
+        accepted_at = await self.interpret_after('FORWARD', 1000, 4.766)
+        self.bridge.adapter.send_action.assert_awaited_once_with('FORWARD', 1)
+        self.assertEqual(self.bridge.arbiter.deadline, accepted_at + 1)
+
+    async def test_configured_intent_age_limit_is_used(self):
+        self.bridge.config['control']['maxIntentAgeMs'] = 3000
+        await self.interpret_after('FORWARD', 4000, 3)
+        self.bridge.adapter.send_action.assert_not_awaited()
+        self.bridge.log.assert_any_call('intent_rejected', commandId='fresh-voice', reason='expired_intent')
+
+    async def test_cancel_wait_that_reaches_freshness_limit_rejects_movement(self):
+        await self.interpret_after('FORWARD', 4000, 4.766, cancel_wait_seconds=3.234)
+        self.bridge.adapter.send_action.assert_not_awaited()
+        self.bridge.log.assert_any_call('intent_rejected', commandId='fresh-voice', reason='expired_intent')
+
+    async def test_cancel_wait_that_exceeds_freshness_limit_rejects_stop(self):
+        await self.interpret_after('STOP', 4000, 7.5, cancel_wait_seconds=1)
+        self.bridge.adapter.send_action.assert_not_awaited()
+        self.bridge.log.assert_any_call('intent_rejected', commandId='fresh-voice', reason='expired_intent')
+
+    async def test_fresh_cancel_wait_does_not_consume_action_duration(self):
+        accepted_at = await self.interpret_after('FORWARD', 4000, 4.766, cancel_wait_seconds=1)
+        self.bridge.adapter.send_action.assert_awaited_once_with('FORWARD', 1)
+        self.assertEqual(self.bridge.arbiter.deadline, accepted_at + 4)
+
+    async def test_cancel_wait_epoch_change_still_rejects_old_action(self):
+        await self.interpret_after('FORWARD', 4000, .25, change_epoch=True)
+        self.bridge.adapter.send_action.assert_not_awaited()
+        self.bridge.log.assert_any_call('intent_rejected', commandId='fresh-voice', reason='stale_intent')
+
+    async def test_cancel_wait_newer_intent_still_rejects_old_action(self):
+        await self.interpret_after('FORWARD', 4000, .25, change_revision=True)
+        self.bridge.adapter.send_action.assert_not_awaited()
+        self.bridge.log.assert_any_call('intent_rejected', commandId='fresh-voice', reason='stale_intent')
 
 
 if __name__ == '__main__':

@@ -43,7 +43,7 @@ _CHILD_KEYS = {
         "visualizationAtlas",
     },
     "conversation": {"mode", "model", "intentModel", *DEFAULT_SETTINGS},
-    "control": {"owner", "maxActionMs", "defaultActionMs", "staleMs", "stopTimeoutMs"},
+    "control": {"owner", "maxActionMs", "defaultActionMs", "maxIntentAgeMs", "staleMs", "stopTimeoutMs"},
 }
 
 _DEFAULT: dict[str, Any] = {
@@ -63,7 +63,7 @@ _DEFAULT: dict[str, Any] = {
         **DEFAULT_SETTINGS,
     },
     "control": {"owner": "observer", "maxActionMs": 8000, "defaultActionMs": 4000,
-                "staleMs": 750, "stopTimeoutMs": 12000},
+                "maxIntentAgeMs": 8000, "staleMs": 750, "stopTimeoutMs": 12000},
     "logPath": "artifacts/bridge/events.jsonl",
 }
 
@@ -191,10 +191,12 @@ def _validate(config: dict[str, Any]) -> None:
     _require_port(config["brain"]["port"], "brain.port")
     if config["bridge"]["tcpPort"] == config["bridge"]["controlPort"]:
         raise ConfigError("bridge.tcpPort and bridge.controlPort must be different")
-    for key in ("maxActionMs", "defaultActionMs", "staleMs", "stopTimeoutMs"):
+    for key in ("maxActionMs", "defaultActionMs", "maxIntentAgeMs", "staleMs", "stopTimeoutMs"):
         _require_timeout(config["control"][key], f"control.{key}")
     if not config['control']['defaultActionMs'] <= config['control']['maxActionMs'] <= 8000:
         raise ConfigError('control durations must satisfy defaultActionMs <= maxActionMs <= 8000')
+    if config['control']['maxIntentAgeMs'] > 8000:
+        raise ConfigError('control.maxIntentAgeMs must not exceed 8000')
     if config['control']['staleMs'] > 750:
         raise ConfigError('control.staleMs must not exceed the 750 ms contract')
     if config['control']['stopTimeoutMs'] > 60000:

@@ -1,6 +1,6 @@
 # blind_run_script_v1
 
-2026-09-13。Backend受信実装あり、Unityのセンサー／GameFlow producer未接続。
+2026-09-13。Backend受信とUnityの開始／局所観測producer、Goal／RevealのGameFlow接続を実装。実音声での受入れは別gate。
 既存 `/ws` の単一control clientだけが送信する。別controllerやBrain TCPへ送らない。
 `bridge_state.capabilities` の `blind_run_script_v1` を確認して利用する。
 
@@ -52,6 +52,7 @@ retryは空evidence、attemptを1増やす。前回の端観測を一度だけ�
 
 goalはinsideGoal/bodyStable/goalConfirmed=trueが必要。
 revealは先にgoalを受理し、UnityがrevealStarted=trueを通知してから。
+goalのqueued応答を取りこぼした場合は、同run／attemptで新しいsequenceのgoalを再通知できる。既存one-shot規則で発話は重複させず、Goal後に通常プレイのcueを再開することもない。
 台本のセリフ、字幕やAPI応答でGoal／Revealを起動してはならない。
 
 ## 発話・応答
@@ -63,5 +64,7 @@ intro/vision/ask/各lesson/retry/goal/revealはattemptごとに一度だけ。
 
 応答：`{"type":"blind_run_cue_result","sequence":1,"stage":"queued","speakRequested":true}`。
 queuedはappend送信までで、API受領ACK、発話完了、再生完了、プレイ成功を意味しない。
+Unity producerはintroのqueuedを確認してから後続通知を送る。introが送信待ちで失効した場合に備え、
+同じrunIdとattempt、新しいsequenceで現在の開始状態を再通知する。既に受理されたintroの発話は重複抑制される。
 ログ `blind_run_cue_queued` はcue/sequence/speakRequestedのみ。本文・PCM・evidenceは新規保存しない。
 不正入力は既存error経路。既存BrainFrame、6 Action、期限・排他・stale・STOP処理は変更しない。

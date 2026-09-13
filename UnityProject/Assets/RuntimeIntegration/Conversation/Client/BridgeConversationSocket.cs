@@ -14,7 +14,7 @@ namespace Flylingual.Conversation
         public const int MaximumMessageBytes = 1024 * 1024;
         const int MaximumQueuedMessages = 64;
         readonly object gate = new object();
-        readonly Queue<string> outbound = new Queue<string>();
+        readonly Queue<Func<string>> outbound = new Queue<Func<string>>();
         readonly SemaphoreSlim outboundSignal = new SemaphoreSlim(0);
         readonly CancellationTokenSource lifetime = new CancellationTokenSource();
         ClientWebSocket socket;
@@ -81,7 +81,26 @@ namespace Flylingual.Conversation
             {
                 if (outbound.Count >= MaximumQueuedMessages)
                     throw new ConversationTransportException("control_send_queue_full");
-                outbound.Enqueue(json);
+                outbound.Enqueue(() => json);
+            }
+            outboundSignal.Release();
+        }
+
+        // Monotonic sender-side age; never call Unity APIs from the send task.
+        public void EnqueueFresh(string jsonWithAgeToken, float observedAgeMs)
+        {
+            if (disposed || !IsConnected) throw new ConversationTransportException("control_not_connected");
+            if (string.IsNullOrEmpty(jsonWithAgeToken) || Encoding.UTF8.GetByteCount(jsonWithAgeToken) > MaximumMessageBytes
+                || float.IsNaN(observedAgeMs) || observedAgeMs < 0 || observedAgeMs > 750)
+                throw new ConversationTransportException("invalid_outbound_message");
+            long queuedAt = System.Diagnostics.Stopwatch.GetTimestamp();
+            lock (gate)
+            {
+                if (outbound.Count >= MaximumQueuedMessages) throw new ConversationTransportException("control_send_queue_full");
+                outbound.Enqueue(() => {
+                    double age = observedAgeMs + (System.Diagnostics.Stopwatch.GetTimestamp() - queuedAt) * 1000d / System.Diagnostics.Stopwatch.Frequency;
+                    return age > 750 ? null : jsonWithAgeToken.Replace("__OBSERVATION_AGE__", age.ToString("F3", System.Globalization.CultureInfo.InvariantCulture));
+                });
             }
             outboundSignal.Release();
         }
@@ -93,8 +112,9 @@ namespace Flylingual.Conversation
                 while (!cancellationToken.IsCancellationRequested)
                 {
                     await outboundSignal.WaitAsync(cancellationToken).ConfigureAwait(false);
-                    string message;
-                    lock (gate) message = outbound.Count == 0 ? null : outbound.Dequeue();
+                    Func<string> pending;
+                    lock (gate) pending = outbound.Count == 0 ? null : outbound.Dequeue();
+                    string message = pending?.Invoke();
                     if (message == null) continue;
                     var bytes = Encoding.UTF8.GetBytes(message);
                     await socket.SendAsync(new ArraySegment<byte>(bytes), WebSocketMessageType.Text, true, cancellationToken).ConfigureAwait(false);

@@ -22,14 +22,30 @@ namespace Flylingual.Conversation
         }
         [Serializable] sealed class Control
         {
-            public string type, @event, stage, commandId, delegationId, fixtureId, action, source, kind;
+            public string type, @event, stage, commandId, delegationId, inputId, fixtureId, action, source, kind;
             public string plan, planId, name, outcome, reason, state, owner, sessionId, instanceId;
-            public int epoch, conversationGeneration, requestId, fixtureChunkIndex, step;
+            public int epoch, conversationGeneration, requestId, fixtureChunkIndex, step, transcriptChars;
             public long sequence;
             public double monotonicMs, audioStartMs, audioEndMs, startMs, endMs, offsetMs;
-            public double interpretationMs, proposalValidForMs;
+            public double interpretationMs, proposalValidForMs, intentAgeMs, executionDurationMs;
             public bool continuedListening, outputInhibited;
+            public ActiveExecution activeExecution;
             [NonSerialized] public double localTime;
+            [NonSerialized] public int observedGeneration;
+            [NonSerialized] public string observedSessionId, observedInstanceId;
+        }
+        [Serializable] sealed class ActiveExecution
+        {
+            public string executionId, action, plan, executionMode;
+            public int step, requestId;
+            public double remainingMs;
+            public bool monitorHazards;
+        }
+        [Serializable] sealed class InputTranscript
+        {
+            public string role, text;
+            public bool append;
+            public int conversationGeneration = -1;
         }
         [Serializable] sealed class UpstreamFrame
         {
@@ -51,7 +67,7 @@ namespace Flylingual.Conversation
         [Serializable] sealed class Case
         {
             public string id, fixtureId, fixtureHash, expectedKind, expectedAction, expectedPlan;
-            public string actualKind, actualAction, actualPlan, commandId, delegationId, planId;
+            public string actualKind, actualAction, actualPlan, commandId, delegationId, inputId, intentSource, planId;
             public string status = "pending", error, correlation = "unconfirmed";
             public int epoch, generation, requestId, sentChunks, observedSamples;
             public long appliedSequence, sourceSampleStart, sourceSampleEnd;
@@ -60,8 +76,16 @@ namespace Flylingual.Conversation
             public double durationSeconds;
             public int sourceSampleRate, sourceChannels;
             public double delegationStartMs, delegationEndMs, delegationOffsetMs;
+            public double inputStartMs, inputEndMs, inputOffsetMs;
             public double fixtureToAppliedMs, fixtureToBodyStartedMs, fixtureToSettledMs;
-            public bool applied, bodyStarted, settled, expired, continuedListening, voiceStopBeforeExpiry;
+            public double acceptedExecutionDurationMs, submittedToExpiryMs;
+            public bool applied, bodyStarted, settled, expired, continuedListening, voiceStopBeforeExpiry, executionUpdated;
+            public bool recognizedMatchesFixture;
+            public int recognizedCharacterCount;
+            public string diagnosticTranscript;
+            public int freshFrameAdvances;
+            [NonSerialized] public long lastFreshSequence;
+            public string executionId, executionMode;
             public bool replyOverlap, replyOverlapRequested, sourceMaintained = true, freshMaintained = true;
             public bool sameEpoch = true, sameSession = true, grounded;
             public string brainSessionId, brainInstanceId;
@@ -73,16 +97,20 @@ namespace Flylingual.Conversation
             [NonSerialized] public Vector3 previousPosition, initialForward;
             [NonSerialized] public float previousYaw, previousPhase;
             [NonSerialized] public long replySamplesAtStart;
+            [NonSerialized] public StringBuilder recognizedText = new StringBuilder();
+            [NonSerialized] public bool recognizedTextOverflow;
         }
         [Serializable] sealed class Report
         {
             public string result = "incomplete", status = "incomplete", suite, inputSource = "synthetic_fixture";
             public string manifest, manifestSha256, error, backend, brainSessionId, brainInstanceId;
             public bool pass, brainReady, microphoneTested, startupFreshStop, overlapVerified;
+            public bool persistentHeld, persistentContinued, persistentStopped, persistentFiniteExpired, persistentNoRevival;
             public bool stopped, controllerReleasedObserved, bridgeStoppedObserved, protocolShutdownObserved, processCleanupObserved;
             public int ttlReacceptChecks, physicsResetCount;
             public long sentFixtureAudioChunks, sentPcmSamples;
             public double startedAt, endedAt, requestedSeconds, minSendIntervalMs, maxSendIntervalMs;
+            public double persistentObservationSeconds;
             public string timing = "Unity realtime clock; Bridge monotonic clock recorded separately";
             public string limitation = "Synthetic PCM is not a physical microphone test. Process cleanup belongs to the runner.";
             public List<Case> cases = new List<Case>();
@@ -116,6 +144,7 @@ namespace Flylingual.Conversation
         readonly Dictionary<string, Fixture> fixtures = new Dictionary<string, Fixture>(StringComparer.Ordinal);
         readonly List<Control> controls = new List<Control>();
         readonly Dictionary<string, Control> delegations = new Dictionary<string, Control>();
+        readonly Dictionary<string, Control> transcriptCandidates = new Dictionary<string, Control>();
         readonly Dictionary<int, UpstreamFrame> appliedFrames = new Dictionary<int, UpstreamFrame>();
         readonly byte[] silence = new byte[4800];
         ConversationSessionController controller;
@@ -130,7 +159,8 @@ namespace Flylingual.Conversation
         int chunkIndex, audioEpoch, audioGeneration;
         long sampleCursor;
         double nextAudioAt, audioNotBefore, previousAudioAt = -1, nextObservationAt, deadline;
-        bool running, quit, observationEnabled;
+        bool running, quit, observationEnabled, textDiagnosticsEnabled;
+        ActiveExecution activeExecution;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         static void Bootstrap()
@@ -172,6 +202,9 @@ namespace Flylingual.Conversation
             CaptureBaseline();
 
             if (report.suite == "plans") yield return RunPlans();
+            else if (report.suite == "duration") yield return RunDuration();
+            else if (report.suite == "persistent") yield return RunPersistent();
+            else if (report.suite == "handoff") yield return RunPersistent(3);
             else
             {
                 yield return RunSmoke();
@@ -215,6 +248,7 @@ namespace Flylingual.Conversation
         bool Initialize()
         {
             quit = Array.IndexOf(Environment.GetCommandLineArgs(), "-flyVoiceFixtureQuit") >= 0;
+            textDiagnosticsEnabled = Array.IndexOf(Environment.GetCommandLineArgs(), "-flyVoiceFixtureTextDiagnostics") >= 0;
             try
             {
                 string path = Path.GetFullPath(Argument("-flyVoiceFixtures"));
@@ -224,17 +258,19 @@ namespace Flylingual.Conversation
                 Directory.CreateDirectory(outputDirectory);
                 if (File.Exists(Path.Combine(outputDirectory, "report.json"))) throw new ArgumentException("output_already_contains_report");
                 string suite = Argument("-flyVoiceFixtureSuite") ?? "smoke";
-                if (suite != "smoke" && suite != "full" && suite != "soak" && suite != "plans") throw new ArgumentException("invalid_suite");
-                double seconds = suite == "full" ? 900 : suite == "soak" ? 300 : 240;
+                if (suite != "smoke" && suite != "full" && suite != "soak" && suite != "plans" && suite != "duration" && suite != "persistent" && suite != "handoff") throw new ArgumentException("invalid_suite");
+                double seconds = suite == "full" ? 900 : suite == "soak" ? 300 : suite == "duration" ? 180 : suite == "persistent" ? 180 : suite == "handoff" ? 120 : 240;
                 string duration = Argument("-flyVoiceFixtureSeconds");
                 if (duration != null && (!double.TryParse(duration, NumberStyles.Float, CultureInfo.InvariantCulture, out seconds)
                     || double.IsNaN(seconds) || double.IsInfinity(seconds) || seconds < 1 || seconds > 3600)) throw new ArgumentException("invalid_duration");
+                if (suite == "persistent" && seconds < 120) throw new ArgumentException("persistent_duration_too_short");
                 report = new Report { suite = suite, manifest = path, startedAt = Now, requestedSeconds = seconds };
+                if (suite == "handoff") report.limitation += " Short audio handoff diagnostic with a 3-second initial hold; not evidence for the 60-second persistent gate.";
                 using (var sha = SHA256.Create()) report.manifestSha256 = BitConverter.ToString(sha.ComputeHash(File.ReadAllBytes(path))).Replace("-", "").ToLowerInvariant();
                 deadline = Now + seconds;
                 events = Writer("events.jsonl"); observations = Writer("observations.jsonl");
                 Manifest manifest = JsonUtility.FromJson<Manifest>(File.ReadAllText(path));
-                if (manifest == null || manifest.schemaVersion != 1 || manifest.fixtures == null || manifest.fixtures.Length == 0)
+                if (manifest == null || (manifest.schemaVersion != 1 && manifest.schemaVersion != 2) || manifest.fixtures == null || manifest.fixtures.Length == 0)
                     throw new ArgumentException("invalid_manifest");
                 string directory = Path.GetDirectoryName(path);
                 foreach (Fixture fixture in manifest.fixtures)
@@ -247,12 +283,15 @@ namespace Flylingual.Conversation
                     fixture.clip = VoiceFixtureClip.Load(resolved, fixture.sha256);
                     if (fixture.clip.Chunks == null || fixture.clip.Chunks.Length == 0) throw new ArgumentException("empty_fixture");
                     if (fixture.expectedKind == null) fixture.expectedKind = "action";
-                    if (fixture.expectedKind != "action" && fixture.expectedKind != "plan") throw new ArgumentException("invalid_expected_kind");
+                    if (fixture.expectedKind != "action" && fixture.expectedKind != "plan" && fixture.expectedKind != "update") throw new ArgumentException("invalid_expected_kind");
                     if (fixture.expectedKind == "action" && !IsAction(fixture.expectedAction)) throw new ArgumentException("invalid_expected_action");
                     if (fixture.expectedKind == "plan" && !IsPlan(fixture.expectedPlan)) throw new ArgumentException("invalid_expected_plan");
+                    if (fixture.expectedKind == "update" && !IsAction(fixture.expectedAction)) throw new ArgumentException("invalid_expected_action");
                     fixtures.Add(fixture.id, fixture);
                 }
-                string[] required = suite == "plans" ? Array.Empty<string>() : suite == "full"
+                string[] required = suite == "plans" ? Array.Empty<string>() : (suite == "persistent" || suite == "handoff")
+                    ? new[] { "persistent_forward", "persistent_continue", "persistent_conditions", "stop", "forward8" } : suite == "duration"
+                    ? new[] { "forward_default", "right_default", "left_default" } : suite == "full"
                     ? new[] { "stop", "forward8", "right8", "ambiguous_forward", "ambiguous_right", "left8", "forward_right8", "forward_left8" }
                     : new[] { "stop", "forward8", "right8", "ambiguous_forward", "ambiguous_right" };
                 foreach (string id in required) if (!fixtures.ContainsKey(id)) throw new ArgumentException("required_fixture_missing");
@@ -335,6 +374,22 @@ namespace Flylingual.Conversation
             }
             item.expired = expired != null && appliedStop != null;
             item.continuedListening = expired != null && expired.continuedListening;
+            if (report.suite == "duration")
+            {
+                Control submission = FindCommand("command_submitted", item.commandId);
+                Control classification = FindCommand("intent_classified", item.commandId);
+                if (submission == null || classification == null || expired == null)
+                    Fail(item, "execution_duration_evidence_missing");
+                else
+                {
+                    item.acceptedExecutionDurationMs = submission.executionDurationMs;
+                    item.submittedToExpiryMs = expired.monotonicMs - submission.monotonicMs;
+                    if (submission.executionDurationMs <= 0 || submission.executionDurationMs != classification.proposalValidForMs
+                        || item.submittedToExpiryMs < submission.executionDurationMs - 50
+                        || item.submittedToExpiryMs > submission.executionDurationMs + 750)
+                        Fail(item, "execution_duration_not_preserved");
+                }
+            }
             bool settled = false;
             if (item.expired) yield return WaitStopped(20, value => settled = value, appliedStop.sequence, appliedStop.requestId);
             item.settled = settled;
@@ -346,6 +401,16 @@ namespace Flylingual.Conversation
                 && x.action != "STOP" && x.commandId != item.commandId)) Fail(item, "unexpected_movement_submission");
             EndCase(item, item.expired && item.continuedListening && settled && MovementPassed(item));
             if (item.status != "pass") SetRunError(item);
+        }
+
+        IEnumerator RunDuration()
+        {
+            string[] ids = { "forward_default", "right_default", "left_default" };
+            foreach (string id in ids)
+            {
+                if (!string.IsNullOrEmpty(report.error)) yield break;
+                yield return RunExpiryCase(id, false);
+            }
         }
 
         IEnumerator RunFull()
@@ -373,6 +438,182 @@ namespace Flylingual.Conversation
                     else yield return RunExpiryCase(id, false);
                     if (!string.IsNullOrEmpty(report.error)) yield break;
                 }
+        }
+
+        IEnumerator RunPersistent(double holdSeconds = 60)
+        {
+            // A simple persistent Action is the first acceptance gate. Hazard-monitored
+            // plans can legitimately stop at a stage edge and are covered separately.
+            Case held = Begin("persistent_forward");
+            if (held == null) yield break;
+            yield return AwaitApplied(held, 25);
+            if (!held.applied || held.correlation != "fixture_audio_overlap") { SetRunError(held); yield break; }
+            yield return ObservePersistent(held, holdSeconds);
+            if (!report.persistentHeld) { SetRunError(held); yield break; }
+            string executionId = held.executionId;
+            int executionRequest = held.requestId;
+
+            Case continued = Begin("persistent_continue");
+            if (continued == null) yield break;
+            yield return AwaitExecutionUpdate(continued, executionId, executionRequest, "until_next_command", false);
+            report.persistentContinued = continued.status == "pass";
+            // Preserve this failure, but still verify that the player can stop
+            // the running operation. Every subsequent case has its own health gate.
+            if (!report.persistentContinued) SetRunError(continued);
+
+            Case stop = Begin("stop");
+            if (stop == null) yield break;
+            yield return AwaitApplied(stop, 20);
+            bool stopped = false;
+            if (stop.applied) yield return WaitStopped(20, value => stopped = value, stop.appliedSequence, stop.requestId);
+            stop.settled = stopped;
+            stop.voiceStopBeforeExpiry = stop.applied && NoSafetyStopBetween(continued.startedAt, stop.appliedAt);
+            EndCase(stop, stopped && stop.voiceStopBeforeExpiry);
+            report.persistentStopped = stop.status == "pass";
+            if (!report.persistentStopped) { SetRunError(stop); yield break; }
+
+            // The finite command must replace a newly accepted persistent execution,
+            // rather than merely follow the STOP that cleared the first one.
+            Case replacement = Begin("persistent_forward");
+            if (replacement == null) yield break;
+            yield return AwaitApplied(replacement, 25);
+            if (!replacement.applied || replacement.correlation != "fixture_audio_overlap") { SetRunError(replacement); yield break; }
+            yield return AwaitPersistentReady(replacement);
+            if (replacement.status != "pass") { SetRunError(replacement); yield break; }
+
+            Case finite = Begin("forward8");
+            if (finite == null) yield break;
+            yield return AwaitApplied(finite, 25);
+            if (!finite.applied || finite.correlation != "fixture_audio_overlap") { SetRunError(finite); yield break; }
+            string finiteExecutionId = activeExecution == null ? null : activeExecution.executionId;
+            if (string.IsNullOrEmpty(finiteExecutionId) || finiteExecutionId == replacement.executionId)
+            { Fail(finite, "finite_command_did_not_replace_persistent_execution"); SetRunError(finite); yield break; }
+            double remainingBeforeConditions = activeExecution == null ? 0 : activeExecution.remainingMs;
+            Case conditions = Begin("persistent_conditions");
+            if (conditions == null) yield break;
+            yield return AwaitExecutionUpdate(conditions, finiteExecutionId, finite.requestId, "timed", true);
+            if (!conditions.executionUpdated || activeExecution == null || activeExecution.remainingMs <= 0
+                || activeExecution.remainingMs > remainingBeforeConditions)
+            { Fail(conditions, "condition_update_deadline_not_preserved"); SetRunError(conditions); }
+            yield return AwaitFiniteExpiry(finite);
+            report.persistentFiniteExpired = finite.status == "pass" && finite.expired && finite.settled;
+            if (!report.persistentFiniteExpired) yield break;
+            yield return ConfirmNoPersistentRevival(replacement.executionId, finite);
+            if (!report.persistentNoRevival && finite != null) SetRunError(finite);
+        }
+
+        IEnumerator ObservePersistent(Case item, double seconds)
+        {
+            double started = Now, windowStarted = Now;
+            Vector3 windowStart = demo.body.Position;
+            while (Now - started < seconds && Healthy(item))
+            {
+                if (Now >= deadline) { Fail(item, "persistent_run_deadline_reached"); break; }
+                if (activeExecution == null || activeExecution.action != "FORWARD"
+                    || activeExecution.executionMode != "until_next_command" || string.IsNullOrEmpty(activeExecution.executionId))
+                {
+                    Fail(item, "persistent_execution_changed_or_missing"); break;
+                }
+                if (string.IsNullOrEmpty(item.executionId)) { item.executionId = activeExecution.executionId; item.executionMode = activeExecution.executionMode; }
+                else if (item.executionId != activeExecution.executionId || item.executionMode != activeExecution.executionMode)
+                { Fail(item, "persistent_execution_changed_or_missing"); break; }
+                if (Now - windowStarted >= 10)
+                {
+                    if (Vector3.ProjectOnPlane(demo.body.Position - windowStart, Vector3.up).magnitude <= .001f)
+                    { Fail(item, "persistent_motion_window_stalled"); break; }
+                    windowStart = demo.body.Position; windowStarted = Now;
+                }
+                yield return null;
+            }
+            if (string.IsNullOrEmpty(item.error) && Now - started >= seconds
+                && Vector3.ProjectOnPlane(demo.body.Position - windowStart, Vector3.up).magnitude <= .001f)
+                Fail(item, "persistent_motion_window_stalled");
+            report.persistentObservationSeconds = Math.Max(0, Now - started);
+            report.persistentHeld = Now - started >= seconds && string.IsNullOrEmpty(item.error) && item.executionMode == "until_next_command"
+                && !string.IsNullOrEmpty(item.executionId) && item.freshFrameAdvances >= 10 && MovementPassed(item);
+            if (!report.persistentHeld) Fail(item, "persistent_execution_not_held");
+            EndCase(item, report.persistentHeld);
+        }
+
+        IEnumerator AwaitExecutionUpdate(Case item, string expectedExecutionId, int expectedRequestId,
+            string expectedMode, bool requireMonitoring)
+        {
+            double until = Math.Min(deadline, Now + 25);
+            while (Now < until && Healthy(item))
+            {
+                Control update = Find("execution_updated", item.startedAt);
+                bool same = activeExecution != null && activeExecution.executionId == expectedExecutionId
+                    && activeExecution.action == "FORWARD" && activeExecution.executionMode == expectedMode
+                    && activeExecution.monitorHazards == requireMonitoring;
+                bool correlated = !string.IsNullOrEmpty(item.commandId) && item.correlation == "fixture_audio_overlap"
+                    && update != null && update.commandId == item.commandId;
+                if (correlated && same)
+                {
+                    item.executionId = expectedExecutionId; item.executionMode = activeExecution.executionMode;
+                    item.executionUpdated = true;
+                    if (item.actualKind != item.expectedKind || item.actualAction != item.expectedAction)
+                    { Fail(item, "unexpected_execution_update"); break; }
+                    bool resent = controls.Exists(x => x.@event == "command_submitted" && x.localTime >= item.startedAt
+                        && x.action == "FORWARD" && x.requestId != expectedRequestId);
+                    if (!resent) { EndCase(item, true); yield break; }
+                    Fail(item, "persistent_continue_resent_brain_action");
+                    break;
+                }
+                yield return null;
+            }
+            if (!item.executionUpdated) Fail(item, "execution_update_not_confirmed");
+            EndCase(item, false);
+        }
+
+        IEnumerator AwaitPersistentReady(Case item)
+        {
+            double until = Math.Min(deadline, Now + 8);
+            while (Now < until && Healthy(item))
+            {
+                if (activeExecution != null && activeExecution.action == "FORWARD"
+                    && activeExecution.executionMode == "until_next_command" && !string.IsNullOrEmpty(activeExecution.executionId))
+                {
+                    item.executionId = activeExecution.executionId; item.executionMode = activeExecution.executionMode;
+                    EndCase(item, true); yield break;
+                }
+                yield return null;
+            }
+            Fail(item, "persistent_replacement_execution_unavailable"); EndCase(item, false);
+        }
+
+        IEnumerator AwaitFiniteExpiry(Case item)
+        {
+            double until = Math.Min(deadline, Now + 20);
+            Control expired = null, appliedStop = null;
+            while (Now < until && Healthy(item))
+            {
+                expired = Find("command_expired", item.appliedAt);
+                Control submittedStop = FindSafetyStop(item.appliedAt);
+                appliedStop = submittedStop == null ? null : FindCommand("command_applied", submittedStop.commandId);
+                if (expired != null && appliedStop != null) break;
+                yield return null;
+            }
+            item.expired = expired != null && appliedStop != null;
+            bool settled = false;
+            if (item.expired) yield return WaitStopped(15, value => settled = value, appliedStop.sequence, appliedStop.requestId);
+            item.settled = settled;
+            item.continuedListening = expired != null && expired.continuedListening;
+            if (!item.expired) Fail(item, "timed_replacement_expiry_not_confirmed");
+            if (!settled) Fail(item, "timed_replacement_stop_not_settled");
+            EndCase(item, item.expired && settled && item.continuedListening);
+        }
+
+        IEnumerator ConfirmNoPersistentRevival(string oldExecutionId, Case item)
+        {
+            double until = Now + 3;
+            while (Now < until && Now < deadline && Healthy(item))
+            {
+                if (activeExecution != null && activeExecution.executionId == oldExecutionId)
+                { Fail(item, "old_persistent_execution_revived"); yield break; }
+                yield return null;
+            }
+            if (Now < until) Fail(item, "persistent_revival_observation_incomplete");
+            report.persistentNoRevival = string.IsNullOrEmpty(item.error);
         }
 
         IEnumerator RunPlans()
@@ -536,6 +777,11 @@ namespace Flylingual.Conversation
             try { item = JsonUtility.FromJson<Control>(json); }
             catch (ArgumentException) { return; }
             if (item == null) return;
+            if (item.type == "conversation_text")
+            {
+                ObserveInputTranscript(json);
+                return; // Caption text never enters Control, lifecycle or event logs.
+            }
             if (item.type == "brain_frame")
             {
                 // This socket retains the original request ID. The motor TCP deliberately maps GPT IDs to zero.
@@ -558,10 +804,15 @@ namespace Flylingual.Conversation
             if (item.type != "voice_test_diagnostic" && item.type != "command_result"
                 && item.type != "conversation_state" && item.type != "bridge_state") return;
             item.localTime = Now;
+            if (item.type == "bridge_state") activeExecution = item.activeExecution;
             if (item.type == "voice_test_diagnostic")
             {
+                item.observedGeneration = controller == null ? -1 : controller.ConversationGeneration;
+                item.observedSessionId = controller == null ? null : controller.BrainSessionId;
+                item.observedInstanceId = controller == null ? null : controller.BrainInstanceId;
                 controls.Add(item);
                 if (item.@event == "delegation_observed" && !string.IsNullOrEmpty(item.delegationId)) delegations[item.delegationId] = item;
+                if (item.@event == "transcript_candidate_observed" && !string.IsNullOrEmpty(item.inputId)) transcriptCandidates[item.inputId] = item;
                 if (item.@event == "controller_released") report.controllerReleasedObserved = true;
                 if (item.@event == "bridge_stopped") report.bridgeStoppedObserved = true;
                 report.protocolShutdownObserved = report.controllerReleasedObserved && report.bridgeStoppedObserved;
@@ -577,7 +828,14 @@ namespace Flylingual.Conversation
             if (item.@event == "voice_intent_dispatch" && item.outcome == "started")
             {
                 if (current.firstAudioAt < 0) return;
-                if (string.IsNullOrEmpty(current.commandId)) { current.commandId = item.commandId; current.delegationId = item.delegationId; }
+                if (string.IsNullOrEmpty(item.commandId)) return;
+                if (string.IsNullOrEmpty(current.commandId))
+                {
+                    current.commandId = item.commandId;
+                    current.delegationId = item.delegationId;
+                    current.inputId = item.inputId;
+                    // Semantic candidates cannot claim the case before their committed dispatch.
+                }
                 else if (current.commandId != item.commandId) Fail(current, "multiple_delegations_for_fixture");
             }
             if (item.commandId == current.commandId && !string.IsNullOrEmpty(current.commandId))
@@ -593,16 +851,83 @@ namespace Flylingual.Conversation
                 }
                 if (item.@event == "plan_started") current.planId = item.planId;
             }
+            if (item.@event == "execution_updated") current.executionUpdated = true;
+            if (item.@event == "execution_updated" && item.commandId == current.commandId)
+            { current.actualKind = "update"; current.actualAction = item.action; }
             if (!string.IsNullOrEmpty(current.planId) && item.planId == current.planId) current.lifecycle.Add(item);
             Correlate(current);
         }
 
+        void ObserveInputTranscript(string json)
+        {
+            if (current == null || current.status != "pending" || current.firstAudioAt < 0
+                || controller == null || controller.ControlEpoch != current.epoch
+                || controller.ConversationGeneration != current.generation
+                || !controller.FixtureInputEnabled || controller.MicrophoneCapturing) return;
+            InputTranscript transcript;
+            try { transcript = JsonUtility.FromJson<InputTranscript>(json); }
+            catch (ArgumentException) { return; }
+            if (transcript == null || transcript.role != "user" || string.IsNullOrEmpty(transcript.text)
+                || transcript.conversationGeneration != current.generation) return;
+            if (!transcript.append)
+            {
+                current.recognizedText.Clear();
+                current.recognizedTextOverflow = false;
+            }
+            int remaining = 2000 - current.recognizedText.Length;
+            int count = Math.Min(remaining, transcript.text.Length);
+            current.recognizedText.Append(transcript.text, 0, count);
+            current.recognizedTextOverflow |= count < transcript.text.Length;
+            // Count the bounded received UTF-16 characters, before comparison normalization.
+            current.recognizedCharacterCount = current.recognizedText.Length;
+            current.recognizedMatchesFixture = false;
+            if (current.recognizedTextOverflow || !fixtures.TryGetValue(current.fixtureId, out Fixture manifestFixture)) return;
+            try
+            {
+                string recognized = NormalizeTranscript(current.recognizedText.ToString());
+                current.recognizedMatchesFixture = recognized.Length > 0
+                    && string.Equals(recognized, NormalizeTranscript(manifestFixture.utterance), StringComparison.Ordinal);
+            }
+            catch (ArgumentException) { } // Malformed Unicode is a diagnostic mismatch only.
+        }
+
+        static string NormalizeTranscript(string value)
+        {
+            string normalized = (value ?? string.Empty).Normalize(NormalizationForm.FormKC);
+            var result = new StringBuilder(normalized.Length);
+            foreach (char character in normalized)
+                if (!char.IsWhiteSpace(character) && !char.IsPunctuation(character)) result.Append(character);
+            return result.ToString();
+        }
+
         void Correlate(Case item)
         {
-            if (string.IsNullOrEmpty(item.delegationId) || !delegations.TryGetValue(item.delegationId, out Control delegation)) return;
-            item.delegationStartMs = delegation.startMs; item.delegationEndMs = delegation.endMs; item.delegationOffsetMs = delegation.offsetMs;
+            if (string.IsNullOrEmpty(item.commandId)) return;
+            Control evidence;
+            string source;
+            bool hasDelegation = !string.IsNullOrEmpty(item.delegationId);
+            bool hasCandidate = !string.IsNullOrEmpty(item.inputId);
+            if (hasDelegation == hasCandidate) return; // Neither an input nor ambiguous provenance can pass.
+            if (hasDelegation)
+            {
+                if (!delegations.TryGetValue(item.delegationId, out evidence)) return;
+                source = "client_delegation";
+            }
+            else
+            {
+                if (!transcriptCandidates.TryGetValue(item.inputId, out evidence)) return;
+                source = "transcript_semantic";
+            }
+            if (evidence.epoch != item.epoch || evidence.observedGeneration != item.generation
+                || evidence.observedSessionId != item.brainSessionId || evidence.observedInstanceId != item.brainInstanceId
+                || evidence.localTime < item.firstAudioAt) return;
+            item.intentSource = source;
+            item.inputStartMs = evidence.startMs; item.inputEndMs = evidence.endMs; item.inputOffsetMs = evidence.offsetMs;
+            if (hasDelegation)
+            { item.delegationStartMs = evidence.startMs; item.delegationEndMs = evidence.endMs; item.delegationOffsetMs = evidence.offsetMs; }
             if (item.bridgeAudioStartMs >= 0 && item.bridgeAudioEndMs > item.bridgeAudioStartMs
-                && delegation.endMs > item.bridgeAudioStartMs && delegation.startMs < item.bridgeAudioEndMs)
+                && evidence.startMs >= 0 && evidence.endMs > evidence.startMs
+                && evidence.endMs > item.bridgeAudioStartMs && evidence.startMs < item.bridgeAudioEndMs)
                 item.correlation = "fixture_audio_overlap";
         }
 
@@ -629,6 +954,8 @@ namespace Flylingual.Conversation
             {
                 item.freshMaintained &= age <= .75;
                 item.frameAgeMax = Mathf.Max(item.frameAgeMax, (float)age);
+                if (item.applied && age <= .75 && frame.sequence > Math.Max(item.appliedSequence, item.lastFreshSequence))
+                { item.freshFrameAdvances++; item.lastFreshSequence = frame.sequence; }
                 item.actualForwardPeak = Mathf.Max(item.actualForwardPeak, Mathf.Abs(frame.motor.forward));
                 item.actualTurnPeak = Mathf.Max(item.actualTurnPeak, Mathf.Abs(frame.motor.turn));
                 if (item.applied && age <= .75 && MatchesApplied(frame, item.appliedSequence, item.requestId,
@@ -713,7 +1040,7 @@ namespace Flylingual.Conversation
 
         void EndCase(Case item, bool passed)
         {
-            if (item.status == "pending") item.status = passed && string.IsNullOrEmpty(item.error) && item.applied
+            if (item.status == "pending") item.status = passed && string.IsNullOrEmpty(item.error) && (item.applied || item.executionUpdated)
                 && item.correlation == "fixture_audio_overlap" && item.sameEpoch && item.sameSession && item.sourceMaintained && item.freshMaintained ? "pass" : "incomplete";
             item.endedAt = Now; Save();
         }
@@ -727,9 +1054,19 @@ namespace Flylingual.Conversation
             report.endedAt = Now;
             report.sentFixtureAudioChunks = controller == null ? 0 : controller.SentFixtureAudioChunks;
             report.sentPcmSamples = sampleCursor;
-            report.pass = string.IsNullOrEmpty(error) && report.cases.Count > 0 && report.cases.TrueForAll(x => x.status == "pass")
+            bool durationPass = report.suite == "duration" && report.cases.Count == 3
+                && report.cases.TrueForAll(x => x.status == "pass" && x.expired && x.settled && x.continuedListening);
+            bool persistentPass = report.suite == "persistent" && report.persistentObservationSeconds >= 60
+                && report.persistentHeld && report.persistentContinued
+                && report.persistentStopped && report.persistentFiniteExpired && report.persistentNoRevival;
+            bool handoffPass = report.suite == "handoff" && report.persistentObservationSeconds >= 3
+                && report.persistentHeld && report.persistentContinued
+                && report.persistentStopped && report.persistentFiniteExpired && report.persistentNoRevival;
+            bool standardPass = report.suite != "duration" && report.suite != "persistent" && report.suite != "handoff"
                 && report.ttlReacceptChecks >= 3 && report.overlapVerified;
-            if (string.IsNullOrEmpty(report.error) && !report.overlapVerified) report.error = "reply_overlap_not_observed";
+            report.pass = string.IsNullOrEmpty(error) && report.cases.Count > 0 && report.cases.TrueForAll(x => x.status == "pass")
+                && (durationPass || persistentPass || handoffPass || standardPass);
+            if (report.suite != "duration" && report.suite != "persistent" && report.suite != "handoff" && string.IsNullOrEmpty(report.error) && !report.overlapVerified) report.error = "reply_overlap_not_observed";
             report.status = report.pass ? "pass" : report.cases.Exists(x => x.status == "blocked") ? "blocked" : "incomplete";
             report.result = report.pass ? "native_voice_fixture_pass" : report.status;
             Save();
@@ -795,7 +1132,17 @@ namespace Flylingual.Conversation
         void Log(string name, string fixtureId) => events?.WriteLine(JsonUtility.ToJson(new Entry { @event = name, realtimeSeconds = Now,
             caseId = current == null ? null : current.id, fixtureId = fixtureId, epoch = controller == null ? 0 : controller.ControlEpoch,
             generation = controller == null ? 0 : controller.ConversationGeneration, chunkIndex = chunkIndex, sampleCursor = sampleCursor }));
-        void Save() { if (report != null && outputDirectory != null) File.WriteAllText(Path.Combine(outputDirectory, "report.json"), JsonUtility.ToJson(report, true), new UTF8Encoding(false)); }
+        void Save()
+        {
+            if (report == null || outputDirectory == null) return;
+            // Explicit synthetic-input diagnostics only. Raw text never enters Control/events
+            // or the operation path, and the default report continues to omit its contents.
+            bool includeText = textDiagnosticsEnabled && controller != null
+                && controller.FixtureInputEnabled && !controller.MicrophoneCapturing;
+            foreach (Case item in report.cases)
+                item.diagnosticTranscript = includeText ? item.recognizedText.ToString() : null;
+            File.WriteAllText(Path.Combine(outputDirectory, "report.json"), JsonUtility.ToJson(report, true), new UTF8Encoding(false));
+        }
         void Close() { events?.Dispose(); observations?.Dispose(); events = observations = null; }
         void OnDestroy() { if (controller != null) controller.ControlEventReceived -= OnControl; Close(); }
     }

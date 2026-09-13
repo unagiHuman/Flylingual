@@ -87,7 +87,9 @@ class BlindRunScript:
             raise ControlError('old_blind_attempt')
         if self.fallen and cue not in ('retry', 'link_error'):
             raise ControlError('blind_retry_required')
-        if self.goal and cue not in ('reveal', 'link_error'):
+        # A producer can lose the queued acknowledgement. Re-accept the same
+        # confirmed goal with a newer sequence; one-shot speech remains deduplicated.
+        if self.goal and cue not in ('goal', 'reveal', 'link_error'):
             raise ControlError('blind_goal_already_confirmed')
         if cue == 'reveal' and not self.goal:
             raise ControlError('blind_goal_required')
