@@ -118,7 +118,7 @@ namespace Flylingual.PlayScreen
             var actions = Row("actions"); actions.style.alignItems = Align.Center; actions.style.flexWrap = Wrap.Wrap; controls.Add(actions);
             startButton = MakeButton("会話のみ開始", () => controller?.StartConversation()); actions.Add(startButton);
             stopButton = MakeButton("会話を終了", () => controller?.StopConversation()); actions.Add(stopButton);
-            var emergency = MakeButton("身体を停止", () => controller?.EmergencyStop()); emergency.style.backgroundColor = new Color(.64f, .18f, .13f); emergency.style.color = Color.white; emergency.style.unityFontStyleAndWeight = FontStyle.Bold; actions.Add(emergency);
+            var emergency = MakeButton("緊急停止", () => controller?.EmergencyStop()); emergency.style.backgroundColor = new Color(.64f, .18f, .13f); emergency.style.color = Color.white; emergency.style.unityFontStyleAndWeight = FontStyle.Bold; actions.Add(emergency);
             muteButton = MakeButton("マイクをミュート", () => { if (controller != null) controller.SetMicrophoneMuted(!controller.MicrophoneMuted); }); actions.Add(muteButton);
             voiceButton = MakeButton("声で操作を有効にする", () => controller?.EnableVoiceActions()); actions.Add(voiceButton);
             actions.Add(Spacer()); settingsButton = MakeButton("設定と診断", ToggleSettingsDrawer); actions.Add(settingsButton);
@@ -211,7 +211,7 @@ namespace Flylingual.PlayScreen
             stopButton.SetEnabled(controller.IsSessionRequested || controller.EnablingVoiceActions);
             settingsButton?.SetEnabled(true);
             settingsDrawer?.SetEnabled(true);
-            voiceButton.text = controller.EnablingVoiceActions ? "声で操作：準備中" : controller.BodyControlActive ? "声で操作中" : "声で操作を有効にする";
+            voiceButton.text = controller.EnablingVoiceActions ? "音声操作：接続中" : controller.BodyControlActive ? "音声指示を待受中" : controller.ContinuousVoiceControl ? "音声操作：復旧中" : "声で操作を有効にする";
             voiceButton.SetEnabled(controller.Ready && controller.VoiceActionsAvailable && !controller.EnablingVoiceActions && !controller.BodyControlActive);
             string controlMode = controller.BodyControlActive ? "声で操作中" : controller.EnablingVoiceActions ? "停止中（声で操作の準備中）"
                 : controller.ConversationLive && controller.ConversationInteraction == "chat_only" ? "会話のみ" : "停止中";

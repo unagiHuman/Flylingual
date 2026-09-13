@@ -6,7 +6,7 @@ Playerは `GAME VIEW`（左7）と、右3に上下配置した 「脳・神経�
 
 ## 対象範囲
 
-通常起動では、ConversationSessionController が BridgeReady 後に一度だけ `EnableVoiceActions` を自動実行し、fresh STOP の適用と `resume` gate を通過した後に control session／`owner=gpt` を有効にします。これにより起動時から音声 Action を受け付けます。会話だけを使う場合は画面の「会話のみ開始」ボタンを押すか、`-flyConversationChatOnly` を明示します。`chat_only` では行動要求を Bridge 側で拒否し、身体出力を抑止します。明示停止、期限切れ、fault、切断の後は自動再開しません。実マイク10往復、15分継続、移動品質は未受入れです。`ready=false` と750msの制限は維持します。音声経路の実測状況は [検証記録](Unity-Native-Conversation-Validation.md) に記録します。
+通常起動では、ConversationSessionController が BridgeReady 後に一度だけ `EnableVoiceActions` を自動実行し、fresh STOP の適用と `resume` gate を通過した後に control session／`owner=gpt` を有効にします。通常のTTL期限切れでは epoch／session／TCP／待受を維持し、次の新しい音声 Actionをそのまま受け付けます。Unity motor TCP、制御WS、Live、一時的 stale のfaultでは古い motor 出力を抑止し、新しい voice session／fresh STOP／`resume` で自動復旧します。上流Bridge→Brain TCPの物理断やBrainサービス終了の自動復旧は保証しません。会話だけを使う場合は画面の「会話のみ開始」ボタンを押すか、`-flyConversationChatOnly` を明示します。明示的な「会話を終了」「緊急停止」、アプリ終了は自動復旧の対象外です。mute はマイクだけを止め、ユーザー操作なしでミュート解除しません。実マイク10往復、15分継続、移動品質は未受入れです。`ready=false` と750msの制限は維持します。音声経路の実測状況は [検証記録](Unity-Native-Conversation-Validation.md) に記録します。
 
 会話の責務は「音声・字幕・会話状態」、Brain／Bridge の責務は「外部 API、意図翻訳、Brain 接続、排他、安全停止」です。Unity は Brain や API へ直接接続せず、同居Bridgeの control/audio WS と、声で操作を有効にした場合の motor TCP を使います。旧ブラウザ Player や WebRTC はこの会話版に不要で、同じ Bridge へ第二の control WS を開かないでください。
 
@@ -51,7 +51,7 @@ Playerを最新ソースから作る手順は [Unity起動・シーン申し送�
 
 `-flyConversation` により `ConversationNativeBootstrap` が Unity の所有者 PID と heartbeat を作り、`tools/windows_native.py` を起動します。helper は `windows-local`、Bridge の `Runtime/Config/local.json`、秘密鍵パスを使い、Brain／Bridge を自分が起動した子だけ管理します。既存ポートを無条件に奪ったり、一括 kill したりしません。Unity を閉じると stop marker が書かれ、Bridge の会話終了と所有子プロセスの停止が行われます。
 
-専用exeの直接起動でも同じ初期化になります。内部サービス起動とローカル制御WS接続は自動で行い、ConversationSessionController が Ready 後に `EnableVoiceActions` を一度だけ実行します。fresh STOP／`resume` gate 完了後に音声操作を開始し、会話終了、明示停止、期限切れ、fault、切断の後は自動再開しません。`-flyConversationChatOnly` を付けた場合だけ旧来の `chat_only` 起動になります。
+専用exeの直接起動でも同じ初期化になります。内部サービス起動とローカル制御WS接続は自動で行い、ConversationSessionController が Ready 後に `EnableVoiceActions` を一度だけ実行します。fresh STOP／`resume` gate 完了後に音声操作を開始し、通常TTLの期限切れではepoch／session／TCP／待受を維持します。Unity motor TCP、制御WS、Live、一時的 staleのfaultは新しい voice session／fresh STOP／`resume` で自動復旧します。上流Bridge→Brain TCPの物理断やBrainサービス終了は自動復旧を保証しません。`-flyConversationChatOnly` を付けた場合だけ旧来の `chat_only` 起動になります。
 
 Unityアプリの正常終了・強制終了・クラッシュを監視ヘルパーが検出し、最大5秒の正常終了猶予後に、その起動に属するBrain／Bridge子孫をWindows Job Objectで終了します。ヘルパー自体が落ちた場合もJob Objectが子孫を終了します。GPT LiveのAPI接続もBridgeとともに閉じます。ウィンドウを背面にしただけではサービスを終了しません。
 
@@ -63,7 +63,7 @@ Unityアプリの正常終了・強制終了・クラッシュを監視ヘルパ
 2. マイクは自動収録・送信されます。返答 PCM はマイク状態にかかわらず再生し、返答音声と認識結果を字幕に表示します。
 3. GPT Live の双方向通話中は、非ゼロ返答 PCM の再生中もマイクを常時収録・送信します。返信再生とマイク送信が同時に動作しても、AEC やエコー自動除去を意味しません。
 4. ミュートはマイクを解放するだけで、返答音声の再生は継続します。デバイス変更または unmute で再収録します。
-5. 「会話を終了」または「身体を停止」はマイク、再生キュー、会話セッションを停止します。明示停止後は自動再開せず、音声操作を再開するには「声で操作を有効にする」をもう一度押します。WS 切断も同じく停止し、自動再開しません。WS 切断時は Player を起動し直します。
+5. 「会話を終了」または「緊急停止」はマイク、再生キュー、会話セッションと身体出力を停止します。通常TTLの期限切れでは待受を維持し、次の新音声Actionをそのまま受け付けます。音声STOPは`source=gpt`の通常STOPです。Unity motor TCP、制御WS、Live、一時的 staleのfaultでは古い motor 出力を抑止し、Controller が新しい voice session／fresh STOP／`resume` で復旧します。明示終了・緊急停止後は自動復旧せず、必要なら音声操作を再度有効にします。
 
 ## 声による身体操作
 
@@ -71,7 +71,7 @@ Unityアプリの正常終了・強制終了・クラッシュを監視ヘルパ
 
 GPT は `FORWARD`、`TURN_R`、`TURN_L`、`FORWARD_R`、`FORWARD_L`、`STOP` の6 Actionを提案するだけです。実行は既存 Brain、raw 神経出力、decoder、motor 経路を通り、Unity や GPT が motor 値を直接生成しません。指示受付とBrain適用は別の状態です。現在の正式画面は両者の詳細なイベント履歴を表示しないため、会話字幕を実行完了や移動成功の証拠にしません。
 
-TTL、stale 750 ms、epoch 更新、Brain／Bridge 切断では身体出力を停止し、無断再開しません。再開には「声で操作を有効にする」をもう一度押します。ミュートは音声だけを止め、身体停止は緊急停止です。会話の入力・返答時には非物理の色 pulse を表示できますが、神経由来の感情や身体反応とは扱いません。
+stale 750 msでは古い身体出力を停止し、full inhibit、epoch更新、TCP closeを行います。新鮮なBrainFrameの復帰後、Controller が新しいLive／STOP／`resume` で復旧します。上流Bridge→Brain TCPの物理断やBrainサービス終了は自動復旧を保証しません。ミュートはマイクだけを止め、ユーザー操作なしでミュート解除しません。chat_only、明示的な「会話を終了」または「緊急停止」、アプリ終了も自動復旧せず、緊急停止は明示解除までラッチします。会話の入力・返答時には非物理の色 pulse を表示できますが、神経由来の感情や身体反応とは扱いません。
 
 ## 設定と診断
 
@@ -83,8 +83,10 @@ Bridge の `conversationGeneration` が変わった場合、Unity は字幕、�
 
 ## 未受入れの段階
 
+- 2026-09-13の実マイク試験で、起動時の音声操作有効化、音声FORWARDからBrain適用と約4.16mの身体前進まで確認しました。その試験時点では音声STOPの期限切れ後に再操作が必要でした。現行仕様ではNative音声controlの待受を維持し、次の新音声Actionをそのまま受け付けます。[実マイク検証記録](Native-Brain-Motion-Validation.md)を参照してください。
 - 自動収録、ミュート／unmute、デバイス変更、返信再生中の同時送受信を含む Windows 実マイク＋実 API 10往復は未受入れです。
-- 会話＋身体操作、6 Action 各3回、fresh STOP／resume／stale の身体 gate は未受入れです。
+- 文字指示による実Responses／Windows Brain／Unity身体の6 Action各3回は18/18合格。通常期限切れ3回の待受継続、身体TCP切断後のSTOPでの自動復旧、明示緊急停止後の再開なしも確認済みです。ケースごとに物理姿勢を復元しており、連続走行品質や実マイクの代替証拠にはしません。
+- 最終版の約3分の実マイク試験で、同じ接続・epochのまま、期限切れ停止を挟んだ前進・左右旋回など5件の音声Action適用を確認しました。音声queue最大2・超過0でした。音声STOPの適用は今回0件で、期限切れ停止との区別は継続して記録します。
 - 15分継続、実音声機器の抜差し、AECの評価は未受入れです。起動終了の回数・プロセス残留結果は検証記録を参照してください。
 - 実マイク、AEC、割込み発話、認識精度、返答品質、神経妥当性、移動品質、Gameplay は今回の画面確認から判断しません。
 

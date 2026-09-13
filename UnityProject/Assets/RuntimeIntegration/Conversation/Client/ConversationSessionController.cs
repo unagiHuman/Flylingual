@@ -28,6 +28,9 @@ namespace Flylingual.Conversation
         bool requestedStart;
         bool autoStartPending = true;
         bool startChatOnly;
+        bool keepVoiceControl, applicationQuitting;
+        string lastControlEndpoint;
+        double nextRecoveryAt, nextMicrophoneRetryAt;
         bool captureAttempted;
         string expectedSettingsRequestId;
         string selectedDevice;
@@ -89,6 +92,7 @@ namespace Flylingual.Conversation
         public event Action<string> BrainObservationReceived;
         public bool BrainConnected => bridgeConnected;
         public bool EnablingVoiceActions { get; private set; }
+        public bool ContinuousVoiceControl => keepVoiceControl;
         public string BrainSessionId { get; private set; }
         public string BrainInstanceId { get; private set; }
         public string BridgeMotorHost { get; private set; }
@@ -141,15 +145,33 @@ namespace Flylingual.Conversation
                 Interlocked.Decrement(ref mainThreadCount);
                 action();
             }
+            if (keepVoiceControl && Ready && Time.realtimeSinceStartupAsDouble - stateReceivedAt > 3)
+                Disconnected("control_state_timeout");
             if (autoStartPending && Ready && OutputInhibited && transport != null && transport.IsConnected)
             {
-                // One startup attempt only. StopConversation consumes this flag,
-                // so faults, expiry and an explicit stop never re-arm the body.
+                // The bootstrap starts once; continuous control owns subsequent recovery.
                 if (startChatOnly) StartConversation();
                 else if (VoiceActionsAvailable) EnableVoiceActions();
             }
             UpdateMicrophone();
             if (bodyArmed && !BodyControlActive) BodyFault("voice_control_stopped_or_stale");
+            MaintainVoiceControl();
+        }
+
+        void MaintainVoiceControl()
+        {
+            if (!keepVoiceControl || applicationQuitting || Time.realtimeSinceStartupAsDouble < nextRecoveryAt) return;
+            if (transport == null && !string.IsNullOrEmpty(lastControlEndpoint))
+            {
+                nextRecoveryAt = Time.realtimeSinceStartupAsDouble + 5;
+                _ = ConnectAsync(lastControlEndpoint);
+                return;
+            }
+            if (!Ready || !VoiceActionsAvailable || !HasFreshBrain || BodyControlActive || EnablingVoiceActions) return;
+            nextRecoveryAt = Time.realtimeSinceStartupAsDouble + 5;
+            // Recovery always starts a fresh voice epoch through STOP/resume.
+            // No old text, audio, or movement request is queued for replay.
+            EnableVoiceActions();
         }
 
         public async Task ConnectAsync(string url)
@@ -162,6 +184,12 @@ namespace Flylingual.Conversation
                 return;
             }
             cancellation = new CancellationTokenSource();
+            cancellation.CancelAfter(TimeSpan.FromSeconds(10));
+            lastControlEndpoint = endpoint;
+            ControlEpoch = 0;
+            Ready = bridgeConnected = bodyArmed = resumePending = false;
+            frameReceivedAt = double.NegativeInfinity;
+            BrainSessionId = BrainInstanceId = null;
             transport = new BridgeConversationSocket();
             var attempt = ++connectionAttempt;
             transport.Message += json => EnqueueMain(attempt, () => HandleMessage(json));
@@ -172,6 +200,7 @@ namespace Flylingual.Conversation
             try
             {
                 await transport.ConnectAsync(endpoint, cancellation.Token);
+                if (attempt == connectionAttempt) cancellation.CancelAfter(Timeout.InfiniteTimeSpan);
                 EnqueueMain(attempt, () => { if (transport != null) Status = "connected"; });
             }
             catch (OperationCanceledException) { EnqueueMain(attempt, () => Disconnected("control_cancelled")); }
@@ -182,6 +211,7 @@ namespace Flylingual.Conversation
         public void StartConversation()
         {
             if (EnablingVoiceActions) return;
+            keepVoiceControl = false;
             autoStartPending = false;
             if (requestedStart) return;
             if (transport == null || !transport.IsConnected || !Ready || !OutputInhibited)
@@ -196,6 +226,7 @@ namespace Flylingual.Conversation
 
         public void StopConversation()
         {
+            keepVoiceControl = false;
             if (enableActionsRoutine != null) StopCoroutine(enableActionsRoutine);
             enableActionsRoutine = null;
             EnablingVoiceActions = resumePending = bodyArmed = false;
@@ -218,6 +249,7 @@ namespace Flylingual.Conversation
             if (!Ready || !VoiceActionsAvailable || EnablingVoiceActions || BodyControlActive) return;
             int previousGeneration = ConversationGeneration;
             StopConversation();
+            keepVoiceControl = true;
             EnablingVoiceActions = true;
             Error = null;
             ActionFeedback = "声で操作の準備中：会話を切り替えています";
@@ -254,9 +286,12 @@ namespace Flylingual.Conversation
 
         void FailActionStart(string code)
         {
+            bool retry = keepVoiceControl;
             enableActionsRoutine = null;
             EmergencyStop();
-            ActionFeedback = "操作を開始できません：" + code;
+            keepVoiceControl = retry;
+            nextRecoveryAt = Time.realtimeSinceStartupAsDouble + 5;
+            ActionFeedback = retry ? "音声操作への接続を再試行します：" + code : "操作を開始できません：" + code;
             SetError(code);
         }
 
@@ -267,7 +302,9 @@ namespace Flylingual.Conversation
                 + " serverAgeMs=" + (FrameAgeMs + (Time.realtimeSinceStartupAsDouble - stateReceivedAt) * 1000).ToString("F1", CultureInfo.InvariantCulture)
                 + " inhibited=" + OutputInhibited + " voice=" + voiceControlAvailable);
             bodyArmed = resumePending = false;
-            ActionFeedback = "身体を停止しました。再開には「声で操作」が必要です：" + code;
+            nextRecoveryAt = Time.realtimeSinceStartupAsDouble + 2;
+            ActionFeedback = keepVoiceControl ? "身体を停止し、音声操作への接続を復旧しています：" + code
+                : "身体を停止しました：" + code;
             SetError(code);
             if (transport != null && transport.IsConnected) Send(new EmergencyStopMessage { type = "emergency_stop" });
         }
@@ -474,7 +511,13 @@ namespace Flylingual.Conversation
             }
             // Open once per session/device/unmute, including while the greeting plays.
             // GPT Live receives input continuously, including while reply audio plays.
-            if (!captureAttempted) { captureAttempted = true; StartCapture(); }
+            if (captureAttempted && (!MicrophoneCapturing || !string.IsNullOrEmpty(microphone.Error)))
+            {
+                StopCapture();
+                nextMicrophoneRetryAt = Time.realtimeSinceStartupAsDouble + 2;
+            }
+            if (!captureAttempted && Time.realtimeSinceStartupAsDouble >= nextMicrophoneRetryAt)
+            { captureAttempted = true; StartCapture(); }
             MicrophoneTransmitting = MicrophoneCapturing && CanTransmit();
             microphone?.SetTransmitting(MicrophoneTransmitting);
         }
@@ -519,6 +562,7 @@ namespace Flylingual.Conversation
         {
             Status = "disconnected"; Ready = false; requestedStart = false; ConversationLive = false;
             autoStartPending = false;
+            nextRecoveryAt = Time.realtimeSinceStartupAsDouble + 2;
             bodyArmed = resumePending = false;
             if (enableActionsRoutine != null) StopCoroutine(enableActionsRoutine);
             enableActionsRoutine = null;
@@ -544,6 +588,7 @@ namespace Flylingual.Conversation
             cancellation?.Cancel(); cancellation?.Dispose(); cancellation = null;
         }
         void SetError(string code) { Error = code; }
+        void OnApplicationQuit() { applicationQuitting = true; StopConversation(); }
         void OnDisable() { StopConversation(); CloseTransport(); }
         void OnDestroy()
         {
@@ -586,6 +631,9 @@ namespace Flylingual.Conversation
         void HandleCommandResult(CommandResult result)
         {
             if (result == null || ConversationInteraction != "control" || !requestedStart) return;
+            if (result.stage == "submitted" && result.epoch == ControlEpoch && result.commandId != null
+                && result.commandId.StartsWith("expired-stop-", StringComparison.Ordinal))
+                ActionFeedback = "行動時間が終了。次の音声指示を待っています";
             if (result.stage == "submitted" && result.epoch == ControlEpoch && result.commandId != null
                 && (result.commandId.StartsWith("voice-", StringComparison.Ordinal) || result.commandId.StartsWith("unity-intent-", StringComparison.Ordinal)))
             {

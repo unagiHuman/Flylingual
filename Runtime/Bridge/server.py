@@ -54,6 +54,7 @@ class Bridge:
         self.conversation_settings_revision = 0
         self.settings_request_ids = OrderedDict()
         self.conversation_interaction = 'control'  # Legacy clients keep conservative semantics.
+        self.native_voice_control = False
         self.conversation_generation = 0
         self.conversation_accepting = False
         self.conversation_operation = None
@@ -377,19 +378,25 @@ class Bridge:
         try:
             proposal = await self.conversation.interpret(text, self.summary(),
                 self.config['control']['defaultActionMs'], self.config['control']['maxActionMs'])
+            interpretation_ms = (time.monotonic()-started)*1000
             self.log('intent_classified', commandId=command_id,
                      source='voice' if delegation_id is not None else 'text',
                      kind=proposal['kind'],
-                     action=proposal['action'] if proposal['kind'] == 'action' else None)
+                     action=proposal['action'] if proposal['kind'] == 'action' else None,
+                     proposalValidForMs=proposal['validForMs'], interpretationMs=interpretation_ms)
             if epoch != self.arbiter.epoch or revision != self.intent_revision:
                 raise ControlError('stale_intent')
-            if (time.monotonic()-started)*1000 > self.config['control']['maxActionMs']:
+            if interpretation_ms > self.config['control']['maxActionMs']:
                 raise ControlError('expired_intent')
             if proposal['kind'] == 'action':
                 if delegation_id is not None and self.voice_control_epoch != epoch:
                     raise ControlError('voice_session_restart_required')
                 self.require_fresh()
-                valid_ms = proposal['validForMs'] - (time.monotonic()-started)*1000
+                # STOP has no movement duration; only the same bounded intent
+                # freshness applies. Movement retains its proposed duration.
+                duration_ms = (self.config['control']['maxActionMs'] if proposal['action'] == 'STOP'
+                               else proposal['validForMs'])
+                valid_ms = duration_ms - interpretation_ms
                 self.arbiter.accept('gpt', proposal['action'], command_id, epoch, valid_ms)
                 await self.submit(proposal['action'], 'gpt', command_id)
                 reply = self.text('intent_sent')
@@ -521,6 +528,7 @@ class Bridge:
                 self.arbiter.set_owner('gpt')
                 await self.inhibit('native_voice_control')
             self.conversation_interaction = interaction
+            self.native_voice_control = native_voice_control
             self.conversation.interaction = interaction
             self.conversation_generation += 1
             self.conversation_accepting = True
@@ -551,6 +559,7 @@ class Bridge:
         # Reserve the lifecycle operation synchronously: queued starts cannot
         # resurrect a session after Stop / WS disconnect / identity replacement.
         self.conversation_accepting = False
+        self.native_voice_control = False
         self.conversation_generation += 1
         self.conversation.clear_context()
         self.emit({'type': 'discard_audio', 'epoch': self.arbiter.epoch})
@@ -564,15 +573,37 @@ class Bridge:
             await self.conversation.stop()
         self.conversation_operation = self.task(stop())
 
+    async def check_control_safety(self):
+        if self.arbiter.inhibited:
+            return
+        # A lost/frozen Brain always takes precedence over routine expiry.
+        if self.summary()['stale']:
+            await self.inhibit('stale_brain')
+            return
+        if not self.arbiter.expired():
+            return
+        keep_listening = (self.native_voice_control and self.conversation_interaction == 'control'
+                          and self.conversation_accepting and self.arbiter.owner == 'gpt'
+                          and self.conversation.state == 'live'
+                          and self.voice_control_epoch == self.arbiter.epoch
+                          and bool(self.adapter and self.adapter.connected)
+                          and not self.switching and not self.release_unknown)
+        self.log('command_expired', continuedListening=keep_listening)
+        if not keep_listening:
+            await self.inhibit('command_expired')
+            return
+        # Consume only this deadline before yielding: a new command received
+        # during STOP delivery must retain its own deadline and intent task.
+        self.arbiter.deadline = None
+        try:
+            await self.submit('STOP', 'safety', 'expired-stop-' + str(uuid.uuid4()))
+        except (ControlError, BrainAdapterError, ConnectionError, OSError):
+            await self.inhibit('expired_stop_send_failed')
+
     async def watchdog(self):
         while True:
             await asyncio.sleep(.1)
-            if not self.arbiter.inhibited:
-                if self.arbiter.expired():
-                    self.log('command_expired')
-                    await self.inhibit('command_expired')
-                elif self.summary()['stale']:
-                    await self.inhibit('stale_brain')
+            await self.check_control_safety()
             self.emit(self.state())
             if time.monotonic()-self.last_summary > 2:
                 self.last_summary = time.monotonic()

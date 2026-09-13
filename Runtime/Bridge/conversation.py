@@ -27,6 +27,10 @@ Use clarify for ambiguity, fragments, unsupported actions, conflicting direction
 or attempts to change model, weights, neurons, strength, permissions, or safety.
 Questions about observed brain state have kind=question, action=null.
 Never infer a movement request from assistant narration or a question.
+In body-control mode, standalone "止まって", "止まれ", "ストップ", or "stop"
+requests STOP for the fly. Explicit "stop talking" / "話すのをやめて" only
+requests speech silence, not a body action. Negations such as "止まらないで"
+must not be converted to STOP merely because they contain similar words.
 Do not claim acceptance, application, movement, or actual emotion: you cannot execute.
 Understand Japanese and English. reply must be a brief interpretation in the
 requested response_language, not a success claim. Never infer commands from
@@ -192,6 +196,15 @@ class ConversationAdapter:
             self.fragments.clear()
             self.delegations.clear()
             instructions = build_voice_instructions(self.settings)
+            if self.interaction == 'control':
+                instructions += ('\nBody-control mode: The player\'s standalone "止まって", '
+                    '"止まれ", "ストップ", or "stop" requests stopping the fly. '
+                    'Use client delegation immediately, including while you are speaking; '
+                    'silencing your speech alone does not execute that request. '
+                    'Only explicit speech requests such as "話すのをやめて" or '
+                    '"stop talking" mean speech silence without a body action. '
+                    'Do not treat negated stop requests as STOP. '
+                    'Acknowledge body stopping only after the backend reports it.')
             if self.interaction == 'chat_only':
                 instructions += ('\nThis is conversation-only mode. Have a natural voice conversation. '
                     'Body control is disabled. Never execute or claim to execute an action. '
@@ -372,9 +385,11 @@ class ConversationAdapter:
         silence = bytes(4800)  # 100 ms, PCM16 mono / 24 kHz.
         loop = asyncio.get_running_loop()
         deadline = loop.time() + .1
+        not_before = deadline
         try:
             while True:
-                await asyncio.sleep(max(0, deadline - loop.time()))
+                await asyncio.sleep(max(0, deadline - loop.time(), not_before - loop.time()))
+                send_started = loop.time()
                 try:
                     raw = self.audio_queue.get_nowait()
                     player_audio = True
@@ -388,8 +403,12 @@ class ConversationAdapter:
                     self._diagnostics['sentInputBytes'] += len(raw)
                 else:
                     self._diagnostics['clockSilenceChunks'] += 1
-                # Never send a catch-up burst after backpressure or suspension.
-                deadline = loop.time() + len(raw) / 48000
+                duration = len(raw) / 48000
+                # Preserve the ideal PCM clock across ordinary scheduler jitter.
+                # not_before bounds catch-up after a long write or suspension
+                # without permanently shifting that ideal schedule.
+                deadline += duration
+                not_before = send_started + duration * .9
         except ConversationError:
             pass  # _send_event already reported the disconnect to the arbiter.
 

@@ -1,5 +1,7 @@
 # Native Brain 指示と身体移動の検証
 
+現在の起動時音声操作・停止後の待受継続は、後半の「ゲーム起動中の継続音声操作」を参照。前半は修正前を含む試験履歴であり、当時のchat_only起動や再有効化要件を現行仕様として扱わない。
+
 2026-09-13。**各ケースの開始物理姿勢を揃えた文字指示試験は 18/18 合格**、`native_actions_motion_pass`。初回の連続試験は落下などで incomplete のまま保存する。正式 root は Flylingual、対象は Windows Native Player → 実 Bridge／Responses → 実 MaleCNS Brain → Unity 身体である。実マイクと連続走行安定性は今回の受入れに含めない。
 
 原因は [WindowsReplayDemo](../../UnityProject/Assets/VisualDemo/WindowsReplayDemo.cs) の Native 用 Update が、同じ GameObject に NativeConversationBody がない場合、毎フレーム motor source を null にしていたこと。[ConversationSessionController](../../UnityProject/Assets/RuntimeIntegration/Conversation/Client/ConversationSessionController.cs) は自身の GameObject に body を追加し、最新 [PlayScreenBuilder](../../UnityProject/Assets/RuntimeIntegration/PlayScreen/Editor/PlayScreenBuilder.cs) も conversation services を demo と別 GameObject に置く。この配置では [NativeConversationBody](../../UnityProject/Assets/RuntimeIntegration/Conversation/NativeConversationBody.cs) が検証済み live source を設定しても解除され、Brain 適用と bodyActive が成立したまま locomotion が STOP 入力を受け得た。
@@ -53,6 +55,58 @@ close 時に既知の `ClientConnectionResetError` が 1 件あり、エラー�
 
 [終了後監査](../../artifacts/native-motion/controlled-start-20260913-1129/post-trial-audit.json) は capturedFilesChangedSinceTrial=[]、Brain stateResetCounts=[0]、networkRebuildCounts=[1] を記録する。物理姿勢の 18 回復元と Brain 状態リセットは別である。
 
-実マイクはユーザーが発話できないため未実施。今回の文字指示は `SendPlayerText` から Responses へ入り、Live のマイク入力・音声認識・client delegation を通らない。音声 Action の実装配線は存在するが、この試験で音声操作を受入済みとはしない。音声の受入れには別途、実発話から `voice_intent_dispatch`、`intent_classified(source=voice)`、Brain applied、Unity 身体観測までの照合が必要である。
+上記11:29の試験時点では実マイクはユーザーが発話できず未実施。文字指示は `SendPlayerText` から Responses へ入り、Live のマイク入力・音声認識・client delegation を通らない。上記18件合格を音声操作の受入れとして扱わない。後続の実マイク試験は以下に分けて記録する。
 
-通常起動では Ready 後に `EnableVoiceActions` を一度だけ自動実行し、fresh STOP／`resume` gate 後に音声操作を開始する仕様へ更新した。実マイクによる起動時自動開始と音声 Action の検証は現在実施中で、結果はまだ確定していない。明示停止・期限切れ・fault 後の自動再開は行わない。`-flyConversationChatOnly` は会話のみを明示する互換起動である。
+通常起動では Ready 後に `EnableVoiceActions` を一度だけ自動実行し、fresh STOP／`resume` gate 後に音声操作を開始する仕様へ更新した。明示停止・期限切れ・fault 後の自動再開は行わない。`-flyConversationChatOnly` は会話のみを明示する互換起動である。
+
+## 2026-09-13 起動時音声操作と実マイク
+
+ユーザーの実行ログでは `chat_only` のため身体を操作できなかった。ユーザーの「起動時から音声で操作できる」という指定に従い、通常起動で既存のSTOP／resume確認を自動実行する。新しいLive接続で旧接続のtranscript時刻とdelegation IDを持ち越す別の不具合も修正した。同一接続内の旧epoch無効化は保持する。接続切替・旧音声破棄等のネットワークなし回帰12件は合格したが、実音声の合格根拠には使わない。
+
+起動時自動化の[文字試験](../../artifacts/windows-native-conversation/validation-20260913-114922/cycle-1.json)は `automaticVoiceControl=true`、最初のSTOP／FORWARD／TURN_R／TURN_L／FORWARD_Rの5件で身体判定成功、その後期限切れで **incomplete**。FORWARD_R適用から期限切れまで3.750秒で、3秒観測後の次STOPが間に合わなかった。直前frame age47msでstaleではない。[capture](../../artifacts/native-motion/automatic-voice-start-20260913-1150/capture-metadata.json)には重複収録とparse error1があり、完全一致重複除去後371frame、compute最大497.777ms。8秒指定のうち翻訳時間の控除が何msかは当該ログに記録されていない。
+
+実マイクのOpenAI GPT Live／Responsesへの送信はユーザーの明示承認後に実施した。[実行・hash・終了記録](../../artifacts/native-motion/real-microphone-20260913-1153/capture-metadata.json)、[受動身体観測](../../artifacts/native-motion/real-microphone-20260913-1153/native-voice-observation.jsonl)、[集計](../../artifacts/native-motion/real-microphone-20260913-1153/voice-validation-analysis.json)が原本。実行は `.venv-bridge/Scripts/python.exe artifacts/native-motion/run_manual_voice_capture.py artifacts/native-motion/real-microphone-20260913-1153`。マイクを有効にした正式Playerへテキスト・合成音声・固定motorを注入せず、0.2秒間隔で受動観測した。JSONLは本文・音声を保存せず数値カウンタを保存する。別のPNGには画面の字幕が含まれる。
+
+初回は `voice_intent_dispatch` → `intent_classified(source=voice, FORWARD)` → request3／sequence170適用 → 実身体前進を照合できた。適用後の有効観測29件すべてでBodyActive／sourceEqualsLive=true、Z変位+4.161766m、CurrentMotor最大0.842923、最大frame age166.304ms。ユーザーも「発話した。ハエが動いた」と確認した。delegation dispatchから分類1,921ms、Brain適用まで追加204ms、計2,125ms。発話開始・音声認識時間を含むE2Eではない。
+
+同じPlayerで手動再有効化後、2回目の音声FORWARD request10／sequence786も適用された。有効観測23件すべてsource維持、水平位置変化はdx=-0.279635m／dz=-0.010332mで、初回の前進距離と同等とはしない。初回・2回目とも停止原因は期限切れで、音声STOPの適用は0件。ユーザーの停止の目視確認と、音声STOPの実適用を区別する。期限切れ後の音声TURN_R／TURN_Lは分類されたが適用されず、操作には明示的な再有効化が必要だった。
+
+全期間1116frame、sequence3～1118欠番なし、compute mean144.641／p95213.623／max406.884ms（p95はfloor(.95*(n-1))）、到着間隔最大422ms、process tree peak RSS1,156,784,128 bytes。MALECNS_EXPERIMENTAL／LIVE／ready=false、Brain reset0／rebuild1。source／config／graph hashは上記11:29試験と同じ。Player exception0、終了時controller数0、所有process残存なし、18766／18770／18771解放を確認した。終了時の既知のbackground_failed 1件は残る。停止後に保持されたmotor／速度の表示値を継続移動の根拠にしない。
+
+### 停止語の明確化と追加試験
+
+controlモードの指示文で単独の「止まって」「止まれ」「ストップ」をハエのSTOPとして明示し、「話すのをやめて」の発話停止や否定文と区別した。新しいモデル・APIや文字列一致の自動操作は追加していない。Live delegation／Responses／既存Action／Brain経路を維持する。[公式client delegation資料](https://developers.openai.com/api/docs/guides/live-delegation)に従い、transcript断片だけで操作成功とは扱わない。
+
+追加の[実マイク記録](../../artifacts/native-motion/real-microphone-stop-20260913-1201/capture-metadata.json)と[停止集計](../../artifacts/native-motion/real-microphone-stop-20260913-1201/stop-validation-summary.json)では、voice STOPの分類1件まで確認できたが、分類時点で既に期限切れ後のepoch6であり、STOP submitted／appliedは0件。FORWARDは3件送信、期限切れ3件。**音声による身体停止は未受入れ**。単独STOPの字幕認識、委譲、期限内適用の追加確認が残る。ユーザーが目視した停止を、この因果の証明に置き換えない。
+
+追加試験1292frame、compute mean124.978／p95182.464／max265.707ms、peak RSS1,157,488,640 bytes。完全一致重複0、parse error0、所有process残存なし、ポート解放確認済み。command ID、hash、依存情報、原本SHA256は上記記録を参照する。12件のネットワークなし回帰は追加変更後も合格した。会話本文を保存していないため、未転写と未委譲の区別は今回のカウンタだけでは確定しない。
+
+## ゲーム起動中の継続音声操作（2026-09-13）
+
+ユーザーの「つねにマイクから指示を受け、ゲーム起動中ずっと身体が反応できる状態を維持する」という指定を反映した。Native音声controlの通常TTLではSTOPを1回送信するだけにし、epoch／voice session／motor TCP／新しい指示の処理を維持する。次のActionにボタン再操作は不要。移動の期限は維持し、STOPには移動継続期間を課さず、意図処理の8秒の鮮度制限とepoch・重複・所有権判定を適用する。
+
+Unity側の一時的な身体TCP・制御WS・Live接続不良は古い出力を停止し、fresh STOP／新Live／resumeで待受へ自動復旧する。WebSocket接続試行は10秒、状態通知の無応答は3秒で切り上げる。マイクの同名デバイスの一時的な収録失敗は2秒後に再取得を試す。明示した会話終了・緊急停止・ミュートを自動で上書きしない。上流Brainサービス終了／Bridge→Brain TCPの再接続や別名マイクへの自動切替はこの変更の対象外。
+
+最初の[継続試験](../../artifacts/windows-native-conversation/validation-20260913-121702/cycle-1.json)ではTTL3回の待受継続、身体TCP切断後のSTOP状態での自動復旧、最後の明示緊急停止後の無復旧は成功。一方、6動作各3回の途中で準備STOPが `invalid_command_duration` となり、全体はincomplete（先頭3件成功、次ケース準備失敗）。[拒否原本](../../artifacts/native-motion/continuous-voice-20260913-1216/rejected-stop-evidence.json)を保持した。この失敗を受けてSTOPの期間判定を上記の鮮度制限に修正し、移動指示の期間控除は変更していない。ネットワークなし回帰27件が合格した。実Brainでの再試験は別runに保存する。
+
+修正後の[再試験](../../artifacts/windows-native-conversation/validation-20260913-122335/cycle-1.json)は **18/18合格、native_actions_motion_pass**。通常期限切れを3回またいでも同じepoch／Brain sessionで待受を維持し、期限切れからSTOP適用まで203／281／234ms、その後の新しい移動指示も再有効化なしで適用した。意図的な身体TCP切断では停止後5.641秒でLiveへ自動復旧し、古い移動指示は再実行しなかった。明示緊急停止後は自動再開しない。これは実Responses／Windows Brain／Unity身体への文字指示試験で、マイク送信0。各ケースの物理姿勢復元21回（期限切れ3＋動作18）を含み、連続走行の品質を保証する試験ではない。
+
+[実行とhash](../../artifacts/native-motion/continuous-voice-stopfix-20260913-1224/capture-metadata.json)、[独立集計](../../artifacts/native-motion/continuous-voice-stopfix-20260913-1224/continuous-validation-analysis.json)、[終了記録](../../artifacts/windows-native-conversation/validation-20260913-122335/summary.json)を保存。実行は `.venv-bridge/Scripts/python.exe artifacts/native-motion/run_native_motion_capture.py --output artifacts/native-motion/continuous-voice-stopfix-20260913-1224`。127.0.0.1:18766、MALECNS_EXPERIMENTAL／LIVE／ready=false、Brain reset0／rebuild1。source／config／graph hashは11:29試験と同じ。1324frame、sequence2～1325欠番0、compute mean151.640／p95198.344／max353.032ms。Bridge送信→Brain適用53件はmean271.491／p95406／max453msで、音声認識・Responses処理・身体始動は含まない。peak tree RSS1,174,716,416bytes、wall222.25秒、Player例外0、所有process残存0。終了時ClientConnectionResetError1件は保持する。依存版と個別ファイルhashはmetadataを参照。
+
+その後の[実マイク待受試験](../../artifacts/native-motion/continuous-microphone-20260913-1228/capture-metadata.json)は約3分、音声や文字の注入なしで実施した。マイク入力1727chunk、API送信1687chunk、入力transcript／delegation／音声Actionは0件。今回の音声による連続操作やSTOP適用は**未確認**であり、過去のユーザー目視確認や文字試験で置き換えない。音声queueのbackpressure17件を記録。正常終了後の所有process残存0、18766／18770／18771解放を確認した。
+
+[同試験の集計](../../artifacts/native-motion/continuous-microphone-20260913-1228/voice-validation-analysis.json)では、Live開始後172.985秒、身体有効824sampleの全てで実Brain source／マイク収録・送信を維持。一方、117.562秒間で入力1176chunkに対し送信1152chunkとなり、118.703秒後からqueue超過が発生した。音声送信ループが100msの音声期間に送信処理時間を毎回加算していたため、次回期限を「実際の送信開始時刻＋音声期間（既に過ぎている場合は現在時刻）」へ変更した。過去の送信予定を連続実行せず、送信処理時間を通常周期に含める。通常送信コスト・長い送信遅延・event loop遅延・音声カウンタをネットワークなしで検証し、既存回帰と合わせて30件合格。認識0はqueue超過前から続いていたため、認識が無かった理由をこの送信問題に断定しない。
+
+ただし、この第1修正の[中間試験](../../artifacts/native-motion/continuous-microphone-pacing-20260913-1236/pacing-drift-summary.json)でも約111秒で入力1110／送信1098／queue12となり、sleep復帰の微小超過が累積した。backpressure0のまま試験を終了して原本を保持した。第2修正は前の予定時刻＋PCM期間へ追従しつつ、「実送信開始＋PCM期間の90%」と現在時刻を下限にする。これにより小さな復帰遅れを次周期で吸収し、大幅遅延後のまとめ送りを避ける。3msの反復jitterで100ms周期を維持する検証を加え、ネットワークなし回帰31件が合格した。PCM内容・順序・sample rateは変更しない。[公式WebSocket資料](https://developers.openai.com/api/docs/guides/voice-websockets)の収録sample rateに合わせた連続送信を維持する実装判断である。
+
+第2修正の実マイク試験では3件の音声移動指示を同じepochで適用できたが、159秒時点でqueue7と小さな遅れが残った。最終実装では理想PCM時刻を音声期間だけで加算し続け、実送信開始から90%期間という最短間隔を別変数で保持する。通常のjitterを理想時刻へ戻し、大幅遅延後も最短間隔を守って回復する。20msの周期的oversleepを200回の送信へ混在させても恒久的な遅れが蓄積しないこと、長い停止後に100ms周期へ戻ることを検証し、回帰33件が合格した。
+
+第2修正の[実マイク原本](../../artifacts/native-motion/continuous-microphone-clock-20260913-1240/capture-metadata.json)と[独立集計](../../artifacts/native-motion/continuous-microphone-clock-20260913-1240/voice-validation-analysis.json)では、音声FORWARD→期限切れSTOP→音声TURN_L→期限切れSTOP→音声FORWARD→期限切れSTOPの適用を、同じepoch3／Brain sessionで照合した。間のinhibitは0件。移動とSTOP収束を含む観測区間で水平変位2.922m、左旋回−63.863度、水平変位2.596mを記録した（区間定義は集計参照）。dispatch→Brain適用は2188／1891／1860msで、発話開始からのE2Eではない。音声Action3件に対しclarify3件／question1件、音声STOP適用0件。ユーザーが発話した文面や未記録のボタン操作は断定せず、接続・epochの継続と実適用を根拠にする。身体有効827sample全てで実source／収録・送信を維持、fault/error空。1385frame欠番0、compute mean116.620／p95157.110／max316.470ms、ready=false／reset0／rebuild1。peak RSS1,166,540,800bytes、所有process残存0、Player例外0、終了時ClientConnectionResetError1件を保持する。
+
+### 最終版の実マイク継続操作
+
+[最終実行記録](../../artifacts/native-motion/continuous-microphone-final-20260913-1245/capture-metadata.json)は `.venv-bridge/Scripts/python.exe artifacts/native-motion/run_manual_voice_capture.py artifacts/native-motion/continuous-microphone-final-20260913-1245` で実行。正式Player＋Windows実Brain＋実GPT Live／Responsesへ、ユーザーの物理マイクだけを入力した。約3分の中でFORWARD／TURN_R／FORWARD／TURN_L／FORWARDの5件を同epoch3で適用し、それぞれ通常期限切れSTOPへ進んだ。操作の間も音声待受を維持した。分類7件中2件はclarifyで、音声STOPは0件。この試験を、発話認識が常に正しいことや音声STOPそのものの実機確認としては扱わない。
+
+Live pipelineの最後の時点で入力1721chunk／送信1719chunk、queue最大2／backpressure0／lastErrorCodeなし。初期の音声buffer差2chunkを保ち、過去runのような時間に伴う増加は発生しなかった。起動から終了までのsource/data/config/Assembly hashはmetadataに記録し、親の終了後照合でも変更0。peak RSS1,167,433,728bytes、所有process残存0、18766／18770／18771解放を確認した。今回の約3分と単体試験の範囲での確認であり、15分運転・機器抜差し・上流サービス終了復旧の受入れは別に残る。
+
+[最終独立集計](../../artifacts/native-motion/continuous-microphone-final-20260913-1245/voice-validation-analysis.json)で、動作＋期限切れSTOP収束区間の身体運動は、前進2.775m／右旋回+30.837度／前進0.356m／左旋回−53.357度／前進0.871m。短い変位の理由や連続走行品質は断定しない。5回の期限切れからSTOP適用は172／313／218／204／281ms、次の4操作までepoch・session維持、間のinhibit0。身体有効826sample全てでsourceLive／マイク収録・送信を維持し、fault/error空。1268frame、sequence2～1269欠番0、compute mean126.079／p95180.846／max320.673ms、ready=false／reset0／rebuild1。Player例外0。終了時のClientConnectionResetError1件とbrain_transport_errorを保持する。capture内にはcontroller_released／bridge_stoppedが無いため、プロトコル上の正常終了確認は欠測であり、所有process残存0／ポート解放とは区別する。

@@ -83,7 +83,7 @@ GPT は 6 Action（`STOP`、`FORWARD`、`TURN_R`、`TURN_L`、`FORWARD_R`、`FOR
 
 manual と GPT の操作権は明示的に排他切替する。observer は解説のみで操作できない。解説音声は操作入力としてフィードバックしない。緊急停止は Unity で即時に出力抑止し、明示解除までラッチする。刺激 OFF の通常 `STOP` とは区別する。曖昧な意図や未対応動作を勝手な Action へ変換しない。
 
-操作提案は action、commandId、controlEpoch、validForMs を持ち、Bridge の単調時計で期限・上限を管理する。重複、期限切れ、旧 session、非所有者の要求を拒否し、切替・再接続で未適用要求を自動再送しない。GPT 操作中に GPT 接続断／期限切れが起きたら STOP を要求し Unity 出力も抑止する。manual 中は会話障害だけで操作権を奪わない。Unity／Bridge 制御路断でも Unity が独立に抑止し、発話中断だけを Brain 停止完了と扱わない。
+操作提案は action、commandId、controlEpoch、validForMs を持ち、Bridge の単調時計で期限・上限を管理する。重複、旧 session、非所有者の要求を拒否し、未適用の旧 Action を自動再送しない。Native音声controlの通常TTL期限切れは epoch、session、TCP、待受を維持し、次の新音声Actionをそのまま受け付ける。音声STOPは `source=gpt` の通常STOPであり、safety STOPとは区別する。Unity motor TCP、制御WS、Live、一時的 staleのfaultでは古い motor 出力を抑止し、新しい voice session／fresh STOP／`resume` で自動復旧する。上流Bridge→Brain TCPの物理断やBrainサービス終了は自動復旧を保証しない。明示的な緊急停止、会話終了、mute、chat_only、アプリ終了はユーザー指定を優先する。manual 中は会話障害だけで操作権を奪わない。Legacy非nativeの抑止規則は維持する。
 
 BrainFrame からの翻訳は、観測 → 決定的な要約／変化検知 → キャラ表現の順とする。要求 Action だけで実応答を断定しない。「気持ち」は神経活動に根拠を置く擬人的表現であり、実際の感情を読み取ったとは主張しない。実移動、崖、接触などは Unity 観測という別入力を根拠として区別する。不明・stale は不明・stale と表示する。frame 要約、変化検知、発話頻度制限を設ける。
 
@@ -105,7 +105,7 @@ BrainFrame からの翻訳は、観測 → 決定的な要約／変化検知 →
 
 解放の証拠は server の session／controller ID にひも付いた release event・ログまたは既存の読み取り専用管理情報とする。ESTABLISHED がないことだけでは内部 slot 解放の直接証明にならない。観測手段は実装時に契約化し、観測不能時は `release unknown` として停止する。新 Brain に残留活動があれば STOP と新規 frame による確認を期限付きで行い、停止確認ができなければ再開しない。
 
-新規 frame だけが鮮度を更新する。既存の 0.75 秒 stale 判定を無制限に延長しない。heartbeat、同一 frame の再送、会話接続状態で鮮度を更新してはならない。
+新規 frame だけが鮮度を更新する。既存の 0.75 秒 stale 判定を無制限に延長しない。stale時は古い出力を停止し、full inhibit、epoch更新、TCP closeを行う。新鮮なBrainFrameの復帰後、Controller が新しいLive／STOP／`resume`で復旧する。heartbeat、同一 frame の再送、会話接続状態で鮮度を更新してはならない。
 
 ## 5. 表示、観測、ログ
 
