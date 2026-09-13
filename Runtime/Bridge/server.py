@@ -16,6 +16,8 @@ import uuid
 from aiohttp import web, WSMsgType
 
 from .brain_adapter import BrainAdapter, BrainAdapterError
+from .action_plans import BoundedPlanRunner, LocalSafetyObservation, PLAN_REPLY
+from .blind_run_script import BlindRunScript
 from .config import load_config
 from .control import ControlArbiter, ControlError
 from .conversation import ConversationAdapter, ConversationError
@@ -31,6 +33,9 @@ class Bridge:
         self.target = config['brain']
         self.profile = config['profile']
         self.conversation = ConversationAdapter(config['conversation'], self.conversation_event, self.voice_utterance)
+        self.blind_script = BlindRunScript()
+        self.local_observation = LocalSafetyObservation()
+        self.plans = BoundedPlanRunner(self)
         self.control_ws = None
         self.control_queue = None
         self.motor_writer = None
@@ -100,7 +105,9 @@ class Bridge:
                 'target': {'host': self.target['host'], 'port': self.target['port']},
                 'brainConnected': bool(self.adapter and self.adapter.connected), 'brainReady': False,
                 'conversationState': self.conversation.state, 'conversationMode': self.conversation.mode,
-                'capabilities': ['conversation_only_v1', 'native_voice_actions_v1'],
+                'capabilities': ['conversation_only_v1', 'native_voice_actions_v1', 'blind_run_script_v1', 'bounded_action_plans_v1'],
+                'actionPlan': ({k: self.plans.active[k] for k in ('planId', 'name', 'step', 'requestId')}
+                               if self.plans.active else None),
                 'conversationInteraction': self.conversation_interaction,
                 'conversationGeneration': self.conversation_generation,
                 'conversationStopping': bool(self.conversation_operation and not self.conversation_operation.done()),
@@ -141,6 +148,9 @@ class Bridge:
             queue.put_nowait(event)
 
     def invalidate(self, preserve_conversation=False):
+        self.plans.cancel()
+        self.local_observation.clear()
+        self.blind_script.last_fact = None
         self.intent_revision += 1
         for task in tuple(self.intent_tasks):
             if task is not asyncio.current_task():
@@ -237,6 +247,7 @@ class Bridge:
         elif kind == 'ack':
             item = self.requests.get(event['requestId'])
             if item and item['epoch'] == self.arbiter.epoch:
+                item['rejected'] = event['accepted'] is not True
                 self.log('command_accepted', requestId=event['requestId'], commandId=item['commandId'], accepted=event['accepted'])
                 self.emit({'type': 'command_result', 'stage': 'accepted', 'commandId': item['commandId'],
                            'requestId': event['requestId'], 'accepted': event['accepted']})
@@ -375,6 +386,7 @@ class Bridge:
 
     async def player_intent(self, text, command_id, epoch, revision, delegation_id):
         started = time.monotonic()
+        replaced_plan = False
         try:
             proposal = await self.conversation.interpret(text, self.summary(),
                 self.config['control']['defaultActionMs'], self.config['control']['maxActionMs'])
@@ -383,7 +395,8 @@ class Bridge:
                      source='voice' if delegation_id is not None else 'text',
                      kind=proposal['kind'],
                      action=proposal['action'] if proposal['kind'] == 'action' else None,
-                     proposalValidForMs=proposal['validForMs'], interpretationMs=interpretation_ms)
+                     proposalValidForMs=proposal['validForMs'], interpretationMs=interpretation_ms,
+                     plan=proposal.get('plan'))
             if epoch != self.arbiter.epoch or revision != self.intent_revision:
                 raise ControlError('stale_intent')
             if interpretation_ms > self.config['control']['maxActionMs']:
@@ -392,6 +405,10 @@ class Bridge:
                 if delegation_id is not None and self.voice_control_epoch != epoch:
                     raise ControlError('voice_session_restart_required')
                 self.require_fresh()
+                replaced_plan = self.plans.active is not None
+                await self.plans.cancel_and_wait()
+                if epoch != self.arbiter.epoch or revision != self.intent_revision:
+                    raise ControlError('stale_intent')
                 # STOP has no movement duration; only the same bounded intent
                 # freshness applies. Movement retains its proposed duration.
                 duration_ms = (self.config['control']['maxActionMs'] if proposal['action'] == 'STOP'
@@ -400,8 +417,23 @@ class Bridge:
                 self.arbiter.accept('gpt', proposal['action'], command_id, epoch, valid_ms)
                 await self.submit(proposal['action'], 'gpt', command_id)
                 reply = self.text('intent_sent')
+            elif proposal['kind'] == 'plan':
+                if delegation_id is not None and self.voice_control_epoch != epoch:
+                    raise ControlError('voice_session_restart_required')
+                deadline = started + proposal['validForMs']/1000
+                await self.plans.begin(proposal['plan'], command_id, epoch,
+                                       self.conversation_generation, deadline)
+                reply = PLAN_REPLY[self.conversation.settings['language']][proposal['plan']]
             elif proposal['kind'] == 'question':
-                reply = self.summary()['interpretation'] + ' ' + self.text('disclosure')
+                if self.blind_script.run_id is not None:
+                    nearby = self.blind_script.current_fact() or (
+                        '今の周りは、まだわからない。' if self.conversation.settings['language'] == 'ja'
+                        else 'I do not have a fresh view right now.')
+                    reply = ('Answer only the question, in one short sentence. '
+                             'Nearby sensor report: ' + nearby + ' Neural report (not body motion): '
+                             + self.summary()['interpretation'])
+                else:
+                    reply = self.summary()['interpretation'] + ' ' + self.text('disclosure')
             else:
                 reply = self.text('clarify')
             if self.conversation.mode == 'mock':
@@ -409,14 +441,26 @@ class Bridge:
             else:
                 await self.conversation.append('commentary', reply, delegation_id)
         except asyncio.CancelledError:
+            if replaced_plan and not self.arbiter.inhibited:
+                await self.inhibit('plan_replacement_cancelled')
             raise
         except (ControlError, ConversationError, BrainAdapterError) as exc:
+            if replaced_plan and not self.arbiter.inhibited:
+                await self.inhibit('plan_replacement_failed')
             self.emit({'type': 'command_result', 'stage': 'rejected', 'commandId': command_id, 'reason': str(exc)})
             self.log('intent_rejected', commandId=command_id, reason=str(exc))
             if isinstance(exc, (ConversationError, BrainAdapterError)) and self.arbiter.owner == 'gpt':
                 await self.inhibit('intent_service_failed')
             if epoch == self.arbiter.epoch:
-                await self.conversation.append('commentary', self.text('rejected'), delegation_id)
+                if str(exc) in ('local_observation_unavailable', 'local_observation_unknown'):
+                    reply = ('周りがまだわからないから、進めない。' if self.conversation.settings['language'] == 'ja'
+                             else "I can't move without a fresh view.")
+                elif str(exc) in ('edge_near', 'ground_missing', 'forward_blocked', 'body_unsafe'):
+                    reply = ('危険を感じるから、進めない。' if self.conversation.settings['language'] == 'ja'
+                             else "I can't start with a hazard nearby.")
+                else:
+                    reply = self.text('rejected')
+                await self.conversation.append('commentary', reply, delegation_id)
 
     async def configure_conversation(self, event):
         request_id = event.get('requestId')
@@ -458,12 +502,62 @@ class Bridge:
             self.emit({'type': 'error', 'error': str(exc),
                        'requestId': request_id if isinstance(request_id, str) and len(request_id) <= 128 else None})
 
+    async def accept_local_observation(self, event):
+        if self.control_ws is None or self.conversation_interaction != 'control':
+            raise ControlError('local_observation_control_required')
+        if type(event.get('controlEpoch')) is not int or event['controlEpoch'] != self.arbiter.epoch:
+            raise ControlError('old_epoch')
+        if (type(event.get('conversationGeneration')) is not int
+                or event['conversationGeneration'] != self.conversation_generation):
+            raise ControlError('old_conversation_generation')
+        try:
+            self.local_observation.accept(event)
+        except (ControlError, TypeError, KeyError):
+            self.local_observation.sample = None
+            if self.plans.active:
+                await self.inhibit('invalid_local_observation')
+            raise ControlError('invalid_local_observation') from None
+        concern = self.local_observation.concern()
+        if self.plans.active and concern:
+            await self.inhibit(concern)
+
+    async def blind_run_cue(self, event):
+        # The existing sole control client is the trusted Unity game producer.
+        # No second Brain connection, no Action submission, no camera controls.
+        if (self.control_ws is None or not self.conversation_accepting
+                or self.conversation.state != 'live' or self.conversation_interaction != 'control'):
+            raise ControlError('blind_live_control_required')
+        if type(event.get('controlEpoch')) is not int or event['controlEpoch'] != self.arbiter.epoch:
+            raise ControlError('old_epoch')
+        if (type(event.get('conversationGeneration')) is not int
+                or event['conversationGeneration'] != self.conversation_generation):
+            raise ControlError('old_conversation_generation')
+        if self.switching or self.release_unknown:
+            raise ControlError('blind_switch_in_progress')
+        if event.get('cue') != 'link_error':
+            self.require_fresh()
+        text, speak = self.blind_script.accept(event, self.conversation.settings['language'])
+        # Send only the selected line, never the catalog, run ID or cue name.
+        instruction = ('Blind Sugar Run。今回確認された場面のセリフだけを短く伝える。'
+                       '意味を変えず一言に言い換えてよいが、事実・進路・原因を足さない。'
+                       if self.conversation.settings['language'] == 'ja' else
+                       'Blind Sugar Run. Use only this verified scene line. Keep it tiny; '
+                       'paraphrase without adding facts, routes or causes. ')
+        await self.conversation.append('commentary' if speak else 'thinking', instruction + text)
+        self.emit({'type': 'blind_run_cue_result', 'sequence': event['sequence'],
+                   'stage': 'queued', 'speakRequested': speak})
+        self.log('blind_run_cue_queued', cue=event['cue'], sequence=event['sequence'], speakRequested=speak)
+
     async def command(self, event):
         if not isinstance(event, dict):
             raise ControlError('invalid_message')
         kind = event.get('type')
         if kind == 'configure_conversation':
             self.task(self.configure_conversation(event))
+        elif kind == 'blind_run_cue':
+            await self.blind_run_cue(event)
+        elif kind == 'local_safety_observation':
+            await self.accept_local_observation(event)
         elif kind == 'emergency_stop':
             await self.inhibit('emergency_stop')
         elif kind == 'set_owner':
@@ -530,6 +624,7 @@ class Bridge:
             self.conversation_interaction = interaction
             self.native_voice_control = native_voice_control
             self.conversation.interaction = interaction
+            self.blind_script.reset()
             self.conversation_generation += 1
             self.conversation_accepting = True
             self.emit(self.state())
@@ -556,6 +651,12 @@ class Bridge:
             raise ControlError('unknown_message')
 
     def stop_conversation_session(self):
+        had_plan = self.plans.active is not None
+        self.plans.cancel()
+        self.local_observation.clear()
+        if had_plan:
+            self.task(self.inhibit('plan_conversation_stopped'))
+        self.blind_script.reset()
         # Reserve the lifecycle operation synchronously: queued starts cannot
         # resurrect a session after Stop / WS disconnect / identity replacement.
         self.conversation_accepting = False
@@ -623,7 +724,8 @@ class Bridge:
                         'bodyMovementVerified': False}, ensure_ascii=False)
                     # Changes of *observed* state drive character speech; no
                     # speech is generated just because an action was requested.
-                    channel = 'commentary' if self.conversation_announced else 'thinking'
+                    channel = ('commentary' if self.conversation_announced and self.blind_script.run_id is None
+                               else 'thinking')
                     self.conversation_announced = self.conversation.state in ('live', 'mock')
                     self.task(self.conversation.append(channel, context))
 

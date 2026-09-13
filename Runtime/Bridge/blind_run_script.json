@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "cues": {
+    "intro": {"evidence": {"stageStarted": true}, "ja": "ぼくの声で、砂糖を探そう。", "en": "Let's find sugar by my voice."},
+    "vision": {"evidence": {"externalVisionAvailable": true}, "ja": "外付けの目で、近くがわかるよ。", "en": "My added sensors see nearby."},
+    "ask": {"evidence": {"tutorialPrompt": true}, "ja": "周りのこと、聞いてね。", "en": "Ask me what's nearby."},
+    "forward_lesson": {"evidence": {"tutorialPrompt": true}, "ja": "「前に進んで」って言ってみて。", "en": "Try saying, 'Move forward.'"},
+    "turn_lesson": {"evidence": {"tutorialPrompt": true}, "ja": "「右向いて」「左向いて」で向きを変えるよ。", "en": "Say 'Turn right' or 'Turn left.'"},
+    "stop_lesson": {"evidence": {"tutorialPrompt": true}, "ja": "止まるのはゆっくりだから、早めにね。", "en": "Stopping takes time, so ask early."},
+    "ruler_ahead": {"evidence": {"forwardObject": "ruler"}, "ja": "前に、細い板。", "en": "A thin board ahead."},
+    "ruler_right": {"evidence": {"forwardObject": "ruler", "alignment": "right"}, "ja": "板は、少し右向き。", "en": "The board angles a little right."},
+    "ruler_left": {"evidence": {"forwardObject": "ruler", "alignment": "left"}, "ja": "板は、少し左向き。", "en": "The board angles a little left."},
+    "aligned": {"evidence": {"forwardObject": "ruler", "alignment": "center"}, "ja": "板が、だいたい正面。", "en": "The board is roughly straight ahead."},
+    "right_edge": {"evidence": {"rightEdge": "near"}, "ja": "右の端が近い。", "en": "The right edge is close."},
+    "right_edge_urgent": {"evidence": {"rightEdge": "very_near"}, "ja": "右、ぎりぎり！", "en": "Right edge, very close!"},
+    "left_edge": {"evidence": {"leftEdge": "near"}, "ja": "左の端が近い。", "en": "The left edge is close."},
+    "left_edge_urgent": {"evidence": {"leftEdge": "very_near"}, "ja": "左、ぎりぎり！", "en": "Left edge, very close!"},
+    "still_moving": {"evidence": {"bodyMoving": true}, "ja": "まだ動いてる。", "en": "Still moving."},
+    "stable": {"evidence": {"bodyMoving": false, "bodyStable": true}, "ja": "落ち着いた。", "en": "Steady now."},
+    "book": {"evidence": {"ground": "book"}, "ja": "本の上だ。", "en": "I'm on a book."},
+    "branch": {"evidence": {"localBranchesVisible": true}, "ja": "近くで、道が二つに分かれてる。", "en": "The path splits nearby."},
+    "branch_left_narrow": {"evidence": {"localBranchesVisible": true, "leftWidth": "narrow", "rightWidth": "wide"}, "ja": "左は細くて、右は広い。", "en": "Left is narrow; right is wide."},
+    "branch_right_narrow": {"evidence": {"localBranchesVisible": true, "leftWidth": "wide", "rightWidth": "narrow"}, "ja": "左は広くて、右は細い。", "en": "Left is wide; right is narrow."},
+    "plate": {"evidence": {"forwardObject": "sugar_plate"}, "ja": "近くに、白い皿。", "en": "A white plate nearby."},
+    "sugar": {"evidence": {"sugarDetected": true}, "ja": "砂糖、見つけた。", "en": "Found sugar."},
+    "goal_wait": {"evidence": {"insideGoal": true, "bodyStable": false}, "ja": "ここで、落ち着こう。", "en": "Let's settle here."},
+    "goal": {"evidence": {"insideGoal": true, "bodyStable": true, "goalConfirmed": true}, "ja": "着いた！", "en": "Made it!"},
+    "reveal": {"evidence": {"revealStarted": true}, "ja": "ここを、歩いてきたんだ。", "en": "This is where we walked."},
+    "link_error": {"evidence": {"technicalFault": true}, "ja": "つながりが切れた。", "en": "The link is down."}
+  }
+}

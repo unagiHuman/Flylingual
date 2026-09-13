@@ -66,18 +66,24 @@ launcher が自動でこの flag を付けることはない。Windows owner が
 | `NeuralActivityObserver` | `staleSeconds` | `0.75` |
 | `NeuralActivityObserver` | `bindSingleExistingClient` | `true` |
 | `NeuralPointCloud` | `renderMaterial` | null → 生成material参照 |
-| `NeuralPointCloud` | `pointSize` | `0.012` |
-| `NeuralPointCloud` | `restingBrightness` | `0.16` |
-| `NeuralPointCloud` | `spikeAfterglowSeconds` | `0.18` 秒 |
+| `NeuralPointCloud` | `pointSize` | `0.016` |
+| `NeuralPointCloud` | `restingBrightness` | `0.5` |
+| `NeuralPointCloud` | `spikeAfterglowSeconds` | `0.25` 秒 |
 | `NeuralPointCloud` | `rateForFullGlowHz` | `45` Hz |
 | `NeuralPointCloud` | `membraneScaleMv` | `2` mV |
 | `NeuralPointCloud` | `displayGain` | `1` |
 | `NeuralPointCloud` | `inheritLayer` | `true` |
+| `NeuralPointCloud` | `spikeScale` | `1.5` |
+| `NeuralPointCloud` | `showMembranePotential` | `false` |
 | `NeuralVisualizationPanel` | `observer` / `pointCloud` / `brainCamera` / `displayRoot` | null → 各生成component参照 |
 | `NeuralVisualizationPanel` | `visible` | `true` |
 | `NeuralVisualizationPanel` | `screenWidthFraction` | `0.36` |
 | `NeuralVisualizationPanel` | `textureResolution` | `768` |
 | `NeuralVisualizationPanel` | `allowOrbit` | `true` |
+| `NeuralVisualizationPanel` | `brainFocus` | `true` |
+| `NeuralVisualizationPanel` | `brainFocusCenter` | `(0, 0.66, 0)` |
+| `NeuralVisualizationPanel` | `brainViewSize` | `0.86` |
+| `NeuralVisualizationPanel` | `fullViewSize` | `1.25` |
 
 ## Acceptance gate と未完了欄
 
@@ -97,3 +103,20 @@ launcher が自動でこの flag を付けることはない。Windows owner が
 初期dirty 12ファイルはSHA-256で一致を確認して保持した。Unityが自動変更した共有URP設定は開始時の内容へ復元済み。既存Scene、Unity受信コード、Packages、ProjectSettingsへの本機能の差分はない。新規Unityコードとmetaは `Assets/BrainVisualization` 配下およびフォルダーmetaだけ。既存Pythonの変更は `analog_controller.py`、`brain_server_analog.py`、`brain_server_bridge.py` の3ファイル。新規Python2ファイルと、本書・protocolの定義ファイルも追加した。commit/pushは未実施。
 
 診断表示はstate、mode、ready、frame age、sequence、sample/active/spikes、SKIP。追加ログキーは `NEURAL_VIS_ATLAS_INVALID`、`NEURAL_VIS_PREFAB_READY`、`NEURAL_VIS_STATIC_PREVIEW`。パネルの統計は表示サンプルと受信窓についての値であり、全CNSの総発火数や観測していない時間の合計とは呼ばない。
+
+
+## 白灰・赤橙デザイン（2026-09-13）
+
+既存の24,000 somaサンプルを保持し、未観測の構造は灰色、スパイク窓を観測済みでゼロの点は白、実測発火は赤橙で表す。発火後0.25秒の表示残光と最大1.5倍の点径を使う。高い発火率では中心を淡い暖色にし、奥の点をわずかに暗くする。premultiplied alpha合成で密集部の加算による白飛びを避ける。電圧のみの点は「発火なし」と判定しない。膜電位色は既定OFFで、必要時に `ShowMembranePotential` またはInspectorから有効にする。
+
+既定の画角は脳の拡大表示。独立パネルの `FULL CNS` / `BRAIN FOCUS` ボタンで切り替える。`SetBrainFocus(bool)` は埋め込み先からも呼べる。既存Play Screenの `SetEmbedded` / `Rotate` / `Zoom` / `DisplayTexture` APIは維持し、そのファイルは変更しない。埋め込み中は独立パネルのボタンを表示しないため、専用切替ボタンを必要とする場合はWindows側UI担当がこのAPIへ接続する。既存のホイールによる拡大縮小は引き続き使える。
+
+`brainFocusCenter` は現在の正規化atlasに合わせた表示上の中心であり、脳細胞の分類やデータの選別ではない。点群自体は削除せず、回転時もこの中心をカメラが追う。全シナプスや全神経突起の表示を追加したものではない。
+
+既に生成済みのPrefabには古いSerializeField値が残るため、独立機能の `1 Generate Prefab` で再生成する。独自のScene overrideは勝手に書き換えず、必要な値をInspectorで上表に合わせる。Play Screenが実行時に新しく作成する点群には新しい既定値が適用される。`3 Export Static Anatomy Preview` は全体の `static-anatomy.png` と拡大の `static-brain-focus.png` を出力する。どちらも活動入力なしの静止画。
+
+今回の変更対象は可視化の描画2ファイル、パネル、専用Builder、および本定義ファイルだけ。Brain計算・受信データ・既存Play Screen・共有Scene・ProjectSettingsは変更しない。検証結果は `artifacts/neural-visualization/design-white-red/` に保存する。Windows実Brainでの発火・残光・回転・画角切替・操作非干渉は引き続き未検証。
+
+2026-09-13 03:25 UTC確認：対象projectは6000.5.9f1、Macのインストール済みEditorは6000.5.5f1のため、一時コピーで同じC#・shaderソースとPackagesを使ってコンパイル・静止描画した。エラー0、可視化コードの警告0、他のC#警告47種類。全体・拡大のPNGを目視確認済み。6000.5.9f1自体の検証、PlayMode、発火・残光の実測とは区別する。ソース側のProjectVersion/ProjectSettingsは変更していない。
+
+今回の再生成Prefab/materialは既存の生成asset GUIDを保持してローカルのGeneratedへ反映済み。開始時に変更中だった9ファイルは内容のSHA-256一致を確認。追加された他タスクのファイルもそのまま保持した。commit/pushは未実施。新規ログキーはなく、静止画出力には既存の `NEURAL_VIS_STATIC_PREVIEW` を使用する。

@@ -38,4 +38,21 @@ public static class NativeConversationBuilder
             throw new InvalidOperationException("Native conversation build failed: " + report.summary.result);
         Debug.Log("NATIVE_CONVERSATION_BUILD_PASS");
     }
+
+    [MenuItem("Flylingual/Conversation/Build Mac conversation Player")]
+    public static void BuildMac()
+    {
+        string root = Path.GetFullPath(Path.Combine(Application.dataPath, "../.."));
+        string player = Path.Combine(root, "artifacts/mac-native-conversation/unity/FlylingualConversation.app");
+        Directory.CreateDirectory(Path.GetDirectoryName(player));
+        var report = BuildPipeline.BuildPlayer(new BuildPlayerOptions {
+            scenes = new[] { "Assets/VisualDemo/SessionRealism/FlyGroundedRealismDemo.unity" },
+            locationPathName = player, target = BuildTarget.StandaloneOSX,
+            extraScriptingDefines = new[] { "FLY_NATIVE_CONVERSATION" },
+            options = BuildOptions.Development
+        });
+        if (report.summary.result != BuildResult.Succeeded)
+            throw new InvalidOperationException("Mac native conversation build failed: " + report.summary.result);
+        Debug.Log("NATIVE_MAC_CONVERSATION_BUILD_PASS");
+    }
 }

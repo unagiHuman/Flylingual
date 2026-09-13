@@ -63,6 +63,7 @@ Brain/MaleCNS/results/*
 
 # Keys and personal settings
 Runtime/Config/windows-native.local.json
+Runtime/Config/mac-native.local.json
 .env
 .env.*
 !.env.example

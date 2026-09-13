@@ -1,5 +1,10 @@
 # Bridge v1 protocol
 
+Optional stage speech extension: [blind_run_script_v1](blind-run-script-v1.md).
+The Backend consumer is implemented; the Unity sensor/GameFlow producer and live acceptance are not yet verified.
+Optional bounded movement plans: [bounded_action_plans_v1](bounded-action-plans-v1.md).
+These require fresh local safety observations; missing observations never enable movement.
+
 This is the implemented local-Bridge contract as inspected on 2026-09-12. It
 does not certify a Brain, GPT service, Unity scene, or physical behaviour as
 ready. The design authority for safety and the external conversation API is

@@ -44,12 +44,13 @@ namespace FlyBrainVisualization.Editor
             cameraObject.transform.localPosition = new Vector3(0, 0, -4);
             var camera = cameraObject.AddComponent<Camera>();
             camera.orthographic = true; camera.orthographicSize = 1.25f; camera.nearClipPlane = .1f; camera.farClipPlane = 10;
-            camera.clearFlags = CameraClearFlags.SolidColor; camera.backgroundColor = new Color(.025f, .044f, .072f, 1);
+            camera.clearFlags = CameraClearFlags.SolidColor; camera.backgroundColor = new Color(.035f, .039f, .048f, 1);
             camera.cullingMask = 1 << 31; camera.allowHDR = false; camera.allowMSAA = false; camera.enabled = false;
             var additional = cameraObject.AddComponent<UniversalAdditionalCameraData>();
             additional.renderPostProcessing = false; additional.renderShadows = false;
             var observer = root.AddComponent<NeuralActivityObserver>(); observer.Configure(null, atlas, cloud);
             var panel = root.AddComponent<NeuralVisualizationPanel>(); panel.Configure(observer, cloud, camera, cloudObject.transform);
+            panel.SetBrainFocus(true);
             root.SetActive(true);
             try { PrefabUtility.SaveAsPrefabAsset(root, PrefabPath); }
             finally { UnityEngine.Object.DestroyImmediate(root); }
@@ -89,17 +90,25 @@ namespace FlyBrainVisualization.Editor
                 root.GetComponentInChildren<NeuralPointCloud>().SetPoints(positions);
                 var camera = root.GetComponentInChildren<Camera>(); camera.scene = scene;
                 texture = new RenderTexture(1000, 1000, 24); texture.Create(); camera.targetTexture = texture;
-                camera.Render();
-                var old = RenderTexture.active;
-                try
-                {
-                    RenderTexture.active = texture; image = new Texture2D(1000, 1000, TextureFormat.RGB24, false);
-                    image.ReadPixels(new Rect(0, 0, 1000, 1000), 0, 0); image.Apply();
-                }
-                finally { RenderTexture.active = old; }
+                var panel = root.GetComponent<NeuralVisualizationPanel>();
                 string folder = Path.GetFullPath(Path.Combine(Application.dataPath, "../../artifacts/neural-visualization"));
-                Directory.CreateDirectory(folder); File.WriteAllBytes(Path.Combine(folder, "static-anatomy.png"), image.EncodeToPNG());
-                Debug.Log("NEURAL_VIS_STATIC_PREVIEW: " + folder + "/static-anatomy.png; static soma coordinates only, no activity simulation");
+                Directory.CreateDirectory(folder);
+                image = new Texture2D(1000, 1000, TextureFormat.RGB24, false);
+                foreach (bool focus in new[] { false, true })
+                {
+                    panel.SetBrainFocus(focus);
+                    camera.Render();
+                    var old = RenderTexture.active;
+                    try
+                    {
+                        RenderTexture.active = texture;
+                        image.ReadPixels(new Rect(0, 0, 1000, 1000), 0, 0); image.Apply();
+                    }
+                    finally { RenderTexture.active = old; }
+                    string file = focus ? "static-brain-focus.png" : "static-anatomy.png";
+                    File.WriteAllBytes(Path.Combine(folder, file), image.EncodeToPNG());
+                    Debug.Log("NEURAL_VIS_STATIC_PREVIEW: " + folder + "/" + file + "; static soma coordinates only, no activity simulation");
+                }
             }
             finally
             {

@@ -9,13 +9,21 @@ using UnityEngine;
 
 namespace Flylingual.Conversation
 {
-    /// <summary>Owns the local services for the native Player or an explicitly opted-in scene.</summary>
+    /// <summary>Owns the local services for the native Player or an explicitly opted-in scene, and starts the local Brain/Bridge stack only when native conversation is requested.</summary>
     [DefaultExecutionOrder(-10000)]
     public sealed class ConversationNativeBootstrap : MonoBehaviour
     {
         private static ConversationNativeBootstrap instance;
         [Serializable]
-        private sealed class NativeLaunchConfig { public string bridgePython; }
+        private sealed class NativeLaunchConfig
+        {
+            public string bridgePython;
+            public string brainPython;
+            public string bridgeLocalConfig;
+            public string keyFile;
+            public string conversationMode;
+            public string runRoot;
+        }
 
         [Serializable]
         private sealed class NativeStatus { public string state; public string endpoint; public string message; }
@@ -29,6 +37,7 @@ namespace Flylingual.Conversation
         private CancellationTokenSource lifetime;
         private bool running;
         private bool closing;
+        private bool macStack;
         private string visibleStatus;
         private float nextHeartbeat;
         private bool previousRunInBackground;
@@ -63,21 +72,30 @@ namespace Flylingual.Conversation
             try
             {
                 string root = ResolveRepositoryRoot();
-                string configPath = Path.Combine(root, "Runtime", "Config", "windows-native.local.json");
-                if (!File.Exists(configPath)) configPath = Path.Combine(root, "Runtime", "Config", "windows-stack.local.json");
-                if (!File.Exists(configPath)) throw new InvalidOperationException("A local windows-native or windows-stack configuration was not found.");
+                macStack = IsMacRuntime();
+                string configPath = macStack
+                    ? Path.Combine(root, "Runtime", "Config", "mac-native.local.json")
+                    : Path.Combine(root, "Runtime", "Config", "windows-native.local.json");
+                if (!macStack && !File.Exists(configPath)) configPath = Path.Combine(root, "Runtime", "Config", "windows-stack.local.json");
+                if (!File.Exists(configPath)) throw new InvalidOperationException(macStack
+                    ? "A local mac-native configuration was not found."
+                    : "A local windows-native or windows-stack configuration was not found.");
                 NativeLaunchConfig config = JsonUtility.FromJson<NativeLaunchConfig>(File.ReadAllText(configPath));
                 if (config == null || String.IsNullOrWhiteSpace(config.bridgePython))
-                    throw new InvalidOperationException("windows-native configuration has no bridgePython.");
+                    throw new InvalidOperationException((macStack ? "mac-native" : "windows-native") + " configuration has no bridgePython.");
+                if (macStack && String.IsNullOrWhiteSpace(config.brainPython))
+                    throw new InvalidOperationException("mac-native configuration has no brainPython.");
 
-                RunDirectory = Path.Combine(root, "artifacts", "windows-native-runs", Guid.NewGuid().ToString("N"));
+                string defaultRunRoot = Path.Combine(root, "artifacts", macStack ? "mac-native-runs" : "windows-native-runs");
+                string runRoot = ResolveConfiguredPath(root, config.runRoot, defaultRunRoot);
+                RunDirectory = Path.Combine(runRoot, Guid.NewGuid().ToString("N"));
                 Directory.CreateDirectory(RunDirectory);
                 statusPath = Path.Combine(RunDirectory, "status.json");
                 stopPath = Path.Combine(RunDirectory, "stop");
                 heartbeatPath = Path.Combine(RunDirectory, "heartbeat");
                 File.WriteAllText(heartbeatPath, String.Empty);
                 visibleStatus = "Starting local conversation services…";
-                StartHelper(root, configPath, config.bridgePython);
+                StartHelper(root, configPath, config);
                 await WaitForServiceAsync(lifetime.Token);
             }
             catch (OperationCanceledException) when (closing) { }
@@ -116,10 +134,10 @@ namespace Flylingual.Conversation
             GUI.Box(new Rect(14, Math.Max(14, Screen.height - 64), Math.Min(Screen.width - 28, 760), 48), visibleStatus);
         }
 
-        private void StartHelper(string root, string configPath, string configuredPython)
+        private void StartHelper(string root, string configPath, NativeLaunchConfig config)
         {
-            string python = Path.IsPathRooted(configuredPython) ? configuredPython : Path.Combine(root, configuredPython);
-            string helper = Path.Combine(root, "tools", "windows_native.py");
+            string python = ResolveConfiguredPath(root, config.bridgePython, config.bridgePython);
+            string helper = Path.Combine(root, "tools", macStack ? "mac_native.py" : "windows_native.py");
             if (!File.Exists(python) || !File.Exists(helper)) throw new InvalidOperationException("native launcher prerequisites were not found.");
             Process current = Process.GetCurrentProcess();
             double created = new DateTimeOffset(current.StartTime.ToUniversalTime()).ToUnixTimeMilliseconds() / 1000.0;
@@ -248,6 +266,17 @@ namespace Flylingual.Conversation
                     if (HasMarker(directory.FullName)) return directory.FullName;
             }
             throw new DirectoryNotFoundException("Flylingual repository root was not found; pass -flyRepoRoot <path>.");
+        }
+
+        private static bool IsMacRuntime()
+        {
+            return Application.platform == RuntimePlatform.OSXEditor || Application.platform == RuntimePlatform.OSXPlayer;
+        }
+
+        private static string ResolveConfiguredPath(string root, string configured, string fallback)
+        {
+            if (String.IsNullOrWhiteSpace(configured)) return Path.GetFullPath(fallback);
+            return Path.GetFullPath(Path.IsPathRooted(configured) ? configured : Path.Combine(root, configured));
         }
 
         private static bool HasMarker(string path) => File.Exists(Path.Combine(path, "tools", "dev.py"));

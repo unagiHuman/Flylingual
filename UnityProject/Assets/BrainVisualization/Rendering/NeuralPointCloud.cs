@@ -19,11 +19,13 @@ namespace FlyBrainVisualization
 
         [Header("Material")]
         [SerializeField] private Material renderMaterial;
-        [SerializeField, Min(0.001f)] private float pointSize = 0.012f;
-        [SerializeField, Range(0f, 1f)] private float restingBrightness = 0.16f;
-        [SerializeField, Min(0.01f)] private float spikeAfterglowSeconds = 0.18f;
+        [SerializeField, Min(0.001f)] private float pointSize = 0.016f;
+        [SerializeField, Range(0f, 1f)] private float restingBrightness = 0.5f;
+        [SerializeField, Min(0.01f)] private float spikeAfterglowSeconds = 0.25f;
         [SerializeField, Min(1f)] private float rateForFullGlowHz = 45f;
         [SerializeField, Min(0.01f)] private float membraneScaleMv = 2f;
+        [SerializeField, Range(1f, 1.5f)] private float spikeScale = 1.5f;
+        [SerializeField] private bool showMembranePotential;
         [SerializeField, Range(0f, 4f)] private float displayGain = 1f;
         [SerializeField] private bool inheritLayer = true;
 
@@ -39,6 +41,17 @@ namespace FlyBrainVisualization
             set
             {
                 displayGain = Mathf.Clamp(value, 0f, 4f);
+                materialDirty = true;
+            }
+        }
+
+        /// <summary>Enables the optional measured delta-membrane colour overlay.</summary>
+        public bool ShowMembranePotential
+        {
+            get => showMembranePotential;
+            set
+            {
+                showMembranePotential = value;
                 materialDirty = true;
             }
         }
@@ -85,7 +98,7 @@ namespace FlyBrainVisualization
 
         /// <summary>
         /// Sets one observational aggregate frame. spikeCounts and deltaMv describe the given window,
-        /// not individual spike times. Only observed points receive membrane or firing highlights.
+        /// not individual spike times. A membrane value alone is not treated as an observed zero spike count.
         /// </summary>
         public void SetActivity(float[] spikeCounts, float[] deltaMv, bool[] observed, float windowMs)
         {
@@ -109,6 +122,7 @@ namespace FlyBrainVisualization
                 for (int pointIndex = 0; pointIndex < chunk.pointCount; ++pointIndex, ++globalIndex)
                 {
                     bool isObserved = observed[globalIndex];
+                    bool hasSpikeObservation = isObserved && spikeCounts != null;
                     float count = spikeCounts == null || !IsFinite(spikeCounts[globalIndex])
                         ? 0f
                         : Mathf.Max(0f, spikeCounts[globalIndex]);
@@ -123,11 +137,11 @@ namespace FlyBrainVisualization
 
                     // Color is repeated over a point's four billboard vertices. Time only advances
                     // for a measured nonzero aggregate; zeros do not fabricate visual firing.
-                    Color packed = new Color(isObserved ? normalizedRate : 0f, membrane, isObserved ? 1f : 0f, hasMembrane ? 1f : 0f);
-                    float spikeTime = isObserved && normalizedRate > 0f ? receiptTime : -10000f;
-                    // A fresh observed zero is still a valid aggregate. It updates membrane state,
+                    Color packed = new Color(hasSpikeObservation ? normalizedRate : 0f, membrane, hasSpikeObservation ? 1f : 0f, hasMembrane ? 1f : 0f);
+                    float spikeTime = hasSpikeObservation && normalizedRate > 0f ? receiptTime : -10000f;
+                    // A fresh measured spike zero is still a valid aggregate. It updates membrane state,
                     // but lets a prior measured firing aggregate decay for its remaining afterglow.
-                    chunk.SetPoint(pointIndex, packed, spikeTime, isObserved && normalizedRate <= 0f);
+                    chunk.SetPoint(pointIndex, packed, spikeTime, hasSpikeObservation && normalizedRate <= 0f);
                 }
                 chunk.UploadActivity();
             }
@@ -177,6 +191,7 @@ namespace FlyBrainVisualization
             spikeAfterglowSeconds = Mathf.Max(0.01f, spikeAfterglowSeconds);
             rateForFullGlowHz = Mathf.Max(1f, rateForFullGlowHz);
             membraneScaleMv = Mathf.Max(0.01f, membraneScaleMv);
+            spikeScale = Mathf.Clamp(spikeScale, 1f, 1.5f);
             displayGain = Mathf.Clamp(displayGain, 0f, 4f);
             materialDirty = true;
             UpdateChunkBounds();
@@ -262,7 +277,8 @@ namespace FlyBrainVisualization
                 maximum = Vector3.Max(maximum, position);
             }
             Bounds bounds = new Bounds((minimum + maximum) * 0.5f, maximum - minimum);
-            bounds.Expand(pointSize * 2f);
+            // The largest real spike can enlarge a billboard by spikeScale.
+            bounds.Expand(pointSize * spikeScale);
             return bounds;
         }
 
@@ -302,6 +318,8 @@ namespace FlyBrainVisualization
             runtimeMaterial.SetFloat("_RestingBrightness", restingBrightness);
             runtimeMaterial.SetFloat("_AfterglowSeconds", spikeAfterglowSeconds);
             runtimeMaterial.SetFloat("_DisplayGain", displayGain);
+            runtimeMaterial.SetFloat("_SpikeScale", spikeScale);
+            runtimeMaterial.SetFloat("_ShowMembranePotential", showMembranePotential ? 1f : 0f);
             runtimeMaterial.SetFloat("_DisplayTime", Time.unscaledTime);
             materialDirty = false;
         }

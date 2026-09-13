@@ -1,0 +1,8 @@
+{
+  "bridgePython": ".venv-bridge/bin/python",
+  "brainPython": "/Users/yourname/miniforge3/envs/flybrain-malecns/bin/python",
+  "conversationMode": "mock",
+  "runRoot": "artifacts/mac-native-runs",
+  "startupSeconds": 90,
+  "heartbeatSeconds": 10
+}

@@ -23,6 +23,14 @@ python3 -m venv .venv-bridge
 .venv-bridge/bin/python tools/dev.py up --profile mac-local --conversation mock --launch-brain --brain-python /path/to/brain-python
 ```
 
+Unity Mac conversation Playerの起動時は、Unityが `tools/mac_native.py` を所有Supervisorとして起動する。Playerを使わずBrain・Bridgeだけを確認する再利用可能な入口は、上記の個別コマンドをまとめた `tools/Start-MacLocal.sh` である。初回依存導入後は、リポジトリルートから次だけを実行する。
+
+```sh
+./tools/Start-MacLocal.sh
+```
+
+詳細なMac側の責務、Unityとの境界、停止方法は [Mac 起動申し送り](../mac/Mac-Startup-Handoff.md) を参照する。
+
 `/path/to/brain-python` は `Brain/MaleCNS/requirements-runtime.txt` を導入した各端末のPythonへ置き換える。Bridge専用venvにはNumPy等のBrain依存を入れていないため、既存Brain環境を指定するか、別のBrain用venvを構築する。BridgeのPythonは3.10以上。Windowsでは `.venv-bridge\Scripts\python.exe` とその端末のBrain Pythonを使う（Windowsでの実行は未検証）。既存8766サーバーを勝手に停止しない。旧serverには拡張identity/releaseがないため、新しい `brain_server_bridge.py` が必要。
 
 liveへ進む場合は、`doctor` または `up` の `--key-file PATH` でローカルの単一行 ASCII key file を指定する。file は 8192 bytes 以下、`sk-` prefix、非空白でなければ安全に失敗する。明示指定が優先され、未指定なら `OPENAI_API_KEY_FILE` を任意の fallback として使う。読み込んだ値は launcher/Bridge の `OPENAI_API_KEY` だけに保持し、Brain 子 process の環境からは `OPENAI_API_KEY` と `OPENAI_API_KEY_FILE` を除外する。値は UI、設定、ログ、引数には出さない（file path 引数は可）。file を使わない場合は、既存の `OPENAI_API_KEY` 環境値を維持する。ブラウザの「会話開始」で初めてGPT-Liveのsessionを開始する。音声はlive接続後の「音声開始」でマイク権限を与える。ヘッドホンを推奨する。音声とテキストはOpenAIへ送信されるが、Bridgeでは本文・音声を既定で保存しない。実APIが使えない場合にmockへ自動切替はしない。

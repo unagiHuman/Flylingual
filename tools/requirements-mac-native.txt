@@ -1,0 +1,2 @@
+# Process ownership for Unity's hidden macOS supervisor.
+psutil==7.2.2

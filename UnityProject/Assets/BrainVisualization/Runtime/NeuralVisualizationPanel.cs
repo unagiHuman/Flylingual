@@ -14,6 +14,11 @@ namespace FlyBrainVisualization
         [SerializeField, Range(.2f, .6f)] private float screenWidthFraction = .36f;
         [SerializeField, Range(256, 1536)] private int textureResolution = 768;
         [SerializeField] private bool allowOrbit = true;
+        [Header("Anatomical framing (display crop, not cell classification)")]
+        [SerializeField] private bool brainFocus = true;
+        [SerializeField] private Vector3 brainFocusCenter = new Vector3(0, .66f, 0);
+        [SerializeField, Min(.1f)] private float brainViewSize = .86f;
+        [SerializeField, Min(.1f)] private float fullViewSize = 1.25f;
 
         private RenderTexture target;
         private GUIStyle titleStyle, smallStyle, valueStyle, stateStyle;
@@ -26,6 +31,7 @@ namespace FlyBrainVisualization
         private bool embedded;
         public Texture DisplayTexture => target;
         public NeuralActivityObserver Observer => observer;
+        public bool BrainFocus => brainFocus;
         public float DisplayGain { get => pointCloud == null ? 1f : pointCloud.DisplayGain; set { if (pointCloud != null) pointCloud.DisplayGain = value; } }
         public void SetEmbedded(bool value) { embedded = value; dragging = false; }
         public void Rotate(Vector2 delta)
@@ -33,16 +39,31 @@ namespace FlyBrainVisualization
             if (!allowOrbit || displayRoot == null) return;
             angles.x = Mathf.Clamp(angles.x + delta.y * .35f, -65, 65); angles.y += delta.x * .35f;
             displayRoot.localRotation = Quaternion.Euler(angles.x, angles.y, 0);
+            ApplyView();
         }
         public void Zoom(float delta)
         {
             zoom = Mathf.Clamp(zoom + delta * .035f, .45f, 2.5f);
-            if (brainCamera != null) brainCamera.orthographicSize = zoom;
+            ApplyView();
         }
-        private readonly Color ink = new Color(.025f, .044f, .072f, .98f);
+        public void SetBrainFocus(bool value)
+        {
+            brainFocus = value;
+            zoom = Mathf.Max(.1f, value ? brainViewSize : fullViewSize);
+            ApplyView();
+        }
+        private void ApplyView()
+        {
+            if (brainCamera == null || displayRoot == null) return;
+            Vector3 center = displayRoot.TransformPoint(brainFocus ? brainFocusCenter : Vector3.zero);
+            brainCamera.transform.position = center - brainCamera.transform.forward * 4f;
+            brainCamera.orthographicSize = zoom;
+            brainCamera.backgroundColor = new Color(.035f, .039f, .048f, 1);
+        }
+        private readonly Color ink = new Color(.035f, .039f, .048f, .98f);
         private readonly Color muted = new Color(.42f, .59f, .66f);
         private readonly Color cyan = new Color(.20f, .88f, .88f);
-        private readonly Color gold = new Color(1f, .74f, .36f);
+        private readonly Color gold = new Color(1f, .23f, .09f);
 
         public void Configure(NeuralActivityObserver data, NeuralPointCloud cloud, Camera camera, Transform content)
         {
@@ -62,7 +83,7 @@ namespace FlyBrainVisualization
             target.Create();
             brainCamera.targetTexture = target;
             brainCamera.enabled = visible;
-            brainCamera.orthographicSize = zoom;
+            SetBrainFocus(brainFocus);
         }
 
         private void RecordFrame()
@@ -86,7 +107,8 @@ namespace FlyBrainVisualization
             Fill(new Rect(panel.x, panel.y, 2, panel.height), new Color(.15f, .68f, .76f, .6f));
             float x = panel.x + 22, w = width - 44, y = panel.y + 19;
             GUI.Label(new Rect(x, y, w, 24), "NEURAL OBSERVATORY", titleStyle);
-            GUI.Label(new Rect(x, y + 28, w, 20), "MALE CNS   /   SOMA ATLAS", smallStyle);
+            GUI.Label(new Rect(x, y + 28, Mathf.Max(0, w - 100), 20), "MALE CNS / SOMATA", smallStyle);
+            if (GUI.Button(new Rect(x + w - 96, y + 27, 96, 23), brainFocus ? "FULL CNS" : "BRAIN FOCUS")) SetBrainFocus(!brainFocus);
             float size = Mathf.Min(w, Mathf.Max(80, panel.height - 290));
             Rect brainRect = new Rect(x + (w - size) / 2, y + 60, size, size);
             if (target != null) GUI.DrawTexture(brainRect, target, ScaleMode.ScaleToFit, false);
@@ -107,11 +129,11 @@ namespace FlyBrainVisualization
             GUI.Label(new Rect(x, y, w, 18), "SAMPLE  " + observer.ObservedCount.ToString("N0") + " / " + observer.PointCount.ToString("N0") + "   ·   SEQ  " + observer.Sequence + "   ·   SKIP  " + observer.DroppedFrames, smallStyle);
             y += 24;
             Fill(new Rect(x, y + 5, 5, 5), gold);
-            GUI.Label(new Rect(x + 12, y, w - 12, 18), "SPIKES     ·     CYAN / VIOLET: VOLTAGE Δ", smallStyle);
+            GUI.Label(new Rect(x + 12, y, w - 12, 18), "RED: SPIKES  ·  WHITE: OBSERVED IDLE", smallStyle);
             y += 24;
             GUI.Label(new Rect(x, y, 65, 18), "GLOW", smallStyle);
             if (pointCloud != null) pointCloud.DisplayGain = GUI.HorizontalSlider(new Rect(x + 66, y + 5, Mathf.Max(50, w - 66), 16), pointCloud.DisplayGain, .1f, 3f);
-            GUI.Label(new Rect(x, panel.yMax - 25, w, 18), "WINDOW AGGREGATES  ·  DISPLAY AFTERGLOW", smallStyle);
+            GUI.Label(new Rect(x, panel.yMax - 25, w, 18), "GRAY: UNOBSERVED  ·  WINDOW AFTERGLOW", smallStyle);
             GUI.depth = oldDepth; GUI.color = oldColor;
         }
 
@@ -123,11 +145,10 @@ namespace FlyBrainVisualization
             if (e.type == EventType.MouseUp && dragging) { dragging = false; e.Use(); }
             if (e.type == EventType.MouseDrag && dragging)
             {
-                angles.x = Mathf.Clamp(angles.x + e.delta.y * .35f, -65, 65); angles.y += e.delta.x * .35f;
-                displayRoot.localRotation = Quaternion.Euler(angles.x, angles.y, 0); e.Use();
+                Rotate(e.delta); e.Use();
             }
             if (e.type == EventType.ScrollWheel && area.Contains(e.mousePosition))
-            { zoom = Mathf.Clamp(zoom + e.delta.y * .035f, .45f, 2.5f); brainCamera.orthographicSize = zoom; e.Use(); }
+            { Zoom(e.delta.y); e.Use(); }
         }
 
         private void DrawHistory(Rect rect)
