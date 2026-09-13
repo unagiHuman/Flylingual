@@ -11,6 +11,7 @@ import re
 import sys
 from pathlib import Path
 from typing import Any, Mapping
+from urllib.parse import urlsplit
 
 from .conversation_settings import DEFAULT_SETTINGS, SettingsError, settings_from_config
 
@@ -42,7 +43,7 @@ _CHILD_KEYS = {
         "expectedGraphHash", "expectedSourceHash", "graph", "config", "python",
         "visualizationAtlas",
     },
-    "conversation": {"mode", "model", "intentModel", *DEFAULT_SETTINGS},
+    "conversation": {"mode", "model", "intentModel", "intentProvider", "localIntentUrl", "localIntentModel", "localIntentFormat", "localIntentCachePrompt", "localIntentResponsesFallback", "intentTimeoutMs", *DEFAULT_SETTINGS},
     "control": {"owner", "maxActionMs", "defaultActionMs", "maxIntentAgeMs", "staleMs", "stopTimeoutMs"},
 }
 
@@ -60,6 +61,8 @@ _DEFAULT: dict[str, Any] = {
     },
     "conversation": {
         "mode": "off", "model": "gpt-live-1", "intentModel": "gpt-5.6-luna",
+        "intentProvider": "responses", "localIntentUrl": "http://127.0.0.1:11435",
+        "localIntentModel": "qwen3.5:4b", "localIntentFormat": "compact", "localIntentCachePrompt": True, "localIntentResponsesFallback": False, "intentTimeoutMs": 8000,
         **DEFAULT_SETTINGS,
     },
     "control": {"owner": "observer", "maxActionMs": 8000, "defaultActionMs": 4000,
@@ -205,6 +208,31 @@ def _validate(config: dict[str, Any]) -> None:
         raise ConfigError("control.owner must be manual, gpt, or observer")
     if config["conversation"]["mode"] not in {"off", "mock", "live"}:
         raise ConfigError("conversation.mode must be off, mock, or live")
+    if config['conversation']['intentProvider'] not in ('responses', 'ollama', 'llama_cpp'):
+        raise ConfigError('conversation.intentProvider must be responses, ollama or llama_cpp')
+    if config['conversation']['localIntentFormat'] not in ('compact', 'full', 'label'):
+        raise ConfigError('conversation.localIntentFormat must be compact, full or label')
+    if type(config['conversation']['localIntentCachePrompt']) is not bool:
+        raise ConfigError('conversation.localIntentCachePrompt must be boolean')
+    if type(config['conversation']['localIntentResponsesFallback']) is not bool:
+        raise ConfigError('conversation.localIntentResponsesFallback must be boolean')
+    if config['conversation']['intentProvider'] == 'llama_cpp' and config['conversation']['localIntentFormat'] == 'full':
+        raise ConfigError('llama_cpp requires compact or label format')
+    local_url = config['conversation']['localIntentUrl']
+    try:
+        endpoint = urlsplit(local_url) if isinstance(local_url, str) else None
+        valid_url = (endpoint is not None and not any(c.isspace() for c in local_url)
+                     and endpoint.scheme == 'http' and endpoint.hostname in _LOOPBACK
+                     and endpoint.port is not None and 1 <= endpoint.port <= 65535
+                     and endpoint.path in ('', '/') and not endpoint.query and not endpoint.fragment
+                     and endpoint.username is None and endpoint.password is None)
+    except ValueError:
+        valid_url = False
+    if not valid_url:
+        raise ConfigError('conversation.localIntentUrl must be an explicit loopback HTTP origin with port')
+    timeout = config['conversation']['intentTimeoutMs']
+    if type(timeout) is not int or not 100 <= timeout <= 60000:
+        raise ConfigError('conversation.intentTimeoutMs must be an integer in 100..60000')
     try:
         config["conversation"].update(settings_from_config(config))
     except SettingsError as exc:
@@ -214,7 +242,7 @@ def _validate(config: dict[str, Any]) -> None:
         if value is not None and (not isinstance(value, str) or not _HASH.fullmatch(value)):
             raise ConfigError(f"brain.{key} must be null or a 64-character hexadecimal SHA-256")
     for group, keys in (("brain", ("expectedBackend", "expectedDataset", "graph", "config", "python")),
-                        ("conversation", ("model", "intentModel"))):
+                        ("conversation", ("model", "intentModel", "localIntentModel"))):
         for key in keys:
             if not isinstance(config[group][key], str) or not config[group][key]:
                 raise ConfigError(f"{group}.{key} must be a non-empty string")

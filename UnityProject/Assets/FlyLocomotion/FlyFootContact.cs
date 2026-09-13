@@ -70,19 +70,28 @@ namespace FlyLocomotionPoC
 
         private bool TryCapture(Collision collision)
         {
-            Collider other = GetOtherCollider(collision);
-            if (other == null || !IsAdhesiveSurface(other) || collision.contactCount == 0) return false;
-
-            ContactPoint contact = collision.GetContact(0);
-            LastContactFixedTime = Time.fixedTime;
-            ContactObservationSource = "DIRECT_COLLISION";
-            hasSurfaceContact = true;
-            contactHoldTicks = 3;
-            surfaceContactPoint = contact.point;
-            surfaceNormal = contact.normal.normalized;
-            surfaceRelativeVelocity = collision.relativeVelocity;
-            otherColliderName = other.name;
-            return true;
+            if (collision == null) return false;
+            // Articulations can forward a sibling collider's collision here.
+            // Only contact involving this exact foot pad can support/adhere this foot.
+            for (int i = 0; i < collision.contactCount; i++)
+            {
+                ContactPoint contact = collision.GetContact(i);
+                bool footIsFirst = contact.thisCollider == footCollider;
+                bool footIsSecond = contact.otherCollider == footCollider;
+                if (!footIsFirst && !footIsSecond) continue;
+                Collider other = footIsFirst ? contact.otherCollider : contact.thisCollider;
+                if (other == null || !IsAdhesiveSurface(other)) continue;
+                LastContactFixedTime = Time.fixedTime;
+                ContactObservationSource = "DIRECT_COLLISION";
+                hasSurfaceContact = true;
+                contactHoldTicks = 3;
+                surfaceContactPoint = contact.point;
+                surfaceNormal = (footIsFirst ? contact.normal : -contact.normal).normalized;
+                surfaceRelativeVelocity = collision.relativeVelocity;
+                otherColliderName = other.name;
+                return true;
+            }
+            return false;
         }
 
         public void CaptureFromArticulationOwner(Collision collision, bool entered)

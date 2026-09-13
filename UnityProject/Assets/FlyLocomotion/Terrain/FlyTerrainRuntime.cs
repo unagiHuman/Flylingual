@@ -17,6 +17,11 @@ namespace FlyLocomotionPoC
         float nextReport, nextDiscovery;
         StreamWriter log;
         int epoch = -1, generation = -1, wireSequence;
+        Vector3 travelAnchor, previousPosition;
+        double travelMeters;
+        bool travelInitialized, travelValid = true;
+        public double TravelMeters => travelInitialized && travelValid ? travelMeters : -1;
+        public float HorizontalSpeedMetersPerSecond => body == null ? -1 : Vector3.ProjectOnPlane(body.LinearVelocity, Vector3.up).magnitude;
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
         static void Register()
         {
@@ -56,10 +61,13 @@ namespace FlyLocomotionPoC
             if (conversation != null && o != null && sensor.Fresh)
             {
                 if (epoch != conversation.ControlEpoch || generation != conversation.ConversationGeneration)
-                { epoch = conversation.ControlEpoch; generation = conversation.ConversationGeneration; wireSequence = 0; }
+                {
+                    epoch = conversation.ControlEpoch; generation = conversation.ConversationGeneration; wireSequence = 0;
+                    travelMeters = 0; travelAnchor = previousPosition = body.Position; travelInitialized = travelValid = true;
+                }
                 conversation.SendLocalSafetyObservation(++wireSequence, Mathf.Max(0f, (Time.unscaledTime - o.sampledAt) * 1000f),
                     o.groundPresent && !o.queryOverflow, o.queryOverflow ? "unknown" : o.leftEdge, o.queryOverflow ? "unknown" : o.rightEdge,
-                    o.forwardBlocked, o.bodyUnsafe);
+                    o.forwardBlocked, o.bodyUnsafe, TravelMeters, HorizontalSpeedMetersPerSecond);
             }
             if (log != null)
             {
@@ -69,6 +77,26 @@ namespace FlyLocomotionPoC
                     hold = traversal.SafetyHold, reason = traversal.Reason, postureLift = traversal.PostureLift, brainSequence = live?.LatestFrame?.sequence ?? -1,
                     forward = live?.LatestFrame?.motor?.forward ?? 0f, turn = live?.LatestFrame?.motor?.turn ?? 0f }));
             }
+        }
+        void FixedUpdate()
+        {
+            if (body == null || controller == null || !travelInitialized || !travelValid) return;
+            Vector3 position = body.Position;
+            if (float.IsNaN(position.x) || float.IsNaN(position.z) || float.IsInfinity(position.x) || float.IsInfinity(position.z))
+            { travelValid = false; return; }
+            Vector3 tickDelta = Vector3.ProjectOnPlane(position - previousPosition, Vector3.up);
+            previousPosition = position;
+            // Teleports are not walking. A generation reset starts a new odometer.
+            if (tickDelta.magnitude > Mathf.Max(1f, Time.fixedDeltaTime * 5f))
+            { travelValid = false; return; }
+            var motor = controller.CurrentMotor;
+            // Continue measuring physical coasting after the neural motor settles.
+            if (Mathf.Max(Mathf.Abs(motor.forward), Mathf.Abs(motor.turn)) < .001f && HorizontalSpeedMetersPerSecond < .03f)
+            { travelAnchor = position; return; }
+            // Integrate horizontal travel in 1 cm segments, suppressing stationary
+            // body jitter and excluding vertical bobbing. Values are Unity metres.
+            float segment = Vector3.ProjectOnPlane(position - travelAnchor, Vector3.up).magnitude;
+            if (segment >= .01f) { travelMeters += segment; travelAnchor = position; }
         }
         [Serializable] sealed class Trace
         {

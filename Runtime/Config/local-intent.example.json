@@ -1,0 +1,9 @@
+{
+  "conversation": {
+    "intentProvider": "ollama",
+    "localIntentUrl": "http://127.0.0.1:11435",
+    "localIntentModel": "qwen3.5:4b",
+    "localIntentFormat": "compact",
+    "intentTimeoutMs": 1500
+  }
+}

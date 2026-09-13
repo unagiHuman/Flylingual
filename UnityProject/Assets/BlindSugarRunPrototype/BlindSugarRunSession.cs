@@ -40,6 +40,7 @@ namespace Flylingual.BlindSugarRun
         {
             if (GetComponent<BlindSugarRunNarrator>() == null) gameObject.AddComponent<BlindSugarRunNarrator>();
             if (GetComponent<BlindSugarRunGoal>() == null) gameObject.AddComponent<BlindSugarRunGoal>();
+            if (GetComponent<BlindSugarRunIdleSwatter>() == null) gameObject.AddComponent<BlindSugarRunIdleSwatter>();
             view = gameObject.AddComponent<BlindSugarRunGameOverView>();
             if (fly == null) { Debug.LogError("BLIND_SUGAR_SESSION_MISSING_FLY"); enabled = false; yield break; }
             bool restoring = pendingScene == gameObject.scene.path;
@@ -103,6 +104,19 @@ namespace Flylingual.BlindSugarRun
             // OnDisable uses NativeConversationBody.Deactivate: source detach, TCP close, timeScale=0.
             if (nativeBody != null) nativeBody.enabled = false;
             Time.timeScale = 0f;
+        }
+
+        internal void KillBySwatter()
+        {
+            if (State != StageState.Playing || fly == null || view == null) return;
+            LastFallPosition = fly.Position;
+            LastFallAction = conversation == null ? "unknown" : conversation.LastAppliedAction ?? "unknown";
+            GetComponent<BlindSugarRunNarrator>()?.NotifySwatted();
+            State = StageState.GameOver;
+            Deaths = ++deaths;
+            StopAttempt();
+            view.Show("GAME OVER", "動かずにいたため、ハエたたきに叩かれました。\n開始地点からもう一度挑戦できます。", Attempt, () => BeginRetry());
+            Debug.Log("BLIND_SUGAR_SWATTED attempt=" + Attempt + " deaths=" + Deaths + " position=" + LastFallPosition);
         }
 
         internal void ConfirmGoal()

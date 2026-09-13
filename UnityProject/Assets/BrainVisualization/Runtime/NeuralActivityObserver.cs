@@ -46,6 +46,10 @@ namespace FlyBrainVisualization
         public int PointCount => atlas == null ? 0 : atlas.neurons.Length;
         public int ObservedCount { get; private set; }
         public int ActiveCount { get; private set; }
+        public int VoltageObservedCount { get; private set; }
+        public int PositiveVoltageCount { get; private set; }
+        public int NegativeVoltageCount { get; private set; }
+        public float MaxAbsDeltaMv { get; private set; }
         public long SpikeCount { get; private set; }
         public int DroppedFrames { get; private set; }
         public long Sequence => lastSequence;
@@ -250,6 +254,8 @@ namespace FlyBrainVisualization
                 Array.Clear(spikes, 0, spikes.Length); Array.Clear(observed, 0, observed.Length);
                 for (int i = 0; i < delta.Length; i++) delta[i] = float.NaN;
                 int measured = 0, active = 0; long total = 0;
+                int voltageObserved = 0, positiveVoltage = 0, negativeVoltage = 0;
+                float maxAbsDelta = 0f;
                 bool hasSpikes = !IsSchematic && frame.visualization != null;
                 float window = 50;
                 if (hasSpikes)
@@ -281,12 +287,18 @@ namespace FlyBrainVisualization
                         if (!seen.Add(id) || !Finite(raw.deltaV[i])) { Invalidate("INVALID VOLTAGE DATA"); return; }
                         if (!indices.TryGetValue(id, out int index)) continue; // Coordinates may be missing from the anatomical source.
                         delta[index] = raw.deltaV[i];
+                        voltageObserved++;
+                        if (raw.deltaV[i] > .001f) positiveVoltage++;
+                        if (raw.deltaV[i] < -.001f) negativeVoltage++;
+                        maxAbsDelta = Mathf.Max(maxAbsDelta, Mathf.Abs(raw.deltaV[i]));
                         if (!observed[index]) { observed[index] = true; measured++; }
                     }
                 }
                 if (measured == 0) { Invalidate("NO NEURON TELEMETRY"); return; }
                 lastSequence = frame.sequence; lastBrainTime = frame.brainTimeMs; receivedAt = item.time;
                 ObservedCount = measured; ActiveCount = active; SpikeCount = total; WindowMs = hasSpikes ? window : 0;
+                VoltageObservedCount = voltageObserved; PositiveVoltageCount = positiveVoltage; NegativeVoltageCount = negativeVoltage;
+                MaxAbsDeltaMv = maxAbsDelta;
                 fresh = true; State = hasSpikes ? "WINDOW SPIKES + VOLTAGE" : IsSchematic ? "RAW VOLTAGE / SCHEMATIC (NO ATLAS)" : "VOLTAGE ONLY / NO SPIKE STREAM";
                 pointCloud.SetActivity(hasSpikes ? spikes : null, delta, observed, window);
                 FrameApplied?.Invoke();
@@ -334,6 +346,7 @@ namespace FlyBrainVisualization
             State = reason;
             if (fresh || reason == "WAITING FOR BRAIN" || reason == "NO ATLAS") pointCloud?.ClearActivity();
             fresh = false; ObservedCount = ActiveCount = 0; SpikeCount = 0;
+            VoltageObservedCount = PositiveVoltageCount = NegativeVoltageCount = 0; MaxAbsDeltaMv = 0f;
         }
         private void Unsubscribe()
         {

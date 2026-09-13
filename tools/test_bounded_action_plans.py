@@ -2,7 +2,7 @@
 import copy
 from types import SimpleNamespace
 import unittest
-from unittest.mock import AsyncMock, Mock, patch
+from unittest.mock import ANY, AsyncMock, Mock, patch
 
 from Runtime.Bridge.action_plans import BoundedPlanRunner, LocalSafetyObservation
 from Runtime.Bridge.config import _DEFAULT
@@ -144,17 +144,14 @@ class BoundedPlanAdmissionTests(unittest.IsolatedAsyncioTestCase):
             await self.begin()
         self.bridge.task.assert_not_called()
 
-    async def test_unknown_and_hazard_observations_still_block_plan(self):
-        for field, value, reason in (('leftEdge', 'unknown', 'local_observation_unknown'),
-                                     ('rightEdge', 'near', 'edge_near'),
-                                     ('groundPresent', False, 'ground_missing'),
-                                     ('forwardBlocked', True, 'forward_blocked'),
+    async def test_translation_obstacles_and_body_safety_still_block_plan(self):
+        for field, value, reason in (('forwardBlocked', True, 'forward_blocked'),
                                      ('bodyUnsafe', True, 'body_unsafe')):
             with self.subTest(field=field):
                 self.refresh_observation()
                 self.bridge.local_observation.sample[field] = value
                 with self.assertRaisesRegex(ControlError, '^' + reason + '$'):
-                    await self.begin()
+                    await self.begin(name='forward_until_concern' if field == 'forwardBlocked' else 'right_then_forward')
         self.bridge.task.assert_not_called()
 
 
@@ -180,7 +177,7 @@ class BridgePlanFreshnessTests(unittest.IsolatedAsyncioTestCase):
                                   b.intent_revision, 'delegation')
         b.plans.begin.assert_awaited_once_with('nudge_right', 'plan-intent', b.arbiter.epoch,
             b.conversation_generation, 4000, intent_deadline=108.0, revision=b.intent_revision,
-            execution_mode='timed', delegation_id='delegation')
+            execution_mode='timed', admission_check=ANY, delegation_id='delegation')
 
 
 if __name__ == '__main__':

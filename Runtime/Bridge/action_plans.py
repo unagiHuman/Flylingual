@@ -1,9 +1,16 @@
 """Bounded linguistic plan presets and local hazard checks, never motor values."""
 import asyncio
+import math
 import time
 import uuid
 
 from .control import ACTIONS, ControlError
+
+DISTANCE_ACTIONS = ('FORWARD', 'FORWARD_R', 'FORWARD_L')
+
+
+def valid_distance(value):
+    return type(value) in (int, float) and 0.05 <= value <= 100 and math.isfinite(value)
 
 
 PLAN_STEPS = {
@@ -33,7 +40,7 @@ def validate_intent(result, max_ms):
     """Validate the complete model proposal before any authority is consulted."""
     keys = {'kind', 'action', 'plan', 'validForMs', 'reply'}
     extension = {'operation', 'executionMode', 'targetExecutionId'}
-    if (not isinstance(result, dict) or set(result) not in (keys, keys | extension)
+    if (not isinstance(result, dict) or set(result) not in (keys, keys | extension, keys | extension | {'distanceMeters'})
             or not isinstance(result['kind'], str)
             or result['kind'] not in ('action', 'plan', 'question', 'clarify', 'update')
             or not isinstance(result['reply'], str) or len(result['reply']) > 1000):
@@ -43,13 +50,16 @@ def validate_intent(result, max_ms):
     mode = result.get('executionMode', 'timed')
     target = result.get('targetExecutionId')
     duration = result['validForMs']
+    distance = result.get('distanceMeters')
     timed = type(duration) is int and 0 < duration <= max_ms
-    if (mode not in ('timed', 'until_next_command', 'inherit')
+    if (mode not in ('timed', 'until_next_command', 'inherit', 'distance')
             or (mode == 'timed' and not timed)
-            or (mode != 'timed' and duration is not None)):
+            or (mode != 'timed' and duration is not None)
+            or (mode == 'distance' and not valid_distance(distance))
+            or (mode != 'distance' and distance is not None)):
         raise ControlError('invalid_intent')
     if kind == 'update':
-        valid = (set(result) == keys | extension and action is None and plan is None
+        valid = (extension <= set(result) and action is None and plan is None
                  and operation in ('continue', 'modify_conditions')
                  and isinstance(target, str) and 1 <= len(target) <= 128
                  and target.strip() != ''
@@ -61,7 +71,8 @@ def validate_intent(result, max_ms):
         raise ControlError('invalid_intent')
     if kind == 'action':
         valid = (isinstance(action, str) and action in ACTIONS and plan is None
-                 and (action != 'STOP' or mode == 'timed'))
+                 and (action != 'STOP' or mode == 'timed')
+                 and (mode != 'distance' or action in DISTANCE_ACTIONS))
     elif kind == 'plan':
         valid = (action is None and isinstance(plan, str) and plan in PLAN_STEPS
                  and (not plan.startswith('nudge_') or mode == 'timed'))
@@ -81,35 +92,76 @@ class LocalSafetyObservation:
         self.sequence = 0
         self.sample = None
         self.sample_at = 0
+        self.travel_meters = None
+        self.horizontal_speed = None
+        self.travel_fault_sequence = 0
+        self.travel_fault_reason = None
 
     def accept(self, event, now=None):
         fields = {'type', 'controlEpoch', 'conversationGeneration', 'sequence', 'ageMs',
                   'groundPresent', 'leftEdge', 'rightEdge', 'forwardBlocked', 'bodyUnsafe'}
-        if set(event) != fields:
+        if not fields <= set(event) or set(event) - fields - {'travelMeters', 'horizontalSpeedMetersPerSecond'}:
             raise ControlError('invalid_local_observation')
+        travel = event.get('travelMeters', -1)
+        speed = event.get('horizontalSpeedMetersPerSecond', -1)
+        if (type(travel) not in (int, float) or not (-1 == travel or 0 <= travel <= 1.7976931348623157e308)
+                or not math.isfinite(travel)):
+            raise ControlError('invalid_local_odometry')
+        if (type(speed) not in (int, float) or not (-1 == speed or 0 <= speed <= 1.7976931348623157e308)
+                or not math.isfinite(speed)):
+            raise ControlError('invalid_local_speed')
         if (type(event['sequence']) is not int or not self.sequence < event['sequence'] <= 2**53
                 or type(event['ageMs']) not in (int, float) or not 0 <= event['ageMs'] <= 750
                 or any(type(event[k]) is not bool for k in ('groundPresent', 'forwardBlocked', 'bodyUnsafe'))
                 or any(not isinstance(event[k], str) or event[k] not in ('safe', 'near', 'very_near', 'unknown')
                        for k in ('leftEdge', 'rightEdge'))):
             raise ControlError('invalid_or_stale_local_observation')
+        sample_at = (time.monotonic() if now is None else now) - event['ageMs']/1000
+        # Preserve a fault's sequence across later packets until the distance
+        # tracker has seen it; a quick backward/jump/recovery cannot hide it.
+        fault = None
+        if travel == -1:
+            fault = 'distance_observation_unavailable'
+        elif speed == -1:
+            fault = 'distance_speed_unavailable'
+        elif self.travel_meters is not None:
+            delta = travel - self.travel_meters
+            elapsed = max(0, sample_at - self.sample_at)
+            if delta < 0:
+                fault = 'distance_odometry_regressed'
+            elif delta > max(2.0, elapsed * 5.0):
+                fault = 'distance_odometry_jump'
+        if fault:
+            self.travel_fault_sequence = event['sequence']
+            self.travel_fault_reason = fault
+        self.travel_meters = None if travel == -1 else float(travel)
+        self.horizontal_speed = None if speed == -1 else float(speed)
         self.sequence = event['sequence']
         self.sample = {k: event[k] for k in ('groundPresent', 'leftEdge', 'rightEdge', 'forwardBlocked', 'bodyUnsafe')}
-        self.sample_at = (time.monotonic() if now is None else now) - event['ageMs']/1000
+        self.sample_at = sample_at
 
-    def concern(self, now=None):
+    def require_distance(self, now=None):
+        concern = self.concern(now)
+        if concern:
+            raise ControlError(concern)
+        if self.travel_meters is None:
+            raise ControlError('distance_observation_unavailable')
+        if self.horizontal_speed is None:
+            raise ControlError('distance_speed_unavailable')
+        if self.travel_fault_sequence == self.sequence:
+            raise ControlError(self.travel_fault_reason)
+        return self.travel_meters
+
+    def concern(self, now=None, *, action=None):
         now = time.monotonic() if now is None else now
         if self.sample is None or now - self.sample_at >= .75:
             return 'local_observation_unavailable'
         s = self.sample
-        if s['leftEdge'] == 'unknown' or s['rightEdge'] == 'unknown':
-            return 'local_observation_unknown'
-        if not s['groundPresent']:
-            return 'ground_missing'
-        # Stop early at NEAR, not just VERY_NEAR: normal STOP has residual motion.
-        if s['leftEdge'] in ('near', 'very_near') or s['rightEdge'] in ('near', 'very_near'):
-            return 'edge_near'
-        if s['forwardBlocked']:
+        # Edge/ground raycasts inform speech, not locomotion admission. The
+        # player may deliberately walk off a ledge; retain these raw facts.
+        # An obstacle ahead blocks translation, not an in-place turn. Every
+        # other local safety requirement still applies.
+        if s['forwardBlocked'] and action not in ('TURN_R', 'TURN_L'):
             return 'forward_blocked'
         if s['bodyUnsafe']:
             return 'body_unsafe'
@@ -123,6 +175,8 @@ class LocalSafetyObservation:
         return {'source': 'unity_local_sensors', 'sequence': self.sequence,
                 'ageMs': round(age, 1) if age is not None else None,
                 'fresh': fresh, 'concern': self.concern(now),
+                'travelMeters': self.travel_meters if fresh else None,
+                'horizontalSpeedMetersPerSecond': self.horizontal_speed if fresh else None,
                 'facts': dict(self.sample) if fresh else {}}
 
 
@@ -145,7 +199,7 @@ class BoundedPlanRunner:
         if task is not None and task is not asyncio.current_task():
             await asyncio.gather(task, return_exceptions=True)
 
-    def guard(self, epoch, generation, deadline):
+    def guard(self, epoch, generation, deadline, *, action=None):
         b = self.bridge
         if deadline is not None and time.monotonic() >= deadline:
             return 'plan_expired'
@@ -159,28 +213,34 @@ class BoundedPlanRunner:
             return 'plan_control_unavailable'
         if not b.adapter or not b.adapter.connected or b.summary()['stale']:
             return 'plan_brain_stale'
-        return b.local_observation.concern()
+        return b.local_observation.concern(action=action)
 
-    def admission_reason(self, epoch, generation, intent_deadline, revision):
+    def admission_reason(self, epoch, generation, intent_deadline, revision, *, action=None):
         if revision != self.bridge.intent_revision:
             return 'stale_intent'
         if time.monotonic() >= intent_deadline:
             return 'expired_intent'
-        return self.guard(epoch, generation, intent_deadline)
+        return self.guard(epoch, generation, intent_deadline, action=action)
 
     async def begin(self, name, command_id, epoch, generation, duration_ms, *, intent_deadline, revision,
-                    execution_mode='timed', delegation_id=None, admission_check=None, notify_live=False):
+                    execution_mode='timed', delegation_id=None, admission_check=None, notify_live=False,
+                    distance_meters=None):
         if not isinstance(name, str) or name not in PLAN_STEPS:
             raise ControlError('invalid_intent')
-        if (execution_mode not in ('timed', 'until_next_command')
+        if (execution_mode not in ('timed', 'until_next_command', 'distance')
                 or (execution_mode == 'timed' and (type(duration_ms) is not int
                     or not 0 < duration_ms <= self.bridge.config['control']['maxActionMs']))
-                or (execution_mode == 'until_next_command'
-                    and (duration_ms is not None or name.startswith('nudge_')))):
+                or (execution_mode in ('until_next_command', 'distance')
+                    and (duration_ms is not None or name.startswith('nudge_')))
+                or (execution_mode == 'distance' and not valid_distance(distance_meters))
+                or (execution_mode != 'distance' and distance_meters is not None)):
             raise ControlError('invalid_command_duration')
-        reason = self.admission_reason(epoch, generation, intent_deadline, revision)
+        first_action = PLAN_STEPS[name][0]
+        reason = self.admission_reason(epoch, generation, intent_deadline, revision, action=first_action)
         if reason:
             raise ControlError(reason)
+        if execution_mode == 'distance':
+            self.bridge.local_observation.require_distance()
         if admission_check is not None:
             admission_check()
         replaced = self.active is not None
@@ -190,11 +250,18 @@ class BoundedPlanRunner:
             if replaced:
                 await self.bridge.inhibit('plan_replacement_cancelled')
             raise
-        reason = self.admission_reason(epoch, generation, intent_deadline, revision)
+        reason = self.admission_reason(epoch, generation, intent_deadline, revision, action=first_action)
         if reason:
             if replaced:
                 await self.bridge.inhibit('plan_replacement_failed')
             raise ControlError(reason)
+        if execution_mode == 'distance':
+            try:
+                self.bridge.local_observation.require_distance()
+            except ControlError:
+                if replaced:
+                    await self.bridge.inhibit('plan_replacement_failed')
+                raise
         if admission_check is not None:
             try:
                 admission_check()
@@ -209,7 +276,8 @@ class BoundedPlanRunner:
                 'name': name, 'step': 0, 'requestId': None, 'deadline': deadline,
                 'phaseSent': False, 'appliedAt': None, 'submittedAt': None, 'applyDeadline': None}
         self.bridge.activate_execution(command_id, PLAN_STEPS[name][0], execution_mode, deadline,
-                                       plan=name, monitor_hazards=True)
+                                       plan=name, monitor_hazards=True,
+                                       **({'target_distance_meters': distance_meters} if execution_mode == 'distance' else {}))
         self.active = plan
         self.bridge.log('plan_started', planId=plan['planId'], commandId=command_id, name=name,
                         executionDurationMs=duration_ms)
@@ -219,7 +287,9 @@ class BoundedPlanRunner:
         b = self.bridge
         try:
             while self.active is plan:
-                reason = self.guard(epoch, generation, plan['deadline'])
+                steps = PLAN_STEPS[plan['name']]
+                action = steps[plan['step']]
+                reason = self.guard(epoch, generation, plan['deadline'], action=action)
                 if reason:
                     if reason == 'plan_expired':
                         await b.finish_plan(plan, reason)
@@ -227,9 +297,7 @@ class BoundedPlanRunner:
                     b.log('plan_stopped', planId=plan['planId'], reason=reason)
                     await b.inhibit(reason)
                     return
-                steps = PLAN_STEPS[plan['name']]
                 if not plan['phaseSent']:
-                    action = steps[plan['step']]
                     command_id = plan['planId'] + '-' + str(plan['step'])
                     remaining_ms = ((plan['deadline'] - time.monotonic()) * 1000
                                     if plan['deadline'] is not None else None)

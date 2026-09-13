@@ -16,7 +16,8 @@ import uuid
 from aiohttp import web, WSMsgType
 
 from .brain_adapter import BrainAdapter, BrainAdapterError
-from .action_plans import BoundedPlanRunner, LocalSafetyObservation, PLAN_REPLY, validate_intent
+from .action_plans import (BoundedPlanRunner, LocalSafetyObservation, PLAN_REPLY, PLAN_STEPS,
+                           DISTANCE_ACTIONS, valid_distance, validate_intent)
 from .blind_run_script import BlindRunScript
 from .config import load_config
 from .control import ControlArbiter, ControlError
@@ -33,6 +34,7 @@ VOICE_TEST_EVENTS = frozenset({
     'execution_updated', 'execution_started', 'execution_ended',
     'input_transcript_observed', 'transcript_candidate_observed', 'transcript_candidate_result',
     'context_append_observed',
+    'intent_classification_started',
 })
 VOICE_TEST_FIELDS = frozenset({
     'commandId', 'requestId', 'sequence', 'action', 'source', 'kind', 'plan',
@@ -43,6 +45,9 @@ VOICE_TEST_FIELDS = frozenset({
     'intentAgeMs', 'executionDurationMs',
     'transcriptChars',
     'executionId', 'executionMode', 'operation', 'targetExecutionId', 'monitorHazards',
+    'targetDistanceMeters', 'traveledMeters', 'remainingMeters', 'completed',
+    'distancePhase', 'stopRequestId', 'stopTrigger',
+    'interpretRoute', 'utteranceFinalized', 'speechEndMs', 'speechEndMonotonicMs',
 })
 
 
@@ -57,6 +62,8 @@ class Bridge:
                                                 self.voice_utterance, self.transcript_utterance)
         self.blind_script = BlindRunScript()
         self.local_observation = LocalSafetyObservation()
+        self.edge_warning_scope = None
+        self.edge_warning_sent = False
         self.plans = BoundedPlanRunner(self)
         self.active_execution = None
         self.last_execution_context = None
@@ -137,6 +144,10 @@ class Bridge:
             active['brainApplied'] = item.get('applied', False)
             active['remainingMs'] = (None if execution['deadline'] is None else
                                      max(0, int((execution['deadline'] - time.monotonic()) * 1000)))
+            active.update(self.distance_summary(execution))
+            if execution.get('distancePhase'):
+                active['distancePhase'] = execution['distancePhase']
+                active['stopApplied'] = bool(self.requests.get(execution.get('stopRequestId'), {}).get('applied'))
         return {**self.summary(), 'localSafety': self.local_observation.summary(),
                 'activeCommand': active}
 
@@ -152,27 +163,58 @@ class Bridge:
             return None
         return execution
 
+    @staticmethod
+    def distance_summary(execution):
+        return {k: execution.get(k) for k in ('targetDistanceMeters', 'traveledMeters', 'remainingMeters')}
+
+    def distance_state(self, distance, action, plan, *, updating=False):
+        if (not valid_distance(distance) or plan in ('nudge_right', 'nudge_left')
+                or (plan is None and action not in DISTANCE_ACTIONS)):
+            raise ControlError('invalid_distance_execution')
+        travel = self.local_observation.require_distance()
+        now = time.monotonic()
+        # A new turn-then-forward plan acquires its origin only at forward
+        # phase entry. An explicit distance update means "from here".
+        origin = travel if updating or action in DISTANCE_ACTIONS else None
+        return {'targetDistanceMeters': float(distance), 'originTravelMeters': origin,
+                'traveledMeters': 0.0, 'remainingMeters': float(distance),
+                'distanceStartedAt': now, 'lastProgressAt': now, 'progressTravelMeters': 0.0,
+                'distanceApplied': False, 'distanceSequence': self.local_observation.sequence,
+                'distancePhase': 'moving', 'stopRequestId': None, 'stopSentAt': None,
+                'settledSince': None, 'settledTravelMeters': None, 'stopTrigger': None}
+
     def activate_execution(self, command_id, action, execution_mode, deadline, *,
-                           plan=None, monitor_hazards=False):
+                           plan=None, monitor_hazards=False, target_distance_meters=None):
+        distance = (self.distance_state(target_distance_meters, action, plan)
+                    if execution_mode == 'distance' else {})
+        monitor_hazards |= execution_mode == 'distance'
         self.arbiter.deadline = deadline
         self.active_execution = {'executionId': command_id, 'action': action, 'plan': plan,
                                  'step': 0, 'executionMode': execution_mode, 'deadline': deadline,
                                  'monitorHazards': monitor_hazards, 'requestId': None,
-                                 'epoch': self.arbiter.epoch, 'generation': self.conversation_generation}
+                                 'epoch': self.arbiter.epoch, 'generation': self.conversation_generation,
+                                 'startedAt': time.monotonic(), **distance}
         self.log('execution_started', executionId=command_id, action=action, plan=plan,
-                 executionMode=execution_mode, monitorHazards=monitor_hazards)
+                 executionMode=execution_mode, monitorHazards=monitor_hazards,
+                 **self.distance_summary(self.active_execution))
 
     def update_execution_step(self, execution_id, action, step):
         execution = self.current_execution()
         if execution is None or execution['executionId'] != execution_id:
             raise ControlError('stale_execution')
+        if execution['executionMode'] == 'distance' and action in DISTANCE_ACTIONS:
+            travel = self.local_observation.require_distance()
+            if execution['originTravelMeters'] is None:
+                execution['originTravelMeters'] = travel
+                execution['lastProgressAt'] = time.monotonic()
         execution.update(action=action, step=step, requestId=None)
 
     def clear_execution(self, reason):
         execution = self.active_execution
         self.active_execution = None
         if execution:
-            self.log('execution_ended', executionId=execution['executionId'], reason=reason)
+            self.log('execution_ended', executionId=execution['executionId'], reason=reason,
+                     **self.distance_summary(execution))
 
     def update_execution(self, proposal, command_id, epoch):
         # No await: validation, deduplication and the in-place update are atomic
@@ -181,9 +223,16 @@ class Bridge:
         execution = self.current_execution()
         if execution is None or execution['executionId'] != proposal['targetExecutionId']:
             raise ControlError('stale_execution')
+        if execution['executionMode'] == 'distance':
+            self.local_observation.require_distance()
+            if self.local_observation.travel_fault_sequence > execution['distanceSequence']:
+                raise ControlError(self.local_observation.travel_fault_reason)
         operation = proposal['operation']
         mode = proposal['executionMode']
+        restarting = (execution.get('distancePhase') == 'braking'
+                      and mode in ('distance', 'timed', 'until_next_command'))
         deadline = execution['deadline']
+        distance_update = None
         if mode == 'inherit':
             mode = execution['executionMode']
         elif mode == 'until_next_command':
@@ -192,25 +241,43 @@ class Bridge:
             deadline = None
         elif mode == 'timed':
             deadline = time.monotonic() + proposal['validForMs'] / 1000
-        monitoring = execution['monitorHazards'] or operation == 'modify_conditions'
+        elif mode == 'distance':
+            distance_update = self.distance_state(proposal.get('distanceMeters'), execution['action'],
+                                                  execution['plan'], updating=True)
+            deadline = None
+        monitoring = execution['monitorHazards'] or operation == 'modify_conditions' or mode == 'distance'
         if monitoring:
-            concern = self.local_observation.concern()
+            concern = self.local_observation.concern(action=execution['action'])
             if concern:
                 raise ControlError(concern)
         duration = None if deadline is None else (deadline - time.monotonic()) * 1000
         self.arbiter.accept('gpt', execution['action'], command_id, epoch, duration,
                             execution_mode=mode)
         self.arbiter.deadline = deadline
+        if restarting:
+            # A STOP transport callback can still be awaiting. A new object,
+            # even under the same logical ID, makes its exact-object guard fail.
+            execution = dict(execution)
+            execution.update(requestId=None, distancePhase=None, stopRequestId=None, stopSentAt=None,
+                             settledSince=None, settledTravelMeters=None, stopTrigger=None)
+            self.active_execution = execution
         execution.update(executionMode=mode, deadline=deadline, monitorHazards=monitoring)
+        if distance_update is not None:
+            execution.update(distance_update)
+        elif mode != 'distance':
+            execution.update(targetDistanceMeters=None, traveledMeters=None, remainingMeters=None,
+                             distancePhase=None)
         if self.plans.active is not None:
             self.plans.active.update(deadline=deadline, executionMode=mode)
         self.log('execution_updated', executionId=execution['executionId'], commandId=command_id,
                  action=execution['action'], plan=execution['plan'], step=execution['step'],
-                 operation=operation, executionMode=mode, monitorHazards=monitoring)
+                 operation=operation, executionMode=mode, monitorHazards=monitoring,
+                 **self.distance_summary(execution))
         self.emit({'type': 'command_result', 'stage': 'execution_updated', 'commandId': command_id,
                    'executionId': execution['executionId'], 'action': execution['action'],
                    'epoch': epoch, 'message': self.text('intent_sent')})
         self.emit(self.state())
+        return execution if restarting else None
 
     def text(self, key):
         return message_text(key, self.conversation.settings['language'])
@@ -223,6 +290,8 @@ class Bridge:
                  'executionMode', 'monitorHazards', 'requestId')}
         state['remainingMs'] = (None if execution['deadline'] is None else
                                 max(0, (execution['deadline'] - time.monotonic()) * 1000))
+        state.update(self.distance_summary(execution))
+        state['distancePhase'] = execution.get('distancePhase')
         return state
 
     def publish_execution_context(self):
@@ -236,6 +305,8 @@ class Bridge:
                     'executionMode', 'monitorHazards')} if execution else None)
         if context is not None:
             context['brainApplied'] = bool(self.requests.get(execution['requestId'], {}).get('applied'))
+            if execution.get('distancePhase'):
+                context['distancePhase'] = execution['distancePhase']
         if context == self.last_execution_context:
             return
         self.last_execution_context = context
@@ -256,7 +327,7 @@ class Bridge:
                 'target': {'host': self.target['host'], 'port': self.target['port']},
                 'brainConnected': bool(self.adapter and self.adapter.connected), 'brainReady': False,
                 'conversationState': self.conversation.state, 'conversationMode': self.conversation.mode,
-                'capabilities': ['conversation_only_v1', 'native_voice_actions_v1', 'blind_run_script_v1', 'bounded_action_plans_v1', 'persistent_intents_v1'],
+                'capabilities': ['conversation_only_v1', 'native_voice_actions_v1', 'blind_run_script_v1', 'bounded_action_plans_v1', 'persistent_intents_v1', 'distance_intents_v1'],
                 'activeExecution': self.execution_state(),
                 'actionPlan': ({k: self.plans.active[k] for k in ('planId', 'name', 'step', 'requestId')}
                                if self.plans.active else None),
@@ -336,11 +407,16 @@ class Bridge:
                 self.log('stop_send_failed')
 
     async def submit(self, action, source, command_id, unity_id=None, *,
-                     intent_age_ms=None, execution_duration_ms=None, delegation_id=None, notify_live=False):
+                     intent_age_ms=None, execution_duration_ms=None, delegation_id=None, notify_live=False,
+                     preserve_execution=None):
         if self.conversation_interaction == 'chat_only' and source != 'safety':
             raise ControlError('chat_only_cannot_control')
         if not self.adapter or not self.adapter.connected:
             raise ControlError('brain_disconnected')
+        if preserve_execution is not None and (action != 'STOP'
+                or self.active_execution is not preserve_execution
+                or preserve_execution.get('distancePhase') != 'braking'):
+            raise ControlError('stale_execution')
         self.request_counter += 1
         request_id = self.request_counter
         item = {'source': source, 'commandId': command_id, 'action': action,
@@ -352,7 +428,10 @@ class Bridge:
         while len(self.requests) > 4096:
             self.requests.popitem(last=False)
         if action == 'STOP':
-            self.clear_execution('stop')
+            if preserve_execution is None:
+                self.clear_execution('stop')
+            else:
+                preserve_execution['stopRequestId'] = request_id
             self.stop_request = request_id
             self.stop_applied = False
         elif source == 'gpt' and self.active_execution is not None:
@@ -569,7 +648,10 @@ class Bridge:
         started = time.monotonic()
         context = self.intent_context()
         context['transcriptCandidate'] = True
+        context['utteranceFinalized'] = candidate.get('finalized', False)
         try:
+            self.log('intent_classification_started', inputId=candidate['inputId'],
+                     utteranceFinalized=context['utteranceFinalized'])
             proposal = await asyncio.wait_for(self.conversation.interpret(text, context,
                 self.config['control']['defaultActionMs'], self.config['control']['maxActionMs']),
                 self.config['control']['maxIntentAgeMs'] / 1000)
@@ -581,22 +663,57 @@ class Bridge:
                 return
             self.log('transcript_candidate_result', inputId=candidate['inputId'], kind=proposal['kind'])
             if proposal['kind'] not in ('action', 'plan', 'update'):
-                if proposal['kind'] == 'question':
-                    self.conversation.claim_transcript(candidate)
-                return  # Live owns conversation; retain text for a later completion.
+                # Reply through Live directly: start_intent would invalidate
+                # pending control work even though this utterance has no Action.
+                # Keep revisable clarification fragments available for a later
+                # completion; finalized conversation can be consumed once.
+                if candidate.get('finalized') is not True:
+                    return
+                if not self.conversation.claim_transcript(candidate):
+                    return
+                await self.conversation.append('commentary',
+                    self.non_action_reply_context(text, proposal['kind']), candidate.get('delegationId'))
+                return
             if not self.conversation.claim_transcript(candidate):
                 return
-            command_id = 'voice-' + str(uuid.uuid4())
-            self.start_intent(text, command_id, epoch, prepared={
+            command_id = candidate['inputId']
+            self.start_intent(text, command_id, epoch, candidate.get('delegationId'), prepared={
                 'proposal': proposal, 'context': context, 'started': started, 'voice': True,
+                'interpretRoute': self.conversation.last_interpret_route,
                 'transcriptRevision': self.conversation.transcript_revision,
                 'contextGeneration': self.conversation.context_generation})
             self.log('voice_intent_dispatch', outcome='started', commandId=command_id,
-                     inputId=candidate['inputId'])
+                     inputId=candidate['inputId'], delegationId=candidate.get('delegationId'))
         except (ControlError, ConversationError, asyncio.TimeoutError, TimeoutError) as exc:
             # No accepted operation exists for this optional semantic check.
             self.log('transcript_candidate_result', inputId=candidate['inputId'],
                      outcome='rejected', reason='classification_timeout' if isinstance(exc, (asyncio.TimeoutError, TimeoutError)) else str(exc))
+
+    def non_action_reply_context(self, text, kind):
+        # Live already has the utterance. Keep a complete observation payload
+        # inside ConversationAdapter.append's 380-character transport limit.
+        context = self.intent_context()
+        active = context.get('activeCommand')
+        local = context.get('localSafety', {})
+        payload = {'kind': kind,
+                   'active': active.get('action') if active else None,
+                   'brainApplied': active.get('brainApplied', False) if active else None,
+                   'localFresh': local.get('fresh', False),
+                   'facts': local.get('facts', {}) if local.get('fresh') else {},
+                   'neuralStale': context.get('stale', True),
+                   'neural': context.get('interpretation') if not context.get('stale', True) else None,
+                   'scene': self.blind_script.current_fact()}
+        instruction = ('最新の発言へ自然に回答。雑談は操作要求にしない。不明な操作だけ確認。'
+                       '状態の質問には以下の観測を使い、一般質問にはその話題で答える。'
+                       'brainAppliedは身体の動作成功ではない。')
+        def encode():
+            return instruction + json.dumps(payload, ensure_ascii=False, separators=(',', ':'))
+        # Omit whole optional fields rather than truncate JSON or factual text.
+        for key in ('scene', 'neural', 'facts'):
+            if len(encode()) <= 380:
+                break
+            payload.pop(key, None)
+        return encode()
 
     def start_intent(self, text, command_id, epoch, delegation_id=None, *, prepared=None):
         if self.conversation_interaction == 'chat_only':
@@ -634,6 +751,9 @@ class Bridge:
         replaced_plan = False
         updating_conditions = False
         def check_transcript():
+            if (notice_generation != self.conversation_generation
+                    or notice_context_generation != self.conversation.context_generation):
+                raise ControlError('stale_conversation_context')
             if prepared is not None and (prepared['transcriptRevision'] != self.conversation.transcript_revision
                     or prepared['contextGeneration'] != self.conversation.context_generation):
                 raise ControlError('stale_transcript')
@@ -643,7 +763,7 @@ class Bridge:
             proposal = (await self.conversation.interpret(text, context,
                 self.config['control']['defaultActionMs'], self.config['control']['maxActionMs'])
                 if prepared is None else prepared['proposal'])
-            if 'operation' in proposal:
+            if any(k in proposal for k in ('operation', 'executionMode', 'distanceMeters')):
                 validate_intent(proposal, self.config['control']['maxActionMs'])
             interpretation_ms = (time.monotonic()-started)*1000
             self.log('intent_classified', commandId=command_id,
@@ -651,8 +771,10 @@ class Bridge:
                      kind=proposal['kind'],
                      action=proposal['action'] if proposal['kind'] == 'action' else None,
                      proposalValidForMs=proposal['validForMs'], interpretationMs=interpretation_ms,
-                     plan=proposal.get('plan'))
+                     plan=proposal.get('plan'), interpretRoute=(self.conversation.last_interpret_route
+                        if prepared is None else prepared.get('interpretRoute')))
             self.require_current_intent(started, epoch, revision)
+            check_transcript()
             if proposal['kind'] == 'update':
                 if voice and self.voice_control_epoch != epoch:
                     raise ControlError('voice_session_restart_required')
@@ -660,12 +782,26 @@ class Bridge:
                 if reference is None or proposal['targetExecutionId'] != reference['executionId']:
                     raise ControlError('stale_execution')
                 updating_conditions = proposal['operation'] == 'modify_conditions'
-                self.update_execution(proposal, command_id, epoch)
+                restarted = self.update_execution(proposal, command_id, epoch)
+                if restarted is not None:
+                    check_transcript()
+                    intent_age_ms = self.require_current_intent(started, epoch, revision)
+                    if self.active_execution is not restarted:
+                        raise ControlError('stale_execution')
+                    await self.submit(restarted['action'], 'gpt', command_id,
+                                      intent_age_ms=intent_age_ms, delegation_id=delegation_id,
+                                      **({'notify_live': True} if prepared is not None else {}))
                 reply = proposal['reply'] or self.text('intent_sent')
+                if self.active_execution is not None and self.active_execution.get('distancePhase') == 'braking':
+                    reply = ('停止を確認しているよ。' if self.conversation.settings['language'] == 'ja'
+                             else "I'm checking that I've stopped.")
             elif proposal['kind'] == 'action':
                 if voice and self.voice_control_epoch != epoch:
                     raise ControlError('voice_session_restart_required')
                 self.require_fresh()
+                mode = proposal.get('executionMode', 'timed')
+                if mode == 'distance':
+                    self.distance_state(proposal.get('distanceMeters'), proposal['action'], None)
                 replaced_plan = self.plans.active is not None
                 if replaced_plan:
                     self.clear_execution('replaced')
@@ -677,11 +813,13 @@ class Bridge:
                 # limit, never the accepted movement's execution duration.
                 duration_ms = (self.config['control']['maxActionMs'] if proposal['action'] == 'STOP'
                                else proposal['validForMs'])
-                mode = proposal.get('executionMode', 'timed')
+                if mode == 'distance':
+                    self.local_observation.require_distance()
                 self.arbiter.accept('gpt', proposal['action'], command_id, epoch, duration_ms,
                                     execution_mode=mode)
                 if proposal['action'] != 'STOP':
-                    self.activate_execution(command_id, proposal['action'], mode, self.arbiter.deadline)
+                    self.activate_execution(command_id, proposal['action'], mode, self.arbiter.deadline,
+                        **({'target_distance_meters': proposal['distanceMeters']} if mode == 'distance' else {}))
                 await self.submit(proposal['action'], 'gpt', command_id,
                                   intent_age_ms=intent_age_ms,
                                   execution_duration_ms=0 if proposal['action'] == 'STOP' else duration_ms,
@@ -696,21 +834,15 @@ class Bridge:
                                        self.conversation_generation, proposal['validForMs'],
                                        intent_deadline=started + self.config['control']['maxIntentAgeMs']/1000,
                                        revision=revision, execution_mode=proposal.get('executionMode', 'timed'),
-                                       **({'admission_check': check_transcript, 'notify_live': True} if prepared is not None else {}),
+                                       **({'distance_meters': proposal['distanceMeters']} if proposal.get('executionMode') == 'distance' else {}),
+                                       admission_check=check_transcript,
+                                       **({'notify_live': True} if prepared is not None else {}),
                                        **({'delegation_id': delegation_id} if delegation_id is not None else {}))
                 reply = PLAN_REPLY[self.conversation.settings['language']][proposal['plan']]
             elif proposal['kind'] == 'question':
-                reply = ('Answer only the current question in one short sentence, using these '
-                         'fresh local observations. Empty facts mean unknown, not safe. '
-                         'Edge samples describe nearby support, not a route or a visible landmark. '
-                         'No new Action was sent; a previous command may still be running. '
-                         + json.dumps({'localSafety': self.local_observation.summary(),
-                                       'sceneCue': self.blind_script.current_fact(),
-                                       'neuralReport': self.summary()['interpretation']}, ensure_ascii=False))
+                reply = self.non_action_reply_context(text, proposal['kind'])
             else:
-                # The interpreter can ask for the missing direction/condition,
-                # instead of rejecting every colloquial request generically.
-                reply = proposal['reply'] or self.text('clarify')
+                reply = self.non_action_reply_context(text, proposal['kind'])
             if self.conversation.mode == 'mock':
                 self.emit({'type': 'conversation_text', 'role': 'assistant', 'text': '[MOCK] ' + reply, 'append': False})
             else:
@@ -724,14 +856,22 @@ class Bridge:
                         and notice_context_generation == self.conversation.context_generation
                         and self.conversation_accepting and not self.arbiter.inhibited):
                     await self.conversation.append('thinking',
-                        'Execution update completed by the backend; no repeated Brain stimulus was needed. '
-                        'Ready for the next player request. Body movement is not verified by this update.',
+                        ('Execution update restarted the movement through the existing Brain Action. '
+                         if restarted is not None else
+                         'Execution update completed by the backend; no repeated Brain stimulus was needed. ')
+                        + 'Ready for the next player request. Body movement is not verified by this update.',
                         delegation_id)
         except asyncio.CancelledError:
             if replaced_plan and not self.arbiter.inhibited:
                 await self.inhibit('plan_replacement_cancelled')
             raise
         except (ControlError, ConversationError, BrainAdapterError) as exc:
+            # A cancelled provider may still finish with an error. Its failure
+            # cannot inhibit or speak over the newer execution/session.
+            if (epoch != self.arbiter.epoch or revision != self.intent_revision
+                    or notice_generation != self.conversation_generation
+                    or notice_context_generation != self.conversation.context_generation):
+                return
             if replaced_plan and not self.arbiter.inhibited:
                 await self.inhibit('plan_replacement_failed')
             self.emit({'type': 'command_result', 'stage': 'rejected', 'commandId': command_id, 'reason': str(exc)})
@@ -808,7 +948,7 @@ class Bridge:
             if self.plans.active or (self.active_execution and self.active_execution['monitorHazards']):
                 await self.inhibit('invalid_local_observation')
             raise ControlError('invalid_local_observation') from None
-        concern = self.local_observation.concern()
+        concern = self.local_observation.concern(action=self.active_execution['action'] if self.active_execution else None)
         if not previous['fresh'] or previous['concern'] != concern:
             self.log('local_observation_received', sequence=self.local_observation.sequence,
                      reason=concern or 'clear')
@@ -816,6 +956,34 @@ class Bridge:
             if self.plans.active:
                 self.log('plan_stopped', planId=self.plans.active['planId'], reason=concern)
             await self.inhibit(concern)
+        await self.warn_local_edge()
+
+    async def warn_local_edge(self):
+        scope = (self.arbiter.epoch, self.conversation_generation,
+                 self.conversation.context_generation)
+        if scope != self.edge_warning_scope:
+            self.edge_warning_scope, self.edge_warning_sent = scope, False
+        if (not self.conversation_accepting or self.conversation.state != 'live'
+                or self.conversation_interaction != 'control' or self.control_ws is None
+                or self.arbiter.inhibited or self.arbiter.owner != 'gpt'):
+            return
+        observation = self.local_observation.summary()
+        if not observation['fresh']:
+            return
+        facts = observation['facts']
+        edges = (facts.get('leftEdge'), facts.get('rightEdge'))
+        danger = facts.get('groundPresent') is False or any(
+            edge in ('near', 'very_near') for edge in edges)
+        safe = facts.get('groundPresent') is True and all(edge == 'safe' for edge in edges)
+        if safe:
+            self.edge_warning_sent = False
+        elif danger and not self.edge_warning_sent:
+            # One utterance per observed approach, not an Action or motor stop.
+            # Unknown/stale samples do not rearm a continuing hazard.
+            self.edge_warning_sent = True
+            await self.conversation.append('commentary',
+                '直近の局所Raycastで崖または足場切れを観測しました。'
+                '「もうすぐ落ちそうです。」と一度だけ発話してください。停止操作は行いません。')
 
     async def blind_run_cue(self, event):
         # The existing sole control client is the trusted Unity game producer.
@@ -884,6 +1052,8 @@ class Bridge:
             self.log('resumed')
             self.emit(self.state())
         elif kind == 'set_action':
+            if event.get('executionMode') == 'distance' or event.get('distanceMeters') is not None:
+                raise ControlError('distance_requires_validated_intent')
             if self.conversation_interaction == 'chat_only':
                 raise ControlError('chat_only_cannot_control')
             if self.motor_writer is not None:
@@ -929,6 +1099,7 @@ class Bridge:
             self.conversation.interaction = interaction
             self.blind_script.reset()
             self.conversation_generation += 1
+            self.local_observation.clear()
             self.conversation_accepting = True
             self.emit(self.state())
             self.conversation_operation = self.task(self.conversation.start())
@@ -1004,7 +1175,7 @@ class Bridge:
     async def finish_plan(self, plan, reason):
         if self.plans.active is not plan:
             return  # The newer instruction already owns the deadline and STOP.
-        concern = self.local_observation.concern()
+        concern = self.local_observation.concern(action=PLAN_STEPS[plan['name']][plan['step']])
         keep_listening = (self.can_keep_voice_listening() and concern is None
                           and self.control_ws is not None and not self.closed)
         self.log('plan_stopped', planId=plan['planId'], reason=concern or reason,
@@ -1021,6 +1192,114 @@ class Bridge:
             await self.submit('STOP', 'safety', 'plan-stop-' + str(uuid.uuid4()))
         except (ControlError, BrainAdapterError, ConnectionError, OSError):
             await self.inhibit('plan_stop_send_failed')
+        self.emit(self.state())
+
+    def distance_reason(self, execution, now):
+        observation = self.local_observation
+        travel = observation.require_distance(now)
+        if observation.travel_fault_sequence > execution['distanceSequence']:
+            raise ControlError(observation.travel_fault_reason)
+        execution['distanceSequence'] = observation.sequence
+        origin = execution['originTravelMeters']
+        if origin is not None:
+            if travel < origin:
+                raise ControlError('distance_odometry_regressed')
+            traveled = travel - origin
+            execution['traveledMeters'] = traveled
+            execution['remainingMeters'] = max(0.0, execution['targetDistanceMeters'] - traveled)
+        if execution['distancePhase'] == 'braking':
+            return self.distance_braking_reason(execution, now)
+        if now - execution['distanceStartedAt'] >= 300:
+            return 'distance_timeout'
+        # The first turn of a new plan is deliberately excluded. A request
+        # awaiting Brain application retains the separate finite apply timeout.
+        item = self.requests.get(execution['requestId'], {})
+        if origin is None or execution['action'] not in DISTANCE_ACTIONS or not item.get('applied'):
+            return None
+        if not execution['distanceApplied']:
+            execution['distanceApplied'] = True
+            execution['lastProgressAt'] = now
+            execution['progressTravelMeters'] = execution['traveledMeters']
+        # Initial control heuristic, not a neural/physics calibration: include
+        # the observed movement speed when anticipating normal STOP's coast.
+        if execution['remainingMeters'] <= observation.horizontal_speed * 1.2:
+            return 'distance_approaching'
+        if execution['traveledMeters'] - execution['progressTravelMeters'] >= 0.02 - 1e-9:
+            execution['progressTravelMeters'] = execution['traveledMeters']
+            execution['lastProgressAt'] = now
+        if now - execution['lastProgressAt'] >= 8:
+            return 'distance_stalled'
+        return None
+
+    def distance_braking_reason(self, execution, now):
+        item = self.requests.get(execution['stopRequestId'], {})
+        elapsed = now - execution['stopSentAt']
+        if item.get('rejected') or item.get('superseded'):
+            raise ControlError('distance_stop_not_applied')
+        if not item.get('applied'):
+            if elapsed >= 10:
+                raise ControlError('distance_stop_apply_timeout')
+            return None
+        observation = self.local_observation
+        travel = observation.travel_meters
+        if observation.horizontal_speed >= .03:
+            execution['settledSince'] = execution['settledTravelMeters'] = None
+        elif (execution['settledSince'] is None
+                or travel - execution['settledTravelMeters'] >= .01 - 1e-9):
+            execution['settledSince'] = observation.sample_at
+            execution['settledTravelMeters'] = travel
+        elif observation.sample_at - execution['settledSince'] >= .5:
+            # Silence/repeated watchdog polls cannot establish stability: the
+            # fresh odometry timestamps must themselves span half a second.
+            if execution['stopTrigger'] in ('distance_stalled', 'distance_timeout'):
+                return execution['stopTrigger']
+            target, traveled = execution['targetDistanceMeters'], execution['traveledMeters']
+            tolerance = min(.5, max(.15, target * .1))
+            if traveled > target + tolerance:
+                return 'distance_overshoot'
+            if traveled < target - tolerance or traveled < min(.05, target * .5):
+                return 'distance_shortfall'
+            return 'distance_reached'
+        if elapsed >= 10:
+            return 'distance_stop_unsettled'
+        return None
+
+    async def begin_distance_braking(self, execution, reason):
+        if self.active_execution is not execution or execution['distancePhase'] != 'moving':
+            return
+        # Stop the runner before it can advance or repeat a phase. Keep this
+        # execution as an observation-only stopping phase for "そのまま".
+        if self.plans.active is not None and self.plans.active['executionId'] == execution['executionId']:
+            self.plans.cancel()
+        execution.update(distancePhase='braking', stopTrigger=reason, stopSentAt=time.monotonic(),
+                         stopRequestId=None, settledSince=None, settledTravelMeters=None)
+        self.arbiter.deadline = None
+        self.log('execution_updated', executionId=execution['executionId'], distancePhase='braking',
+                 stopTrigger=reason, **self.distance_summary(execution))
+        self.emit(self.state())
+        try:
+            await self.submit('STOP', 'safety', 'distance-stop-' + str(uuid.uuid4()),
+                              preserve_execution=execution)
+        except (ControlError, BrainAdapterError, ConnectionError, OSError):
+            # A newer instruction, including an explicit update, owns a new
+            # object. A late completion/failure of this STOP cannot revoke it.
+            if self.active_execution is execution:
+                await self.inhibit('distance_stop_send_failed')
+
+    async def finish_distance(self, execution, reason):
+        if self.active_execution is not execution:
+            return
+        result = {'type': 'command_result', 'stage': 'execution_finished',
+                  'executionId': execution['executionId'], 'commandId': execution['executionId'],
+                  'reason': reason, 'completed': reason == 'distance_reached',
+                  'epoch': self.arbiter.epoch, **self.distance_summary(execution)}
+        # Normal STOP was already sent once when braking began. Consume only
+        # this final observation; never send another stale STOP on completion.
+        self.clear_execution(reason)
+        self.arbiter.deadline = None
+        # reached now requires STOP application plus fresh physical stability
+        # and an actual traveled distance within the declared tolerance.
+        self.emit(result)
         self.emit(self.state())
 
     async def check_control_safety(self):
@@ -1040,7 +1319,7 @@ class Bridge:
                 await self.inhibit('execution_context_lost')
                 return
             if execution['monitorHazards']:
-                concern = self.local_observation.concern()
+                concern = self.local_observation.concern(action=execution['action'])
                 if concern:
                     await self.inhibit(concern)
                     return
@@ -1050,6 +1329,18 @@ class Bridge:
                 return
             if item and not item['applied'] and time.monotonic() - item['sent'] >= self.config['control']['stopTimeoutMs'] / 1000:
                 await self.inhibit('execution_apply_timeout')
+                return
+            if execution['executionMode'] == 'distance':
+                try:
+                    reason = self.distance_reason(execution, time.monotonic())
+                except ControlError as exc:
+                    await self.inhibit(str(exc))
+                    return
+                if reason:
+                    if execution['distancePhase'] == 'braking':
+                        await self.finish_distance(execution, reason)
+                    else:
+                        await self.begin_distance_braking(execution, reason)
                 return
         if not self.arbiter.expired():
             return
@@ -1235,6 +1526,8 @@ class Bridge:
                     event = json.loads(line)
                     if not isinstance(event, dict) or event.get('type') != 'set_action':
                         raise ControlError('expected_set_action')
+                    if event.get('executionMode') == 'distance' or event.get('distanceMeters') is not None:
+                        raise ControlError('distance_requires_validated_intent')
                     rid = event.get('requestId')
                     if type(rid) is not int or rid <= 0:
                         raise ControlError('positive_request_id_required')

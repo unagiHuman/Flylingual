@@ -26,6 +26,9 @@ namespace Flylingual.BlindSugarRun
         long introSequence, firstIntroSequence;
         bool subscribed;
         bool goalWanted, revealWanted;
+        bool swatterWarningActive, swatterWarningAcknowledged, swatterClearPending;
+        float nextSwatterSend;
+        long firstSwatterSequence, lastSwatterSequence;
         float goalDeadline, revealDeadline;
         long firstGoalSequence, lastGoalSequence, firstRevealSequence, lastRevealSequence;
         public bool GoalAcknowledged { get; private set; }
@@ -50,6 +53,9 @@ namespace Flylingual.BlindSugarRun
             // The Bridge run/sequence is conversation-scoped. An epoch change discards local observations only.
             if (epoch != conversation.ControlEpoch)
             {
+                swatterClearPending |= swatterWarningActive;
+                swatterWarningActive = swatterWarningAcknowledged = false;
+                firstSwatterSequence = lastSwatterSequence = 0;
                 epoch = conversation.ControlEpoch; lastObservation = null; lastGroundAt = float.NegativeInfinity;
                 lastGround = lastLeft = lastRight = "unknown";
                 stableSince = -1f; observedMovement = false; previousAction = null;
@@ -67,6 +73,7 @@ namespace Flylingual.BlindSugarRun
                 { introSequence = sequence; if (firstIntroSequence == 0) firstIntroSequence = sequence; }
                 return;
             }
+            if (SendSwatterWarning()) return;
             if (sensor == null) sensor = stage.fly.GetComponent<FlyTerrainSensor>();
             var o = sensor == null ? null : sensor.Observation;
             bool fresh = sensor != null && sensor.Fresh && o != null && !o.queryOverflow;
@@ -110,6 +117,9 @@ namespace Flylingual.BlindSugarRun
 
         void ResetContext()
         {
+            swatterWarningActive = swatterWarningAcknowledged = swatterClearPending = false;
+            firstSwatterSequence = lastSwatterSequence = 0;
+            nextSwatterSend = 0;
             runId = null; once.Clear(); lastObservation = null; nextSpeech = 0;
             lastGround = lastLeft = lastRight = "unknown"; lastGroundAt = float.NegativeInfinity;
             stableSince = -1f; observedMovement = false; previousAction = null;
@@ -191,6 +201,8 @@ namespace Flylingual.BlindSugarRun
             if (firstIntroSequence > 0 && result.sequence >= firstIntroSequence && result.sequence <= introSequence) once.Add("intro");
             if (firstGoalSequence > 0 && result.sequence >= firstGoalSequence && result.sequence <= lastGoalSequence) GoalAcknowledged = true;
             if (firstRevealSequence > 0 && result.sequence >= firstRevealSequence && result.sequence <= lastRevealSequence) RevealAcknowledged = true;
+            if (swatterWarningActive && firstSwatterSequence > 0 && result.sequence >= firstSwatterSequence && result.sequence <= lastSwatterSequence)
+                swatterWarningAcknowledged = true;
         }
         void OnDestroy() { if (conversation != null && subscribed) conversation.ControlEventReceived -= OnControlEvent; }
         [Serializable] sealed class CueResult { public string type, stage; public long sequence; }
@@ -219,12 +231,59 @@ namespace Flylingual.BlindSugarRun
 
         public void NotifyFall(bool healthy, string appliedAction)
         {
+            NotifySwatterEscaped();
             if (!healthy) { Send("link_error", "{\"technicalFault\":true}", 0); return; }
             if (!ValidAction(appliedAction)) return;
             bool fresh = Time.unscaledTime - lastGroundAt <= .75f;
             var evidence = new FallEvidence { ground = fresh ? lastGround : "unknown", lastAction = appliedAction,
                 leftEdge = fresh ? lastLeft : "unknown", rightEdge = fresh ? lastRight : "unknown" };
             Send("fall", JsonUtility.ToJson(evidence), 0);
+        }
+
+        // Game-owned events only. Neither timer nor world state is inferred by the voice model.
+        public void NotifySwatterWarning()
+        {
+            if (stage == null || stage.State != BlindSugarRunSession.StageState.Playing) return;
+            if (!swatterWarningActive)
+            {
+                swatterWarningActive = true; swatterWarningAcknowledged = false;
+                firstSwatterSequence = lastSwatterSequence = 0;
+                nextSwatterSend = 0;
+            }
+            SendSwatterWarning();
+        }
+
+        public void NotifySwatterEscaped()
+        {
+            if (swatterWarningActive) swatterClearPending = true;
+            swatterWarningActive = swatterWarningAcknowledged = false;
+            firstSwatterSequence = lastSwatterSequence = 0;
+            if (swatterClearPending && Send("swatter_escaped", "{\"swatterWarning\":false}", 0))
+                swatterClearPending = false;
+        }
+
+        bool SendSwatterWarning()
+        {
+            if (stage.State != BlindSugarRunSession.StageState.Playing || Time.timeScale <= 0) return false;
+            if (swatterClearPending)
+            {
+                if (!Send("swatter_escaped", "{\"swatterWarning\":false}", 0)) return false;
+                swatterClearPending = false;
+            }
+            if (!swatterWarningActive || swatterWarningAcknowledged || Time.unscaledTime < nextSwatterSend) return false;
+            // Urgent speech bypasses the tutorial cooldown; retry only during this active warning.
+            nextSwatterSend = Time.unscaledTime + .5f;
+            if (!Send("swatter_warning", "{\"swatterWarning\":true}", 0)) return false;
+            lastSwatterSequence = sequence;
+            if (firstSwatterSequence == 0) firstSwatterSequence = sequence;
+            return true;
+        }
+
+        public void NotifySwatted()
+        {
+            swatterWarningActive = swatterWarningAcknowledged = swatterClearPending = false;
+            firstSwatterSequence = lastSwatterSequence = 0;
+            Send("swatted", "{\"swatted\":true}", 0);
         }
 
         public bool NotifyGoalConfirmed(bool insideGoal, bool bodyStable, bool goalConfirmed)

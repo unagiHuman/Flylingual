@@ -54,7 +54,7 @@ class ControlArbiter:
         if command_id in self.seen:
             raise ControlError('duplicate_command')
         # Check the bounded range before float conversion (huge JSON integers).
-        if execution_mode == 'until_next_command':
+        if execution_mode in ('until_next_command', 'distance'):
             if source != 'gpt' or action == 'STOP' or valid_ms is not None:
                 raise ControlError('invalid_command_duration')
         elif execution_mode != 'timed' or (type(valid_ms) not in (int, float)
@@ -64,7 +64,7 @@ class ControlArbiter:
         self.order.append(command_id)
         if len(self.order) > 4096:
             self.seen.remove(self.order.popleft())
-        self.deadline = (None if action == 'STOP' or execution_mode == 'until_next_command'
+        self.deadline = (None if action == 'STOP' or execution_mode in ('until_next_command', 'distance')
                          else time.monotonic() + valid_ms / 1000)
 
     def expired(self):

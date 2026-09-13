@@ -197,7 +197,8 @@ class NativeContinuousControlTests(unittest.IsolatedAsyncioTestCase):
         self.bridge.adapter.send_action.assert_awaited_once_with('STOP', 1)
         self.assertIsNone(self.bridge.arbiter.deadline)
         self.bridge.log.assert_any_call('intent_classified', commandId='fresh-voice',
-            source='voice', kind='action', action='STOP', plan=None, proposalValidForMs=0, interpretationMs=250)
+            source='voice', kind='action', action='STOP', plan=None, proposalValidForMs=0, interpretationMs=250,
+            interpretRoute=None)
 
     async def test_stop_after_four_second_interpretation_remains_fresh(self):
         await self.interpret_after('STOP', 4000, 4.5)
@@ -278,12 +279,16 @@ class NativeContinuousControlTests(unittest.IsolatedAsyncioTestCase):
     async def test_cancel_wait_epoch_change_still_rejects_old_action(self):
         await self.interpret_after('FORWARD', 4000, .25, change_epoch=True)
         self.bridge.adapter.send_action.assert_not_awaited()
-        self.bridge.log.assert_any_call('intent_rejected', commandId='fresh-voice', reason='stale_intent')
+        self.assertFalse(any(call.args[0] == 'intent_rejected'
+                             and call.kwargs.get('commandId') == 'fresh-voice'
+                             for call in self.bridge.log.call_args_list))
 
     async def test_cancel_wait_newer_intent_still_rejects_old_action(self):
         await self.interpret_after('FORWARD', 4000, .25, change_revision=True)
         self.bridge.adapter.send_action.assert_not_awaited()
-        self.bridge.log.assert_any_call('intent_rejected', commandId='fresh-voice', reason='stale_intent')
+        self.assertFalse(any(call.args[0] == 'intent_rejected'
+                             and call.kwargs.get('commandId') == 'fresh-voice'
+                             for call in self.bridge.log.call_args_list))
 
 
 if __name__ == '__main__':

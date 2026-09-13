@@ -22,12 +22,14 @@ namespace Flylingual.Conversation
         }
         [Serializable] sealed class Control
         {
-            public string type, @event, stage, commandId, delegationId, inputId, fixtureId, action, source, kind;
+            public string type, @event, stage, commandId, delegationId, inputId, fixtureId, action, source, kind, interpretRoute;
             public string plan, planId, name, outcome, reason, state, owner, sessionId, instanceId;
             public int epoch, conversationGeneration, requestId, fixtureChunkIndex, step, transcriptChars;
             public long sequence;
             public double monotonicMs, audioStartMs, audioEndMs, startMs, endMs, offsetMs;
             public double interpretationMs, proposalValidForMs, intentAgeMs, executionDurationMs;
+            public double speechEndMonotonicMs;
+            public bool utteranceFinalized;
             public bool continuedListening, outputInhibited;
             public ActiveExecution activeExecution;
             [NonSerialized] public double localTime;
@@ -78,6 +80,8 @@ namespace Flylingual.Conversation
             public double delegationStartMs, delegationEndMs, delegationOffsetMs;
             public double inputStartMs, inputEndMs, inputOffsetMs;
             public double fixtureToAppliedMs, fixtureToBodyStartedMs, fixtureToSettledMs;
+            public double audioEndToAppliedMs = -1, audioEndToBodyStartedMs = -1;
+            public string interpretRoute;
             public double acceptedExecutionDurationMs, submittedToExpiryMs;
             public bool applied, bodyStarted, settled, expired, continuedListening, voiceStopBeforeExpiry, executionUpdated;
             public bool recognizedMatchesFixture;
@@ -841,13 +845,14 @@ namespace Flylingual.Conversation
             if (item.commandId == current.commandId && !string.IsNullOrEmpty(current.commandId))
             {
                 current.lifecycle.Add(item);
-                if (item.@event == "intent_classified") { current.actualKind = item.kind; current.actualAction = item.action; current.actualPlan = item.plan; }
+                if (item.@event == "intent_classified") { current.actualKind = item.kind; current.actualAction = item.action; current.actualPlan = item.plan; current.interpretRoute = item.interpretRoute; }
                 if (item.@event == "intent_rejected") Fail(current, SafeCode(item.reason));
                 if (item.@event == "command_applied")
                 {
                     current.applied = true; current.appliedAt = Now;
                     current.requestId = item.requestId; current.appliedSequence = item.sequence;
                     current.fixtureToAppliedMs = (Now - current.firstAudioAt) * 1000;
+                    current.audioEndToAppliedMs = current.fixtureToAppliedMs - current.durationSeconds * 1000;
                 }
                 if (item.@event == "plan_started") current.planId = item.planId;
             }
@@ -962,7 +967,9 @@ namespace Flylingual.Conversation
                     item.brainSessionId, item.brainInstanceId, item.actualAction)) ObservePostApplied(item, frame);
                 if (item.applied && frame.sequence >= item.appliedSequence && !item.bodyStarted
                     && MovementPassed(item))
-                { item.bodyStarted = true; item.fixtureToBodyStartedMs = (Now - item.firstAudioAt) * 1000; Log("body_started", item.fixtureId); }
+                { item.bodyStarted = true; item.fixtureToBodyStartedMs = (Now - item.firstAudioAt) * 1000;
+                    item.audioEndToBodyStartedMs = item.fixtureToBodyStartedMs - item.durationSeconds * 1000;
+                    Log("body_started", item.fixtureId); }
             }
             else item.freshMaintained = false;
             item.observedSamples++;

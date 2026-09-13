@@ -30,6 +30,7 @@ class BlindRunScript:
         self.last_fact_at = 0
         self.last_cue = None
         self.last_spoken_at = 0
+        self.swatter_warning = False
 
     def accept(self, event, language, now=None):
         now = time.monotonic() if now is None else now
@@ -94,9 +95,17 @@ class BlindRunScript:
         if cue == 'reveal' and not self.goal:
             raise ControlError('blind_goal_required')
         self.run_id, self.attempt, self.sequence = run, attempt, sequence
+        new_swatter_warning = cue == 'swatter_warning' and not self.swatter_warning
+        if cue == 'swatter_warning':
+            self.swatter_warning = True
+        elif cue in ('swatter_escaped', 'swatted', 'fall', 'retry', 'goal', 'link_error'):
+            self.swatter_warning = False
         if cue == 'fall':
             self.fallen = True
             self.last_fall = dict(evidence)
+        elif cue == 'swatted':
+            self.fallen = True
+            self.last_fall = None  # A swat is not evidence of an edge-related fall.
         elif cue == 'retry':
             self.fallen = False
             self.last_fall = None  # One retrospective per retry, never infer a cause.
@@ -115,6 +124,12 @@ class BlindRunScript:
         key = (attempt, cue)
         speak = key not in self.once if one_shot else (
             cue != self.last_cue and (now - self.last_spoken_at >= 3 or cue.endswith('_urgent') or cue in ('fall', 'link_error')))
+        if cue == 'swatter_warning':
+            speak = new_swatter_warning
+        elif cue == 'swatter_escaped':
+            speak = False
+        elif cue == 'swatted':
+            speak = True
         if one_shot:
             self.once.add(key)
         if speak:

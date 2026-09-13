@@ -31,14 +31,15 @@ from Runtime.Bridge.credentials import load_requested_api_key
 
 
 def expected(kind='action', action='FORWARD', plan=None, mode='timed',
-             duration='default', operation='new', target=None):
+             duration='default', operation='new', target=None, distance=None):
     return dict(kind=kind, action=action, plan=plan, executionMode=mode,
-                validForMs=duration, operation=operation, targetExecutionId=target)
+                validForMs=duration, operation=operation, targetExecutionId=target,
+                distanceMeters=distance)
 
 
-def update(mode='inherit', duration=None, operation='continue'):
+def update(mode='inherit', duration=None, operation='continue', distance=None):
     return expected('update', None, mode=mode, duration=duration,
-                    operation=operation, target='synthetic-execution-current')
+                    operation=operation, target='synthetic-execution-current', distance=distance)
 
 
 def context(active=False, nudge=False):
@@ -51,7 +52,7 @@ def context(active=False, nudge=False):
             command.update(action='TURN_R', plan='nudge_right', step=0)
     return {'source': 'SYNTHETIC_CLASSIFICATION_CONTEXT', 'stale': False,
             'localSafety': {'source': 'unity_local_sensors', 'sequence': 10,
-                'ageMs': 0, 'fresh': True, 'concern': None, 'facts': {
+                'ageMs': 0, 'fresh': True, 'concern': None, 'travelMeters': 12.5, 'facts': {
                     'groundPresent': True, 'leftEdge': 'safe', 'rightEdge': 'safe',
                     'forwardBlocked': False, 'bodyUnsafe': False}},
             'activeCommand': command}
@@ -99,6 +100,21 @@ CASES = [
     ('transcript_negation', '止まらないで、そのまま', True, update()),
     ('transcript_question', '右は危ない？', True, expected('question', None)),
     ('transcript_correction', '右、いや左へ曲がって', True, expected(action='TURN_L')),
+    ('distance_approximate_five', '5mぐらい進んで', False,
+     expected(mode='distance', duration=None, distance=5)),
+    ('distance_centimeters', '500cm進んで', False,
+     expected(mode='distance', duration=None, distance=5)),
+    ('distance_half_meter', '半メートル前へ進んで', False,
+     expected(mode='distance', duration=None, distance=0.5)),
+    ('distance_little_forward', 'ちょっと前へ', False,
+     expected(mode='distance', duration=None, distance=0.5)),
+    ('distance_little_more_forward', 'もう少し前へ', True,
+     update(mode='distance', distance=0.5)),
+    ('distance_continue_two', 'そのままあと2m', True,
+     update(mode='distance', distance=2)),
+    ('distance_right_then_forward', '少し右を向いて5m進んで', False,
+     expected('plan', None, 'right_then_forward', mode='distance', duration=None, distance=5)),
+    ('distance_conflicting_duration', '5mを8秒で進んで', False, expected('clarify', None)),
 ]
 
 
@@ -189,7 +205,7 @@ def main():
     parser.add_argument('--key-file', help='Existing authorized one-line key file; never logged')
     parser.add_argument('--local', type=Path, help='Existing Bridge local config (default Runtime/Config/local.json)')
     parser.add_argument('--case', action='append', choices=[item[0] for item in CASES],
-                        help='Select synthetic cases; default all 24')
+                        help=f'Select synthetic cases; default all {len(CASES)}')
     parser.add_argument('--repeat', type=int, choices=range(1, 4), default=1,
                         help='Explicit repetitions, 1..3; maximum 72 total requests')
     parser.add_argument('--timeout-seconds', type=int, choices=range(2, 31), default=12)
@@ -201,6 +217,8 @@ def main():
         parser.error('--output already exists; use a new directory')
     selected = set(args.case) if args.case else {item[0] for item in CASES}
     cases = [item for item in CASES if item[0] in selected]
+    if len(cases) * args.repeat > 72:
+        parser.error('at most 72 requests per run; select fewer cases or repetitions')
     try:
         # Same credential resolver as tools/dev.py: explicit file, key-file env,
         # then an already inherited OPENAI_API_KEY. No credential discovery.

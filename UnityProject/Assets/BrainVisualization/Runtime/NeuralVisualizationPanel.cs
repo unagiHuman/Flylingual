@@ -15,7 +15,7 @@ namespace FlyBrainVisualization
         [SerializeField, Range(256, 1536)] private int textureResolution = 768;
         [SerializeField] private bool allowOrbit = true;
         [Header("Anatomical framing (display crop, not cell classification)")]
-        [SerializeField] private bool brainFocus = true;
+        [SerializeField] private bool brainFocus = false;
         [SerializeField] private Vector3 brainFocusCenter = new Vector3(0, .66f, 0);
         [SerializeField, Min(.1f)] private float brainViewSize = .86f;
         [SerializeField, Min(.1f)] private float fullViewSize = 1.25f;
@@ -25,7 +25,7 @@ namespace FlyBrainVisualization
         private readonly float[] activityHistory = new float[100];
         private int historyCount, historyCursor;
         private string historyIdentity;
-        private Vector2 angles = new Vector2(0, 12);
+        private Vector2 angles = new Vector2(-18, 35);
         private float zoom = 1.25f;
         private bool dragging;
         private bool embedded;
@@ -38,7 +38,6 @@ namespace FlyBrainVisualization
         {
             if (!allowOrbit || displayRoot == null) return;
             angles.x = Mathf.Clamp(angles.x + delta.y * .35f, -65, 65); angles.y += delta.x * .35f;
-            displayRoot.localRotation = Quaternion.Euler(angles.x, angles.y, 0);
             ApplyView();
         }
         public void Zoom(float delta)
@@ -55,8 +54,15 @@ namespace FlyBrainVisualization
         private void ApplyView()
         {
             if (brainCamera == null || displayRoot == null) return;
+            // Apply the same oblique view at startup and during orbit. Runtime-created
+            // displays previously stayed face-on until the first drag.
+            displayRoot.localRotation = Quaternion.Euler(angles.x, angles.y, 0);
             Vector3 center = displayRoot.TransformPoint(brainFocus ? brainFocusCenter : Vector3.zero);
             brainCamera.transform.position = center - brainCamera.transform.forward * 4f;
+            // Match the previous framing at the focal plane, with gentle perspective
+            // so near and far somata convey the atlas volume. Zoom/orbit remain manual.
+            brainCamera.orthographic = false;
+            brainCamera.fieldOfView = 2f * Mathf.Atan(zoom / 4f) * Mathf.Rad2Deg;
             brainCamera.orthographicSize = zoom;
             brainCamera.backgroundColor = new Color(.035f, .039f, .048f, 1);
         }
@@ -129,7 +135,7 @@ namespace FlyBrainVisualization
             GUI.Label(new Rect(x, y, w, 18), "SAMPLE  " + observer.ObservedCount.ToString("N0") + " / " + observer.PointCount.ToString("N0") + "   ·   SEQ  " + observer.Sequence + "   ·   SKIP  " + observer.DroppedFrames, smallStyle);
             y += 24;
             Fill(new Rect(x, y + 5, 5, 5), gold);
-            GUI.Label(new Rect(x + 12, y, w - 12, 18), "RED: SPIKES  ·  WHITE: OBSERVED IDLE", smallStyle);
+            GUI.Label(new Rect(x + 12, y, w - 12, 18), "ORANGE: SPIKES · CYAN/PURPLE: VOLTAGE +/-", smallStyle);
             y += 24;
             GUI.Label(new Rect(x, y, 65, 18), "GLOW", smallStyle);
             if (pointCloud != null) pointCloud.DisplayGain = GUI.HorizontalSlider(new Rect(x + 66, y + 5, Mathf.Max(50, w - 66), 16), pointCloud.DisplayGain, .1f, 3f);

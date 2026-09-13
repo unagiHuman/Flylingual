@@ -43,6 +43,16 @@ namespace FlyLocomotionPoC
         private int contactLostStanceProgressCount;
 
         public bool DiagnosticDrivenByController { get; set; }
+        public bool FallReleaseActive { get; private set; }
+
+        public void SetFallRelease(bool release)
+        {
+            FallReleaseActive = release;
+            if (!release) return;
+            Detach(attached);
+            normalForceNewtons = shearForceNewtons = gripUtilization = 0f;
+            lastAdhesionForce = Vector3.zero;
+        }
 
         // Read-only diagnostics of the inputs actually consumed by adhesion this tick.
         public float LastEvaluationFixedTime { get; private set; } = float.NegativeInfinity;
@@ -122,7 +132,7 @@ namespace FlyLocomotionPoC
             if (validContact) contactTickCount++;
             if (stanceActive) stanceTickCount++;
             if (validContact && stanceActive) eligibleTickCount++;
-            if (!adhesionEnabled || !stanceActive || !validContact || footBody == null)
+            if (FallReleaseActive || !adhesionEnabled || !stanceActive || !validContact || footBody == null)
             {
                 if (!stanceActive || !validContact)
                 {
@@ -208,6 +218,7 @@ namespace FlyLocomotionPoC
 
         private void ResetState()
         {
+            FallReleaseActive = false;
             attached = false;
             blockedUntilRelease = false;
             eligibleSeconds = 0f;

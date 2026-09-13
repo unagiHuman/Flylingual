@@ -13,7 +13,7 @@ from Runtime.Bridge.conversation_prompts import build_voice_instructions
 def proposal(**changes):
     value = dict(kind='action', action='FORWARD', plan=None, validForMs=None,
                  reply='前に進み続ける指示だね。', operation='new',
-                 executionMode='until_next_command', targetExecutionId=None)
+                 executionMode='until_next_command', targetExecutionId=None, distanceMeters=None)
     value.update(changes)
     return value
 
@@ -64,6 +64,52 @@ class PersistentIntentTranslationTests(unittest.IsolatedAsyncioTestCase):
                                  executionMode=mode, validForMs=duration,
                                  targetExecutionId='execution-current-123')
                 self.assertEqual(await self.interpret(value, 'そのまま'), value)
+
+    async def test_distance_actions_and_plans_preserve_meter_target(self):
+        # These are contract fixtures, not a claim about real model classification.
+        for action in ('FORWARD', 'FORWARD_R', 'FORWARD_L'):
+            for meters in (0.05, 0.5, 5, 100):
+                with self.subTest(action=action, meters=meters):
+                    value = proposal(action=action, executionMode='distance', distanceMeters=meters)
+                    self.assertEqual(await self.interpret(value), value)
+        for plan in ('forward_until_concern', 'right_then_forward', 'left_then_forward'):
+            with self.subTest(plan=plan):
+                value = proposal(kind='plan', action=None, plan=plan,
+                                 executionMode='distance', distanceMeters=5)
+                self.assertEqual(await self.interpret(value), value)
+
+    async def test_distance_update_preserves_execution_reference(self):
+        value = proposal(kind='update', action=None, operation='continue',
+                         targetExecutionId='execution-current-123',
+                         executionMode='distance', distanceMeters=2)
+        self.assertEqual(await self.interpret(value, 'そのままあと2m'), value)
+
+    async def test_inherit_does_not_restate_distance_goal(self):
+        self.observed['activeCommand'].update(executionMode='distance', distanceMeters=5,
+                                             remainingMeters=2)
+        for operation in ('continue', 'modify_conditions'):
+            value = proposal(kind='update', action=None, operation=operation,
+                             executionMode='inherit', targetExecutionId='execution-current-123')
+            self.assertEqual(await self.interpret(value, 'そのまま'), value)
+
+    async def test_invalid_distance_range_type_and_action_fail_closed(self):
+        values = [proposal(executionMode='distance', distanceMeters=value)
+                  for value in (None, 0, -1, 0.049, 100.001, True, '5', float('inf'), float('nan'))]
+        values += [proposal(executionMode='distance', distanceMeters=5, action=action)
+                   for action in ('STOP', 'TURN_R', 'TURN_L')]
+        values += [proposal(kind='plan', action=None, plan=plan,
+                            executionMode='distance', distanceMeters=5)
+                   for plan in ('nudge_right', 'nudge_left')]
+        values += [proposal(executionMode='distance', distanceMeters=5, validForMs=4000),
+                   proposal(distanceMeters=5),
+                   proposal(executionMode='timed', validForMs=4000, distanceMeters=5),
+                   proposal(kind='update', action=None, operation='modify_conditions',
+                            targetExecutionId='execution-current-123',
+                            executionMode='distance', distanceMeters=5)]
+        for value in values:
+            with self.subTest(value=value):
+                with self.assertRaisesRegex(ConversationError, '^intent_translation_failed$'):
+                    await self.interpret(value)
 
     async def test_finite_nudge_and_stop_remain_timed(self):
         values = [proposal(kind='plan', action=None, plan='nudge_right',
@@ -117,6 +163,10 @@ class PersistentIntentTranslationTests(unittest.IsolatedAsyncioTestCase):
         legacy = dict(kind='action', action='FORWARD', plan=None, validForMs=4000, reply='前へ。')
         with self.assertRaisesRegex(ConversationError, '^intent_translation_failed$'):
             await self.interpret(legacy)
+        legacy_eight = proposal(executionMode='timed', validForMs=4000)
+        del legacy_eight['distanceMeters']
+        with self.assertRaisesRegex(ConversationError, '^intent_translation_failed$'):
+            await self.interpret(legacy_eight)
 
     async def test_mock_remains_bounded_and_uses_complete_contract(self):
         self.adapter.state = 'mock'
@@ -126,6 +176,7 @@ class PersistentIntentTranslationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result['executionMode'], 'timed')
         self.assertIsNone(result['targetExecutionId'])
         self.assertEqual(result['validForMs'], 4000)
+        self.assertIsNone(result['distanceMeters'])
         self.adapter.http.post.assert_not_called()
 
 
@@ -135,6 +186,9 @@ class PersistentIntentSchemaTests(unittest.TestCase):
         self.assertFalse(INTENT_SCHEMA['additionalProperties'])
         self.assertEqual(INTENT_SCHEMA['properties']['validForMs']['type'], ['integer', 'null'])
         self.assertIn('update', INTENT_SCHEMA['properties']['kind']['enum'])
+        self.assertIn('distance', INTENT_SCHEMA['properties']['executionMode']['enum'])
+        self.assertEqual(INTENT_SCHEMA['properties']['distanceMeters'],
+                         {'type': ['number', 'null'], 'minimum': 0.05, 'maximum': 100})
 
     def test_both_voice_languages_describe_continuation_delegation(self):
         for language, phrase in (('ja', 'そのまま次の指示まで'),

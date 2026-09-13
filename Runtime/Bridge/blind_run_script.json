@@ -11,10 +11,10 @@
     "ruler_right": {"evidence": {"forwardObject": "ruler", "alignment": "right"}, "ja": "板は、少し右向き。", "en": "The board angles a little right."},
     "ruler_left": {"evidence": {"forwardObject": "ruler", "alignment": "left"}, "ja": "板は、少し左向き。", "en": "The board angles a little left."},
     "aligned": {"evidence": {"forwardObject": "ruler", "alignment": "center"}, "ja": "板が、だいたい正面。", "en": "The board is roughly straight ahead."},
-    "right_edge": {"evidence": {"rightEdge": "near"}, "ja": "右の端が近い。", "en": "The right edge is close."},
-    "right_edge_urgent": {"evidence": {"rightEdge": "very_near"}, "ja": "右、ぎりぎり！", "en": "Right edge, very close!"},
-    "left_edge": {"evidence": {"leftEdge": "near"}, "ja": "左の端が近い。", "en": "The left edge is close."},
-    "left_edge_urgent": {"evidence": {"leftEdge": "very_near"}, "ja": "左、ぎりぎり！", "en": "Left edge, very close!"},
+    "right_edge": {"evidence": {"rightEdge": "near"}, "ja": "もうすぐ落ちそうです。", "en": "The right edge is close."},
+    "right_edge_urgent": {"evidence": {"rightEdge": "very_near"}, "ja": "もうすぐ落ちそうです。", "en": "Right edge, very close!"},
+    "left_edge": {"evidence": {"leftEdge": "near"}, "ja": "もうすぐ落ちそうです。", "en": "The left edge is close."},
+    "left_edge_urgent": {"evidence": {"leftEdge": "very_near"}, "ja": "もうすぐ落ちそうです。", "en": "Left edge, very close!"},
     "still_moving": {"evidence": {"bodyMoving": true}, "ja": "まだ動いてる。", "en": "Still moving."},
     "stable": {"evidence": {"bodyMoving": false, "bodyStable": true}, "ja": "落ち着いた。", "en": "Steady now."},
     "book": {"evidence": {"ground": "book"}, "ja": "本の上だ。", "en": "I'm on a book."},
@@ -26,6 +26,9 @@
     "goal_wait": {"evidence": {"insideGoal": true, "bodyStable": false}, "ja": "ここで、落ち着こう。", "en": "Let's settle here."},
     "goal": {"evidence": {"insideGoal": true, "bodyStable": true, "goalConfirmed": true}, "ja": "着いた！", "en": "Made it!"},
     "reveal": {"evidence": {"revealStarted": true}, "ja": "ここを、歩いてきたんだ。", "en": "This is where we walked."},
+    "swatter_warning": {"evidence": {"swatterWarning": true}, "ja": "ハエたたきが来る！ 動かなきゃ", "en": "A fly swatter is coming! I need to move!"},
+    "swatter_escaped": {"evidence": {"swatterWarning": false}, "ja": "ハエたたきの予告は解除された。", "en": "The swatter warning has ended."},
+    "swatted": {"evidence": {"swatted": true}, "ja": "ハエたたきに叩かれた。", "en": "I was hit by the fly swatter."},
     "link_error": {"evidence": {"technicalFault": true}, "ja": "つながりが切れた。", "en": "The link is down."}
   }
 }

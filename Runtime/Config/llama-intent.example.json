@@ -1,0 +1,10 @@
+{
+  "conversation": {
+    "intentProvider": "llama_cpp",
+    "localIntentUrl": "http://127.0.0.1:11436",
+    "localIntentModel": "qwen3.5:4b",
+    "localIntentFormat": "label",
+    "localIntentCachePrompt": true,
+    "intentTimeoutMs": 1500
+  }
+}

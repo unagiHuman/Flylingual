@@ -139,3 +139,29 @@ Retryは同じ `BlindSugarRunPlay.unity` を再読込してFly/CPG/接触状態�
 正式Windows Playerも再ビルド済み。24.69秒、結果 `Succeeded`、error 0、warning 1（[BuildReport](../../artifacts/blind-sugar-run-surfaces/build-report.json)）。保存したSceneを再読込しても正常に表示されることを確認した。[修正後の定規橋](../../artifacts/blind-sugar-run-surfaces/after-ruler.png)／[修正後の分岐](../../artifacts/blind-sugar-run-surfaces/after-branch.png)。既存コード・Scene等の保護対象81ファイルはSHA-256不変（[照合記録](../../artifacts/blind-sugar-run-surfaces/protected-after.json)）。
 
 この確認は描画・静的形状・ビルドの検証であり、歩行や実Brainの再試験ではない。
+
+## 局所視界仕様（2026-09-13最新指示）
+
+完全暗転ではなく、ハエ中心の床上半径約3mだけをソフトな追従Spotで照らす。遠方のStageは黒く保ち、ゲーム映像は通常表示する。既存のPlay UI、会話、Brain、Fly制御は保持し、`-blindSugarDeveloperView` 指定時だけ従来の全景Developer Viewを使用する。ゲーム物理の縮尺は変更せず、既存の1 Unity unitを1mとして扱う。
+
+[BlindSugarRunLocalVisibility.cs](../../UnityProject/Assets/BlindSugarRunPrototype/BlindSugarRunLocalVisibility.cs) とBuilderで、Directional Light／Cool rimを抑止し、ambient・reflectionを暗転させ、ハエへ近接追従するSpotと近距離Cameraを適用する。新Sceneロード時には再適用し、別Sceneでは元の照明設定を復元する。静止描画は [editor-local-view.png](../../artifacts/blind-sugar-run-local-view/editor-local-view.png) で確認済み。これはEditor静止画の確認であり、実Player／実Brainでの動作検証ではない。
+
+Goal／Reveal状態では局所照明とCamera追従を解除し、元の外灯・環境光を復元して既存の全景演出に引き渡す。Inspectorの`visibleRadius`は3、光源はThoraxの8 unit上、接地時の胴体高さ約1.1を加味してSpotの角度を設定する。縁の約24%は暗く減衰する。地面の高さと姿勢で照射半径はわずかに変わるため、厳密な距離による描画カットではない。
+
+通常Windows版を再ビルド済み（20.56秒、error 0、warning 35、[BuildReport](../../artifacts/blind-sugar-run-local-view/build-report.json)）。Windows実Brain `127.0.0.1:18766`、Bridge motor `127.0.0.1:18770` で、映像表示・局所照明・光源追従を確認した。30/30サンプルがfresh、TCP sequence14→61、backend=`MALECNS_EXPERIMENTAL`、raw Brain ready=falseのまま。今回は移動命令を送らない表示確認であり、コース歩行やGoal到達の再試験ではない。
+
+非表示Windows Playerでは自動Camera描画が省略され、初回の取得画像は空だった。最終確認では既存Cameraを明示的にRenderして、映像に実際の有色pixelがあることも検査した（155,606 pixels）。[ゲーム映像](../../artifacts/blind-sugar-run-local-view/player-02/game-view.png) と [UI全体](../../artifacts/blind-sugar-run-local-view/player-02/play-screen.png) を目視確認済み。[検証JSON](../../artifacts/blind-sugar-run-local-view/player-02/report.json) のPASSは表示確認の範囲に限る。UI取得時には既存の`body_fixed_control_inactive`による復旧中表示も記録されており、接続エラー皆無の検証ではない。操作・Brainコードは本変更では編集していない。
+
+Sceneの既存450オブジェクトのうち、変更はStage CameraのGameObject／Transformへの参照追加だけで、新規4オブジェクトを追加した。Fly・Collider・ステージ形状は保持（[Scene照合](../../artifacts/blind-sugar-run-local-view/scene-preservation.json)）。
+
+### 隠しデバッグ操作
+
+数字キー`1`（テンキー`1`も可）で、コース全体を見渡すカメラ＋通常照明と、元の半径約3mの局所視界を交互に切り替える。UIには常設ボタンを追加しない。テキスト欄の入力中やCtrl／Alt／Shift併用時には切り替えず、キーを押しっぱなしにしても連続切り替えしない。Goal／Reveal演出中は無効。切り替えは表示だけに作用し、移動命令を送信しない。リトライ後は通常の局所視界で始まる。
+
+通常Windows版を更新し、実Brain接続中のPlayerへInput Systemの`Digit1`／`Numpad1`入力イベントを送って往復切り替えを確認した。[全景](../../artifacts/blind-sugar-run-toggle/player/debug-overview.png) と [局所視界への復帰](../../artifacts/blind-sugar-run-toggle/player/debug-local-restored.png) を目視確認済み。[検証結果](../../artifacts/blind-sugar-run-toggle/player/report.json) はPASS、fresh30/30、sequence17→62、`MALECNS_EXPERIMENTAL`、raw ready=false。表示確認のためCameraを明示Renderしている。文字入力中とGoal演出中のガードはコード確認のみ。ビルドは23.28秒で成功、error0、warning35（[BuildReport](../../artifacts/blind-sugar-run-toggle/build-report.json)）。
+
+## 探索ミニマップ仕様（2026-09-13）
+
+`BlindSugarRunExplorationMap`／`BlindSugarRunMinimapView` は、ハエ周囲約3mのPhysics観測だけを0.5mセル・単一高さで記録する。未観測セルは辞書へ登録せず暗色、探索済みgroundは淡いmint、通過済みはgold、既知groundに隣接する既知voidまたは高さ差0.5超の確認済み崖だけを赤線で表示する。未知境界は崖と判定せず、遮蔽物の裏側や全景Developer Viewを表示しても全域を登録しない。表示は北を上にした20m幅のスクロール地図で、本人位置と向きを示す。
+
+既存Brain／共有PlayScreen UIは編集せず、既存game texture Imageの親へUIを接続する。同SceneのRetryでは地図記憶を保持したまま再接続し、通常起動ではリセットする。Goal／Reveal時は非表示とする。実Player／実Brainでのミニマップ動作試験は未実施である。

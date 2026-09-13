@@ -22,6 +22,7 @@ namespace FlyLocomotionPoC
         [SerializeField, Range(.02f, .3f)] float contactWaitSeconds = .12f;
         [SerializeField, Range(.05f, .5f)] float stepClearanceWaitSeconds = .25f;
         [SerializeField, Range(0f, .2f)] float maximumPostureLiftFraction = .12f;
+        [SerializeField, Min(.1f)] float unsupportedReleaseSeconds = .3f;
         FlyBody body;
         FlyTerrainSensor sensor;
         FlyLocomotionController controller;
@@ -33,6 +34,9 @@ namespace FlyLocomotionPoC
         public string Reason { get; private set; } = "idle";
         public bool Active { get; private set; }
         public float PostureLift { get; private set; }
+        public bool FallReleaseActive { get; private set; }
+        public int MeasuredSupportCount { get; private set; }
+        public float UnsupportedSeconds { get; private set; }
         float standingClearance = -1f;
         public void Configure(FlyBody owner, FlyTerrainSensor sensing, FlyLocomotionController driver)
         {
@@ -47,11 +51,24 @@ namespace FlyLocomotionPoC
             Active = enabled && live != null && live.HasFreshFrame && config.groundedTripodGait
                 && Mathf.Max(Mathf.Abs(raw.forward), Mathf.Abs(raw.turn)) >= config.gaitStartThreshold;
             SafetyHold = WaitingForContact = WaitingForClearance = false; Reason = Active ? "walking" : "idle";
+            MeasuredSupportCount = 0;
             for (int i = 0; i < Feet.Length; i++)
             {
                 var leg = body.Legs[i]; var f = Feet[i];
                 f.footPosition = leg.FootProbePosition;
                 f.measuredSupport = leg.FootContact.HasFreshSurfaceContact && Vector3.Dot(leg.FootContact.SurfaceNormal, sensor.Up) >= .65f;
+                if (f.measuredSupport) MeasuredSupportCount++;
+            }
+            UpdateFallRelease(config.groundedTripodGait && enabled && live != null && live.HasFreshFrame, dt);
+            if (FallReleaseActive)
+            {
+                Reason = "unsupported_fall_release"; PostureLift = 0f;
+                foreach (var f in Feet)
+                {
+                    f.state = Reason; f.landingValid = false; f.correction = Vector3.zero;
+                    f.wasSwing = f.initialized = false; f.wait = f.clearanceWait = 0f;
+                }
+                return false;
             }
             if (!Active) { PostureLift = 0f; foreach (var f in Feet) { f.state = "idle"; f.landingValid = false; f.correction = Vector3.zero; f.wasSwing = false; f.initialized = false; f.wait = f.clearanceWait = 0; } return false; }
             var o = sensor.Observation;
@@ -65,10 +82,10 @@ namespace FlyLocomotionPoC
             float wantedLift = highest - lowest > sensor.Reach * .025f
                 ? Mathf.Clamp(highest + standingClearance - Vector3.Dot(body.Position, sensor.Up), 0f, sensor.Reach * maximumPostureLiftFraction) : 0f;
             PostureLift = Mathf.MoveTowards(PostureLift, wantedLift, sensor.Reach * .5f * dt);
-            if (!sensor.Fresh || o.queryOverflow || !o.groundPresent || o.bodyUnsafe)
+            if (!sensor.Fresh || o.queryOverflow || o.bodyUnsafe)
             { SafetyHold = true; Reason = !sensor.Fresh ? "stale_sensor" : o.bodyUnsafe ? "body_unsafe" : "ground_unknown"; }
-            else if (raw.forward > config.gaitStartThreshold && (o.forwardBlocked || o.leftEdge == "very_near" || o.rightEdge == "very_near"))
-            { SafetyHold = true; Reason = o.forwardBlocked ? "obstacle_too_high" : "edge"; }
+            else if (raw.forward > config.gaitStartThreshold && o.forwardBlocked)
+            { SafetyHold = true; Reason = "obstacle_too_high"; }
             for (int i = 0; i < Feet.Length; i++)
             {
                 var leg = body.Legs[i]; var f = Feet[i];
@@ -84,7 +101,7 @@ namespace FlyLocomotionPoC
                     { WaitingForClearance = true; Reason = "awaiting_step_clearance"; }
                 }
                 else if (target.stance) f.clearanceWait = 0f;
-                if (f.wasSwing && target.stance && !f.measuredSupport && !SafetyHold)
+                if (f.wasSwing && target.stance && f.landingValid && !f.measuredSupport && !SafetyHold)
                 {
                     f.wait += dt;
                     if (f.wait < contactWaitSeconds) { WaitingForContact = true; Reason = "awaiting_foot_contact"; }
@@ -95,6 +112,8 @@ namespace FlyLocomotionPoC
         }
         public FlyLeg.LegDriveTarget Adjust(FlyLeg leg, FlyLeg.LegDriveTarget target, float phase, FlyMotorCommand motor, FlyLocomotionConfig config, float dt)
         {
+            // Do not pin an old terrain stance against the bridge side while falling.
+            if (FallReleaseActive) { target.stance = false; return target; }
             if (!Active) return target;
             int index = -1;
             for (int i = 0; i < body.Legs.Count; i++) if (body.Legs[i] == leg) { index = i; break; }
@@ -145,9 +164,9 @@ namespace FlyLocomotionPoC
             }
             if (!f.landingValid)
             {
-                // Leave the last supported configuration in place. No fabricated contact.
-                target.angles = f.initialized ? f.lastAngles : CurrentAngles(leg);
-                target.stance = f.measuredSupport;
+                // No landing surface: continue the nominal gait into open space.
+                // Do not invent contact or freeze a leg to avoid the ledge.
+                f.correction = Vector3.zero;
                 f.state = "no_landing";
                 return target;
             }
@@ -191,6 +210,38 @@ namespace FlyLocomotionPoC
             if (!ground.walkable || !ground.wideEnough || rise > sensor.MaximumStep || rise < -sensor.MaximumDrop) return;
             if (!foot.landingValid || Vector3.Dot(ground.point - foot.landing, sensor.Up) > 0f)
             { foot.landing = ground.point; foot.landingValid = true; }
+        }
+        void UpdateFallRelease(bool allowed, float dt)
+        {
+            var o = sensor.Observation;
+            bool valid = allowed && sensor.Fresh && !o.queryOverflow;
+            bool recovered = MeasuredSupportCount >= 3 || (o.groundPresent && MeasuredSupportCount > 0);
+            if (!allowed || (valid && recovered))
+            {
+                UnsupportedSeconds = 0f;
+                if (FallReleaseActive) Debug.Log((allowed ? "FLY_FALL_RELEASE_RECOVERED" : "FLY_FALL_RELEASE_SOURCE_INACTIVE")
+                    + " supports=" + MeasuredSupportCount);
+                FallReleaseActive = false;
+            }
+            else if (valid && !o.groundPresent && MeasuredSupportCount < 3)
+            {
+                UnsupportedSeconds += dt;
+                if (!FallReleaseActive && UnsupportedSeconds >= Mathf.Max(.1f, unsupportedReleaseSeconds))
+                {
+                    FallReleaseActive = true;
+                    Debug.Log("FLY_FALL_RELEASE supports=" + MeasuredSupportCount + " seconds=" + UnsupportedSeconds + " position=" + body.Position);
+                }
+            }
+            else if (!FallReleaseActive) UnsupportedSeconds = 0f;
+            foreach (var leg in body.Legs)
+                if (leg != null && leg.FootAdhesion != null) leg.FootAdhesion.SetFallRelease(FallReleaseActive);
+        }
+        void OnDisable()
+        {
+            FallReleaseActive = false; UnsupportedSeconds = 0f;
+            if (body == null) return;
+            foreach (var leg in body.Legs)
+                if (leg != null && leg.FootAdhesion != null) leg.FootAdhesion.SetFallRelease(false);
         }
         static Vector3 CurrentAngles(FlyLeg leg) => new Vector3(leg.Coxa.Articulation.jointPosition[0],
             leg.Femur.Articulation.jointPosition[0], leg.Tibia.Articulation.jointPosition[0]) * Mathf.Rad2Deg;

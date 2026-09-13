@@ -184,10 +184,10 @@ class PersistentExecutionTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(execution['monitorHazards'])
         self.assertEqual(before, (execution['action'], execution['requestId'], execution['deadline']))
         self.b.adapter.send_action.assert_awaited_once()
-        self.observation(rightEdge='near')
+        self.observation(forwardBlocked=True)
         await self.b.check_control_safety()
         self.assertIsNone(self.b.active_execution)
-        self.assertEqual(self.b.arbiter.reason, 'edge_near')
+        self.assertEqual(self.b.arbiter.reason, 'forward_blocked')
 
     async def test_missing_conditions_observation_stops_existing_movement(self):
         await self.start()

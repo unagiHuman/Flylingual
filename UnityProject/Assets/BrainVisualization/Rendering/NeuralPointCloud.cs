@@ -15,6 +15,7 @@ namespace FlyBrainVisualization
         public const int MaxPointCount = 65536;
 
         private const int PointsPerChunk = 12000;
+        private const float MembraneDisplayThresholdMv = 0.001f;
         private const string ShaderName = "FlyBrain/Neural Point Cloud";
 
         [Header("Material")]
@@ -27,7 +28,7 @@ namespace FlyBrainVisualization
         [SerializeField, Range(1f, 1.5f)] private float spikeScale = 1.5f;
         [SerializeField, Range(1f, 5f)] private float spikeHaloScale = 4f;
         [SerializeField, Range(0.25f, 4f)] private float spikeGlowGain = 2f;
-        [SerializeField] private bool showMembranePotential;
+        [SerializeField] private bool showMembranePotential = true;
         [SerializeField, Range(0f, 4f)] private float displayGain = 1f;
         [SerializeField] private bool inheritLayer = true;
 
@@ -47,7 +48,7 @@ namespace FlyBrainVisualization
             }
         }
 
-        /// <summary>Enables the optional measured delta-membrane colour overlay.</summary>
+        /// <summary>Shows measured delta-membrane light separately from firing; enabled by default.</summary>
         public bool ShowMembranePotential
         {
             get => showMembranePotential;
@@ -133,7 +134,11 @@ namespace FlyBrainVisualization
                     bool hasMembrane = false;
                     if (isObserved && deltaMv != null && IsFinite(deltaMv[globalIndex]))
                     {
-                        membrane = Mathf.Clamp(deltaMv[globalIndex] / membraneScaleMv, -1f, 1f) * 0.5f + 0.5f;
+                        // Suppress display noise before packing, so the threshold itself
+                        // cannot turn into light through the signed-to-unit float conversion.
+                        // The supplied neural values and spike observations stay untouched.
+                        if (Mathf.Abs(deltaMv[globalIndex]) > MembraneDisplayThresholdMv)
+                            membrane = Mathf.Clamp(deltaMv[globalIndex] / membraneScaleMv, -1f, 1f) * 0.5f + 0.5f;
                         hasMembrane = true;
                     }
 
@@ -326,6 +331,7 @@ namespace FlyBrainVisualization
             runtimeMaterial.SetFloat("_SpikeHaloScale", spikeHaloScale);
             runtimeMaterial.SetFloat("_SpikeGlowGain", spikeGlowGain);
             runtimeMaterial.SetFloat("_ShowMembranePotential", showMembranePotential ? 1f : 0f);
+            runtimeMaterial.SetFloat("_MembraneScaleMv", membraneScaleMv);
             runtimeMaterial.SetFloat("_DisplayTime", Time.unscaledTime);
             materialDirty = false;
         }

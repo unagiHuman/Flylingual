@@ -111,10 +111,15 @@ namespace Flylingual.PlayScreen
             gameFrame.RegisterCallback<GeometryChangedEvent>(_ => UpdateGameImageRect());
 
             var side = new VisualElement(); side.style.flexGrow = 3; side.style.flexBasis = 0; side.style.minWidth = 260; side.style.flexDirection = FlexDirection.Column; main.Add(side);
-            var neuralCard = Card(); neuralCard.style.flexGrow = 1; neuralCard.style.flexBasis = 0; neuralCard.style.marginBottom = 12; side.Add(neuralCard);
-            var neuralTitle = Label("脳・神経活動 · 橙色は実測発火", 13, mint, FontStyle.Bold);
-            neuralTitle.tooltip = "受信した計測窓で発火した細胞が光ります。短い残光を含みます。灰色は細胞の位置で、発火ではありません。";
+            var neuralCard = Card(); neuralCard.style.flexGrow = 2; neuralCard.style.flexBasis = 0; neuralCard.style.marginBottom = 12; side.Add(neuralCard);
+            var neuralTitle = Label("脳・神経活動", 13, mint, FontStyle.Bold);
+            neuralTitle.tooltip = "橙色は実測発火と短い残光。シアン・紫は起動時の基準からの平均膜電位変化で、発火とは別です。膜電位は受信した細胞だけを表示します。灰色は細胞の位置です。";
             neuralCard.Add(neuralTitle);
+            var neuralLegend = Row("neural-legend"); neuralLegend.style.flexWrap = Wrap.Wrap;
+            neuralLegend.Add(Label("● 発火  ", 12, new Color(1f, .48f, .12f)));
+            neuralLegend.Add(Label("● 電位上昇  ", 12, new Color(.1f, .85f, 1f)));
+            neuralLegend.Add(Label("● 電位低下", 12, new Color(.76f, .38f, 1f)));
+            neuralLegend.tooltip = neuralTitle.tooltip; neuralCard.Add(neuralLegend);
             neuralImage = new Image { scaleMode = ScaleMode.ScaleToFit }; neuralImage.style.flexGrow = 1; neuralImage.style.minHeight = 90; neuralImage.style.marginTop = 7; neuralCard.Add(neuralImage);
             neuralStatus = Label("可視化データを待機中", 12, cream); neuralStatus.style.opacity = .8f; neuralStatus.style.whiteSpace = WhiteSpace.Normal; neuralCard.Add(neuralStatus);
             RegisterControlSurface(neuralCard);
@@ -195,9 +200,10 @@ namespace Flylingual.PlayScreen
                 else
                 {
                     string age = observer.FrameAgeMs < 0 ? "—" : observer.FrameAgeMs.ToString("0") + " ms";
-                    string sample = observer.ObservedCount > 0 ? "観測 " + observer.ObservedCount + " / " + observer.PointCount : "観測データなし";
-                    string firing = observer.IsFresh && observer.WindowMs > 0 ? "発火 " + observer.SpikeCount + " 回 / " + observer.WindowMs.ToString("0") + " ms · 活動細胞 " + observer.ActiveCount : "発火数: 有効な計測を待機";
-                    neuralStatus.text = (observer.IsSchematic ? "模式配置・膜電位" : "細胞体座標") + " · " + observer.Mode + " / " + observer.Backend + "\n" + sample + " · " + firing + "\nseq " + observer.Sequence + " · age " + age + " · " + observer.State;
+                    string firing = observer.IsFresh && observer.WindowMs > 0 ? "発火 " + observer.ActiveCount + "細胞 · " + observer.SpikeCount + "回 / " + observer.WindowMs.ToString("0") + "ms" : "発火数: 有効な計測を待機";
+                    string voltage = observer.IsFresh ? "膜電位: " + observer.VoltageObservedCount + "細胞を観測 · 変化 " + (observer.PositiveVoltageCount + observer.NegativeVoltageCount) : "膜電位: 有効な計測を待機";
+                    neuralStatus.text = firing + "\n" + voltage + "\n" + observer.Mode + " · " + (observer.IsFresh ? "受信中" : observer.State);
+                    neuralStatus.tooltip = "表示対象 " + observer.ObservedCount + " / " + observer.PointCount + " · " + observer.Backend + " · seq " + observer.Sequence + " · age " + age + "\n膜電位の色は基準との差を強調表示。変化細胞数は±0.001mVを超えた細胞です。";
                 }
             }
             if (controller == null)
@@ -229,6 +235,12 @@ namespace Flylingual.PlayScreen
             string controlMode = controller.BodyControlActive ? "声で操作中" : controller.EnablingVoiceActions ? "停止中（声で操作の準備中）"
                 : controller.ConversationLive && controller.ConversationInteraction == "chat_only" ? "会話のみ" : "停止中";
             controlModeLabel.text = "操作状況: " + controlMode;
+            var execution = controller.ActiveExecution;
+            if (controller.BodyControlActive && execution != null && execution.executionMode == "distance")
+            {
+                controlModeLabel.text += " · 距離 " + execution.traveledMeters.ToString("0.00") + " / " + execution.targetDistanceMeters.ToString("0.##") + "m";
+                if (execution.distancePhase == "braking") controlModeLabel.text += "（停止を確認中）";
+            }
             actionFeedbackLabel.text = string.IsNullOrEmpty(controller.ActionFeedback) ? string.Empty : "直近の操作案内: " + controller.ActionFeedback;
             muteButton.text = controller.MicrophoneMuted ? "マイクをオン" : "マイクをミュート";
             muteButton.SetEnabled(!controller.MicrophoneCaptureDisabled);

@@ -212,11 +212,11 @@ class PersistentPlanRunnerTests(unittest.IsolatedAsyncioTestCase):
         plan = await self.begin()
 
         def hazard():
-            self.b.local_observation.concern.return_value = 'edge_near'
+            self.b.local_observation.concern.return_value = 'forward_blocked'
 
         self.tick = hazard
         await self.run_for(plan, 20)
-        self.b.inhibit.assert_awaited_once_with('edge_near')
+        self.b.inhibit.assert_awaited_once_with('forward_blocked')
         self.assertEqual(len(self.sent), 1)
 
     async def test_cancel_during_turn_never_submits_old_forward(self):

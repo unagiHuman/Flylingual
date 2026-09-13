@@ -35,6 +35,8 @@ def main():
     for path in ('UnityProject/Assets/BrainVisualization/Rendering/NeuralPointCloud.cs',
                  'UnityProject/Assets/BrainVisualization/Rendering/NeuralPointCloud.shader',
                  'UnityProject/Assets/BrainVisualization/Runtime/NeuralActivityObserver.cs',
+                 'UnityProject/Assets/BrainVisualization/Runtime/NeuralVisualizationPanel.cs',
+                 'UnityProject/Assets/RuntimeIntegration/PlayScreen/PlayScreenView.cs',
                  'UnityProject/Assets/RuntimeIntegration/PlayScreen/PlayScreenProbe.cs',
                  'tools/verify_neural_visual.py'):
         hashes['source'][path] = sha256(ROOT / path)
@@ -75,6 +77,7 @@ def main():
     report = json.loads(report_path.read_text(encoding='utf-8')) if report_path.is_file() else {}
     errors = len(re.findall(r'^[\w.]*Exception:', (output / 'player.log').read_text(encoding='utf-8', errors='replace'), re.MULTILINE))
     passed = bool(report.get('movementRequested') and report.get('positiveSpikeSamples', 0) > 0
+                  and report.get('positiveVoltageSamples', 0) > 0 and report.get('maxCyanPixels', 0) > 0
                   and report.get('maxWarmPixels', 0) > 0 and not report.get('visualError')
                   and not metadata['timeout'] and not remaining and ports_free and errors == 0 and player.returncode == 0)
     metadata.update(status='pass' if passed else 'incomplete', probe=report,

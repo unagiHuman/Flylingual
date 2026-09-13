@@ -55,6 +55,13 @@ namespace Flylingual.Conversation
         public string ConversationInteraction { get; private set; } = "chat_only";
         public int ControlEpoch { get; private set; }
         public string Owner { get; private set; } = "observer";
+        public ExecutionObservation ActiveExecution { get; private set; }
+        [Serializable] public sealed class ExecutionObservation
+        {
+            public string executionId, action, plan, executionMode, distancePhase;
+            public int step;
+            public float targetDistanceMeters, traveledMeters, remainingMeters;
+        }
         public bool OutputInhibited { get; private set; } = true;
         public bool ConversationLive { get; private set; }
         public bool IsSessionRequested => requestedStart;
@@ -423,6 +430,9 @@ namespace Flylingual.Conversation
             ControlEpoch = state.epoch;
             Owner = string.IsNullOrEmpty(state.owner) ? "observer" : state.owner;
             OutputInhibited = state.outputInhibited;
+            // JsonUtility creates an empty nested object for a JSON null.
+            ActiveExecution = state.outputInhibited || state.activeExecution == null
+                || string.IsNullOrEmpty(state.activeExecution.executionId) ? null : state.activeExecution;
             ConversationInteraction = string.IsNullOrEmpty(state.conversationInteraction) ? "chat_only" : state.conversationInteraction;
             Ready = HasCapability(state.capabilities, "conversation_only_v1");
             BlindRunScriptAvailable = HasCapability(state.capabilities, "blind_run_script_v1");
@@ -655,19 +665,23 @@ namespace Flylingual.Conversation
             public long sequence;
         }
 
-        public void SendLocalSafetyObservation(int sequence, float ageMs, bool groundPresent, string leftEdge, string rightEdge, bool forwardBlocked, bool bodyUnsafe)
+        public void SendLocalSafetyObservation(int sequence, float ageMs, bool groundPresent, string leftEdge, string rightEdge, bool forwardBlocked, bool bodyUnsafe, double travelMeters = -1, float horizontalSpeedMetersPerSecond = -1)
         {
             if (!Ready || ConversationInteraction != "control" || ConversationGeneration < 0 ||
                 sequence <= 0 || float.IsNaN(ageMs) || ageMs < 0f || ageMs > 750f) return;
             Send(new LocalSafetyMessage { sequence = sequence, ageMs = ageMs, controlEpoch = ControlEpoch,
                 conversationGeneration = ConversationGeneration, groundPresent = groundPresent,
-                leftEdge = leftEdge, rightEdge = rightEdge, forwardBlocked = forwardBlocked, bodyUnsafe = bodyUnsafe });
+                leftEdge = leftEdge, rightEdge = rightEdge, forwardBlocked = forwardBlocked, bodyUnsafe = bodyUnsafe,
+                travelMeters = double.IsNaN(travelMeters) || double.IsInfinity(travelMeters) ? -1 : travelMeters,
+                horizontalSpeedMetersPerSecond = float.IsNaN(horizontalSpeedMetersPerSecond) || float.IsInfinity(horizontalSpeedMetersPerSecond) ? -1 : horizontalSpeedMetersPerSecond });
         }
         [Serializable] sealed class LocalSafetyMessage
         {
             public string type = "local_safety_observation";
             public int controlEpoch, conversationGeneration, sequence;
             public float ageMs;
+            public double travelMeters = -1;
+            public float horizontalSpeedMetersPerSecond = -1;
             public bool groundPresent, forwardBlocked, bodyUnsafe;
             public string leftEdge, rightEdge;
         }
@@ -680,6 +694,7 @@ namespace Flylingual.Conversation
         void Disconnected(string code)
         {
             Status = "disconnected"; Ready = false; requestedStart = false; ConversationLive = false;
+            ActiveExecution = null;
             autoStartPending = false;
             nextRecoveryAt = Time.realtimeSinceStartupAsDouble + 2;
             bodyArmed = resumePending = false;
@@ -731,7 +746,7 @@ namespace Flylingual.Conversation
         }
         [Serializable] public sealed class ConversationSettings { public string language = "ja"; public string voice = "marin"; public string persona = "friendly"; public string personaText = ""; }
         [Serializable] sealed class MessageHeader { public string type; }
-        [Serializable] sealed class BridgeState { public int epoch; public string owner; public bool outputInhibited; public string[] capabilities; public string conversationInteraction; public int conversationGeneration = -1; public ConversationSettings conversationSettings; public int conversationSettingsRevision; public string backend; public bool brainReady; public float frameAgeMs; public string sessionId, instanceId, conversationState; public bool brainConnected, resumeReady, voiceControlAvailable, conversationStopping, switching, releaseUnknown; public MotorEndpoint motorEndpoint; }
+        [Serializable] sealed class BridgeState { public int epoch; public string owner; public bool outputInhibited; public ExecutionObservation activeExecution; public string[] capabilities; public string conversationInteraction; public int conversationGeneration = -1; public ConversationSettings conversationSettings; public int conversationSettingsRevision; public string backend; public bool brainReady; public float frameAgeMs; public string sessionId, instanceId, conversationState; public bool brainConnected, resumeReady, voiceControlAvailable, conversationStopping, switching, releaseUnknown; public MotorEndpoint motorEndpoint; }
         [Serializable] sealed class MotorEndpoint { public string host; public int port; }
         void HandleFrame(BrainFrameMessage frame)
         {
@@ -750,6 +765,15 @@ namespace Flylingual.Conversation
         void HandleCommandResult(CommandResult result)
         {
             if (result == null || ConversationInteraction != "control" || !requestedStart) return;
+            if (result.stage == "execution_finished" && result.epoch == ControlEpoch)
+            {
+                ActionFeedback = result.reason == "distance_reached" ? "指定距離の付近で停止。次の指示を待っています"
+                    : result.reason == "distance_stalled" ? "進めないため停止。次の指示を待っています"
+                    : result.reason == "distance_overshoot" ? "指定距離を越えて停止。次の指示を待っています"
+                    : result.reason == "distance_shortfall" ? "指定距離の手前で停止。次の指示を待っています"
+                    : "距離移動を中断。次の指示を待っています";
+                return;
+            }
             if (result.stage == "submitted" && result.epoch == ControlEpoch && result.commandId != null
                 && result.commandId.StartsWith("expired-stop-", StringComparison.Ordinal))
                 ActionFeedback = "行動時間が終了。次の音声指示を待っています";

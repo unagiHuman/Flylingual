@@ -1,12 +1,13 @@
 """No-network transcript/Bridge ordering tests, not ASR or Brain motion acceptance."""
 import asyncio
 import copy
+import json
 from types import SimpleNamespace
 import unittest
-from unittest.mock import AsyncMock, Mock
+from unittest.mock import AsyncMock, Mock, patch
 
 from Runtime.Bridge.config import _DEFAULT
-from Runtime.Bridge.conversation import ConversationError
+from Runtime.Bridge.conversation import ConversationAdapter, ConversationError
 from Runtime.Bridge.server import Bridge
 from tools.test_live_session_clock import EventSocket, delegation, transcript
 from tools.test_persistent_execution import action, update
@@ -89,8 +90,8 @@ class TranscriptSemanticControlTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(self.b.requests[1]['delegationId'])
         dispatches = [c.kwargs for c in self.b.log.call_args_list if c.args[0] == 'voice_intent_dispatch']
         self.assertEqual(len(dispatches), 1)
-        self.assertTrue(dispatches[0]['inputId'].startswith('transcript-'))
-        self.assertNotIn('delegationId', dispatches[0])
+        self.assertTrue(dispatches[0]['inputId'].startswith('utterance-'))
+        self.assertIsNone(dispatches[0].get('delegationId'))
 
     async def test_question_and_clarify_preserve_existing_pending_task_and_execution(self):
         self.b.activate_execution('already-running', 'FORWARD', 'until_next_command', None)
@@ -113,6 +114,31 @@ class TranscriptSemanticControlTests(unittest.IsolatedAsyncioTestCase):
         finally:
             pending.cancel()
             await asyncio.gather(pending, return_exceptions=True)
+
+    async def test_nonfinal_question_waits_without_consuming_caption(self):
+        self.a.interpret.return_value = non_action('question')
+        with patch.object(self.a, 'claim_transcript', wraps=self.a.claim_transcript) as claim:
+            await self.socket.feed(transcript(0, 500, '今どういう状態？'))
+            await self.finish_semantic()
+            claim.assert_not_called()
+        self.a.append.assert_not_awaited()
+        self.b.adapter.send_action.assert_not_awaited()
+
+    def test_large_context_is_complete_and_stale_facts_are_omitted(self):
+        self.b.intent_context = Mock(return_value={
+            'activeCommand': {'action': 'FORWARD', 'brainApplied': True},
+            'localSafety': {'fresh': False, 'facts': {'groundPresent': True}},
+            'stale': False, 'interpretation': '長い神経報告' * 200})
+        self.b.blind_script.current_fact = Mock(return_value='長い場面観測' * 200)
+        message = self.b.non_action_reply_context('状態は？', 'question')
+        self.assertLessEqual(len(message), 380)
+        payload = json.loads(message[message.index('{'):])
+        self.assertEqual(payload['active'], 'FORWARD')
+        self.assertTrue(payload['brainApplied'])
+        self.assertFalse(payload['localFresh'])
+        self.assertEqual(payload['facts'], {})
+        self.assertNotIn('scene', payload)
+        self.assertNotIn('neural', payload)
 
     async def test_unclassified_caption_does_not_cancel_pending_intent(self):
         pending = self.b.task(asyncio.Event().wait(), intent=True)
@@ -153,8 +179,8 @@ class TranscriptSemanticControlTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.a.interpret.await_count, 2)
         self.assertEqual(self.a.interpret.await_args_list[1].args[0], '右へ、いや左へ')
 
-    async def test_live_delegation_while_model_waits_wins_without_duplicate_submission(self):
-        entered, release = await self.blocked_classifier(action('STOP', duration=4000), action('FORWARD', duration=4000))
+    async def test_live_delegation_joins_pending_classification_without_restarting_it(self):
+        entered, release = await self.blocked_classifier(action('FORWARD', duration=4000), action('STOP', duration=4000))
         await self.socket.feed(transcript(0, 500, '前へ'))
         await asyncio.wait_for(entered.wait(), 1)
         await self.socket.feed(delegation(500, 'actual-live-delegation'))
@@ -162,7 +188,54 @@ class TranscriptSemanticControlTests(unittest.IsolatedAsyncioTestCase):
         await self.finish_semantic()
         self.b.adapter.send_action.assert_awaited_once_with('FORWARD', 1)
         self.assertEqual(self.b.requests[1]['delegationId'], 'actual-live-delegation')
-        self.assertEqual(self.a.interpret.await_count, 2)
+        self.assertEqual(self.a.interpret.await_count, 1)
+
+    async def test_quiet_completed_short_request_skips_model_and_late_delegation(self):
+        self.a.interpret = ConversationAdapter.interpret.__get__(self.a)
+        self.a.http = object()
+        self.a.last_voice_end_ms = 500
+        self.a.sent_audio_samples = 19200  # 800 ms; the last 300 ms are quiet.
+        with patch('Runtime.Bridge.conversation.interpret_intent', new=AsyncMock()) as model:
+            await self.socket.feed(transcript(0, 500, '前に進んで'))
+            await self.finish_semantic()
+            await self.socket.feed(delegation(500, 'late'))
+            await self.finish_semantic()
+            model.assert_not_awaited()
+        self.a.http = None
+        self.b.adapter.send_action.assert_awaited_once_with('FORWARD', 1)
+        self.assertEqual(self.a.last_interpret_route, 'rules')
+
+    async def test_speech_still_in_progress_does_not_execute_a_short_prefix(self):
+        self.a.last_voice_end_ms = 500
+        self.a.sent_audio_samples = 12000
+        await self.socket.feed(transcript(0, 500, '止まって'))
+        await asyncio.sleep(.035)
+        self.a.interpret.assert_not_awaited()
+        await self.socket.feed(transcript(500, 700, 'はいけない'))
+        self.a.interpret.return_value = non_action('clarify')
+        self.a.last_voice_end_ms = 700
+        self.a.sent_audio_samples = 24000
+        await self.finish_semantic()
+        self.assertEqual(self.a.interpret.await_args.args[0], '止まってはいけない')
+        self.b.adapter.send_action.assert_not_awaited()
+
+    async def test_duplicate_transcript_event_id_and_two_delegations_share_one_receipt(self):
+        event = dict(transcript(0, 500, '止まって'), event_id='same-transcript')
+        await self.socket.feed(event, event, delegation(400, 'a'), delegation(500, 'b'))
+        await self.finish_semantic()
+        self.a.interpret.assert_awaited_once()
+        self.assertEqual(self.a.interpret.await_args.args[0], '止まって')
+        self.b.adapter.send_action.assert_awaited_once_with('STOP', 1)
+
+    async def test_continuous_background_sound_falls_back_to_semantics_instead_of_locking_input(self):
+        self.a.last_voice_end_ms = 500
+        self.a.sent_audio_samples = 12000
+        await self.socket.feed(transcript(0, 500, '止まって'), delegation(500, 'noisy'))
+        self.a.transcript_changed_at = asyncio.get_running_loop().time() - 1.01
+        await self.finish_semantic()
+        self.a.interpret.assert_awaited_once()
+        self.assertFalse(self.a.interpret.await_args.args[1]['utteranceFinalized'])
+        self.b.adapter.send_action.assert_awaited_once_with('STOP', 1)
 
     async def test_stop_epoch_change_discards_old_semantic_result(self):
         entered, release = await self.blocked_classifier(action('FORWARD', duration=4000))
@@ -310,17 +383,15 @@ class TranscriptSemanticControlTests(unittest.IsolatedAsyncioTestCase):
     async def test_plan_cancel_wait_rechecks_prepared_transcript(self):
         await self.check_cancel_wait_revision('plan')
 
-    async def test_completed_question_consumed_but_clarification_retained(self):
-        self.a.interpret.return_value = non_action('question')
-        await self.socket.feed(transcript(0, 500, '右は危ない？'))
-        await self.finish_semantic()
-        self.assertFalse(self.a.fragments)
-        self.assertEqual(self.a.transcript_consumed_end, 500)
-        self.assertEqual(self.b.intent_revision, 0)
-        self.a.interpret.return_value = non_action('clarify')
-        await self.socket.feed(transcript(500, 700, 'あそこへ'))
-        await self.finish_semantic()
-        self.assertEqual(tuple(self.a.fragments), ((500, 700, 'あそこへ'),))
+    async def test_finalized_non_action_claims_once_and_replies(self):
+        for kind in ('question', 'clarify'):
+            self.a.interpret.return_value = non_action(kind)
+            candidate = {'inputId': 'final-' + kind, 'finalized': True}
+            with patch.object(self.a, 'transcript_is_current', return_value=True), \
+                    patch.object(self.a, 'claim_transcript', return_value=True) as claim:
+                await self.b.transcript_utterance('こんにちは', candidate)
+                claim.assert_called_once_with(candidate)
+        self.assertEqual(self.a.append.await_count, 2)
         self.assertEqual(self.b.intent_revision, 0)
         self.b.adapter.send_action.assert_not_awaited()
 

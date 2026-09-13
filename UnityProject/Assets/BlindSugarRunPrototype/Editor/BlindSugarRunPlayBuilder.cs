@@ -77,6 +77,7 @@ public static class BlindSugarRunPlayBuilder
         demo.view.transform.position = framing.follow.position + framing.offset;
         demo.view.transform.LookAt(framing.follow.position + framing.lookAhead);
         ConfigureGameSession(demo.body, environment);
+        ConfigureLocalVisibility(framing);
 
         foreach (var entry in bodySnapshot)
             if (entry.Key == null || EditorJsonUtility.ToJson(entry.Key) != entry.Value)
@@ -105,6 +106,39 @@ public static class BlindSugarRunPlayBuilder
         PlayScreenBuilder.Build();
     }
 
+    static void ConfigureLocalVisibility(BlindSugarRunStageCamera framing)
+    {
+        var visibility = framing.GetComponent<BlindSugarRunLocalVisibility>();
+        if (visibility == null) visibility = framing.gameObject.AddComponent<BlindSugarRunLocalVisibility>();
+        visibility.follow = framing.follow;
+        visibility.stageCamera = framing.stageCamera;
+        var exploration = framing.GetComponent<BlindSugarRunExplorationMap>();
+        if (exploration == null) exploration = framing.gameObject.AddComponent<BlindSugarRunExplorationMap>();
+        exploration.stage = UnityEngine.Object.FindAnyObjectByType<BlindSugarRunSession>();
+        exploration.visibility = visibility;
+        if (visibility.spotlight == null)
+        {
+            var lightObject = new GameObject("Fly Local Spotlight");
+            lightObject.transform.SetParent(framing.transform, false);
+            visibility.spotlight = lightObject.AddComponent<Light>();
+            visibility.spotlight.type = LightType.Spot;
+            visibility.spotlight.enabled = false;
+        }
+    }
+
+    [MenuItem("Flylingual/Blind Sugar Run/Install local spotlight view")]
+    public static void InstallLocalVisibility()
+    {
+        if (EditorApplication.isPlaying || EditorSceneManager.GetActiveScene().isDirty)
+            throw new InvalidOperationException("Stop Play Mode and save the scene first.");
+        var scene = EditorSceneManager.OpenScene(PlayScreenBuilder.ScenePath);
+        var framing = UnityEngine.Object.FindAnyObjectByType<BlindSugarRunStageCamera>();
+        if (framing == null) throw new InvalidOperationException("Stage camera missing.");
+        ConfigureLocalVisibility(framing);
+        if (!EditorSceneManager.SaveScene(scene)) throw new IOException("Could not save local visibility.");
+        Debug.Log("BLIND_SUGAR_LOCAL_VIEW_INSTALLED radius=3");
+    }
+
     static void ConfigureGameSession(FlyBody body, GameObject environment)
     {
         var session = UnityEngine.Object.FindFirstObjectByType<BlindSugarRunSession>();
@@ -112,6 +146,8 @@ public static class BlindSugarRunPlayBuilder
         session.fly = body;
         session.killVolume = environment.transform.Find("Volumes/KillVolume").GetComponent<BoxCollider>();
         session.fallHeight = -2f;
+        if (session.GetComponent<BlindSugarRunIdleSwatter>() == null)
+            session.gameObject.AddComponent<BlindSugarRunIdleSwatter>();
     }
 
     [MenuItem("Flylingual/Blind Sugar Run/Install game over and retry")]

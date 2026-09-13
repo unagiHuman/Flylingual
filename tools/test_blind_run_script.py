@@ -97,6 +97,43 @@ class CueSelectorTests(unittest.TestCase):
         self.assertTrue(script.accept(cue('reveal', 4), 'ja', now=22)[1])
         self.assertFalse(script.accept(cue('reveal', 5), 'ja', now=26)[1])
 
+    def test_swatter_warning_urgent_deduplicated_and_rearmed_by_escape(self):
+        script = self.started()
+        self.assertTrue(script.accept(cue('swatter_warning', 2), 'ja', now=10.1)[1])
+        script.accept(cue('right_edge_urgent', 3), 'ja', now=10.2)
+        self.assertFalse(script.accept(cue('swatter_warning', 4), 'ja', now=10.3)[1])
+        self.assertFalse(script.accept(cue('swatter_escaped', 5), 'ja', now=10.4)[1])
+        self.assertTrue(script.accept(cue('swatter_warning', 6), 'ja', now=10.5)[1])
+
+    def test_swatted_is_death_without_fabricated_fall_memory(self):
+        script = self.started()
+        text, speak = script.accept(cue('swatted', 2), 'ja', now=10.1)
+        self.assertEqual(text, 'ハエたたきに叩かれた。')
+        self.assertTrue(speak)
+        self.assertTrue(script.fallen)
+        self.assertIsNone(script.last_fall)
+        with self.assertRaisesRegex(ControlError, 'retry_required'):
+            script.accept(cue('swatter_warning', 3), 'ja', now=14)
+        text, _ = script.accept(cue('retry', 3, 2, {}), 'ja', now=14)
+        self.assertEqual(text, 'もう一回。')
+        self.assertTrue(script.accept(cue('swatter_warning', 4, 2), 'ja', now=14.1)[1])
+
+    def test_swatter_evidence_and_existing_run_guards(self):
+        for name in ('swatter_warning', 'swatter_escaped', 'swatted'):
+            with self.subTest(cue=name):
+                with self.assertRaisesRegex(ControlError, 'intro_required'):
+                    BlindRunScript().accept(cue(name), 'ja', now=10)
+                script = self.started()
+                invalid = cue(name, 2)
+                invalid['evidence']['route'] = 'global-map'
+                with self.assertRaisesRegex(ControlError, 'evidence_mismatch'):
+                    script.accept(invalid, 'ja', now=11)
+                with self.assertRaisesRegex(ControlError, 'old_blind_run_or_sequence'):
+                    script.accept(cue(name, 1), 'ja', now=11)
+                script.accept(cue('goal', 2), 'ja', now=14)
+                with self.assertRaisesRegex(ControlError, 'goal_already_confirmed'):
+                    script.accept(cue(name, 3), 'ja', now=15)
+
 
 if __name__ == '__main__':
     unittest.main()
