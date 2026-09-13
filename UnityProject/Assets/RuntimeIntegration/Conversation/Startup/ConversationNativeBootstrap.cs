@@ -9,7 +9,7 @@ using UnityEngine;
 
 namespace Flylingual.Conversation
 {
-    /// <summary>Starts the Windows-local Bridge only when -flyConversation is present.</summary>
+    /// <summary>Owns the local services for the native Player or an explicitly opted-in scene.</summary>
     [DefaultExecutionOrder(-10000)]
     public sealed class ConversationNativeBootstrap : MonoBehaviour
     {
@@ -31,6 +31,7 @@ namespace Flylingual.Conversation
         private bool closing;
         private string visibleStatus;
         private float nextHeartbeat;
+        private bool previousRunInBackground;
         public string RunDirectory { get; private set; }
         public string StatusPath => statusPath;
         public string StartupError { get; private set; }
@@ -46,20 +47,17 @@ namespace Flylingual.Conversation
         {
             if (instance != null && instance != this) { Destroy(gameObject); return; }
             instance = this;
-#if UNITY_EDITOR
-            // An explicitly added test-scene component opts that Editor scene in.
+            // A Bootstrap in the formal scene opts in even for a standard Unity build
+            // launched directly, without command-line flags or extra build defines.
             NativeConversationRuntime.SceneOptIn = true;
-#endif
+            previousRunInBackground = Application.runInBackground;
+            Application.runInBackground = true;
         }
 
         private async void Start()
         {
             if (instance != this) return;
-#if UNITY_EDITOR
-            if (!NativeConversationRuntime.Requested && !NativeConversationRuntime.SceneOptIn) { enabled = false; return; }
-#else
-            if (!NativeConversationRuntime.Requested) { enabled = false; return; }
-#endif
+            if (!NativeConversationRuntime.Enabled) { enabled = false; return; }
             DontDestroyOnLoad(gameObject);
             lifetime = new CancellationTokenSource();
             try
@@ -107,9 +105,8 @@ namespace Flylingual.Conversation
         {
             if (instance != this) return;
             instance = null;
-#if UNITY_EDITOR
             NativeConversationRuntime.SceneOptIn = false;
-#endif
+            Application.runInBackground = previousRunInBackground;
             Close();
         }
 

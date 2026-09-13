@@ -236,8 +236,10 @@ namespace FlyVisualDemo
         {
             if (Flylingual.Conversation.NativeConversationRuntime.Enabled)
             {
-                // NativeConversationBody owns this source while the conversation safety gate is armed.
-                if (GetComponent<Flylingual.Conversation.NativeConversationBody>() == null) controller.SetMotorSource(null);
+                // NativeConversationBody lives on the conversation bootstrap object,
+                // not necessarily this demo object.  It is the sole owner of the
+                // live source while the native safety gate is armed; clearing it
+                // here would overwrite its validated SetMotorSource(demo.live).
                 if (quitAfter > 0 && Time.realtimeSinceStartup-startedAt >= quitAfter) Application.Quit();
                 return;
             }

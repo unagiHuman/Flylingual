@@ -22,19 +22,36 @@ namespace Flylingual.Conversation
         }
         [Serializable] sealed class ActionStep
         {
-            public string action, error;
+            public string action, error, brainSessionId, brainInstanceId;
             public int repeat, requestId, tcpSequence;
             public long appliedSequence;
-            public bool applied, bodyActive;
-            public float horizontalDisplacement, yawDegrees, motorForward, motorTurn, brainStepWallMs;
+            public bool applied, bodyActive, sourceMaintained, phaseAdvanced, movementPassed, forwardPassed, groundedPassed, heightPassed, turnPassed, stopSettled, validationPassed;
+            public int sampleCount, groundedSampleCount, attachedMax, groundContactMax, stopTailSampleCount;
+            public float horizontalDisplacement, forwardDisplacement, forwardProjectedTravel, lateralDisplacement, endHeightDelta;
+            public float yawDegrees, motorForward, motorTurn, brainStepWallMs, frameAgeMaxSeconds;
+            public float currentMotorForwardPeakAbs, currentMotorTurnPeakAbs, finalCurrentMotorForward, finalCurrentMotorTurn;
+            public float phaseStartRadians, phaseEndRadians, phaseAbsoluteTravelRadians, thoraxSpeedMax;
+            public Vector3 startPosition, endPosition;
         }
         [Serializable] sealed class ActionReport
         {
             public string result = "incomplete", error, backend;
             public string brainEndpoint = "127.0.0.1:18766";
-            public bool microphoneDisabled, microphoneTested, brainReady, disconnectStopped, noAutomaticResume, stopped;
+            public bool microphoneDisabled, microphoneTested, brainReady, disconnectStopped, noAutomaticResume, stopped, automaticVoiceControl, sourceMaintainedDuringPreparation = true;
             public long sentAudioChunks, sequence;
+            public int physicsResetCount, initialGroundContactCount;
+            public string physicsResetMethod;
+            public Vector3 initialRootPosition;
+            public Quaternion initialRootRotation;
+            public float initialPhaseRadians;
             public List<ActionStep> steps = new List<ActionStep>();
+        }
+        sealed class PhysicsBaseline
+        {
+            public Vector3 rootPosition;
+            public Quaternion rootRotation;
+            public List<float> jointPositions;
+            public float phaseRadians;
         }
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         static void Bootstrap()
@@ -132,69 +149,174 @@ namespace Flylingual.Conversation
             if (controller != null && controller.Ready && report.microphoneDisabled && demo != null && body != null)
             {
                 ScreenCapture.CaptureScreenshot(Path.ChangeExtension(path, ".png"));
-                controller.EnableVoiceActions();
                 double deadline = Time.realtimeSinceStartupAsDouble + 65;
                 while (Time.realtimeSinceStartupAsDouble < deadline && (controller.EnablingVoiceActions || !body.BodyActive)
                     && string.IsNullOrEmpty(controller.Error)) yield return null;
+                report.automaticVoiceControl = body.BodyActive && controller.BodyControlActive && !controller.EnablingVoiceActions;
+                if (!report.automaticVoiceControl && string.IsNullOrEmpty(report.error))
+                    report.error = "automatic_voice_control_timeout";
                 string[] actions = { "STOP", "FORWARD", "TURN_R", "TURN_L", "FORWARD_R", "FORWARD_L" };
                 string[] phrases = { "止まって", "8秒間前に進んで", "8秒間右に曲がって", "8秒間左に曲がって", "8秒間右前に進んで", "8秒間左前に進んで" };
-                for (int repeat = 1; repeat <= 3 && controller.BodyControlActive && body.BodyActive; repeat++)
+                var baseline = new PhysicsBaseline();
+                bool initialStopReady = false;
+                yield return WaitForAppliedBrainStop(controller, body, demo, 20, ready => initialStopReady = ready);
+                bool initialGrounded = false;
+                if (initialStopReady)
+                    yield return WaitForGroundSettle(demo, 1, 20, ready => initialGrounded = ready);
+                report.sourceMaintainedDuringPreparation &= demo.controller.MotorSource == demo.live;
+                if (!initialStopReady || !initialGrounded)
                 {
-                    for (int i = 0; i < actions.Length && controller.BodyControlActive && body.BodyActive; i++)
+                    report.error = initialStopReady ? "initial_ground_settle_timeout" : "initial_brain_stop_timeout";
+                }
+                else
+                {
+                    CaptureBaseline(demo, baseline, report);
+                    bool abortCases = false;
+                    for (int repeat = 1; repeat <= 3 && !abortCases && controller.BodyControlActive && body.BodyActive; repeat++)
                     {
-                        var step = new ActionStep { action = actions[i], repeat = repeat };
-                        Vector3 before = demo.body.Position;
-                        float yaw = demo.body.transform.eulerAngles.y;
-                        int applied = controller.AppliedActions, rejected = controller.RejectedActions;
-                        controller.SendPlayerText(phrases[i]);
-                        deadline = Time.realtimeSinceStartupAsDouble + 10;
-                        while (Time.realtimeSinceStartupAsDouble < deadline && controller.BodyControlActive
-                            && controller.RejectedActions == rejected && !(controller.AppliedActions > applied
-                                && controller.LastAppliedAction == actions[i] && controller.LastAppliedSequence > 0
-                                && body.TcpSequence >= controller.LastAppliedSequence)) yield return null;
-                        step.applied = controller.AppliedActions > applied && controller.LastAppliedAction == actions[i]
-                            && controller.LastAppliedSequence > 0 && body.TcpSequence >= controller.LastAppliedSequence;
-                        step.requestId = controller.LastAppliedRequestId;
-                        step.appliedSequence = controller.LastAppliedSequence;
-                        deadline = Time.realtimeSinceStartupAsDouble + 1;
-                        while (step.applied && controller.BodyControlActive && Time.realtimeSinceStartupAsDouble < deadline)
+                        for (int i = 0; i < actions.Length && !abortCases && controller.BodyControlActive && body.BodyActive; i++)
                         {
-                            var frame = demo.client.LatestBrainFrame;
-                            if (frame != null && frame.motor != null)
+                            bool stopReady = false;
+                            yield return WaitForAppliedBrainStop(controller, body, demo, 20, ready => stopReady = ready);
+                            report.sourceMaintainedDuringPreparation &= demo.controller.MotorSource == demo.live;
+                            if (!stopReady)
                             {
-                                step.motorForward = frame.motor.forward;
-                                step.motorTurn = frame.motor.turn;
-                                step.brainStepWallMs = frame.performance == null ? 0 : frame.performance.stepWallTimeMs;
+                                report.steps.Add(new ActionStep { action = actions[i], repeat = repeat, error = "case_brain_stop_timeout" });
+                                abortCases = true;
+                                break;
                             }
-                            yield return null;
-                        }
-                        Vector3 delta = demo.body.Position - before;
-                        step.horizontalDisplacement = new Vector2(delta.x, delta.z).magnitude;
-                        step.yawDegrees = Mathf.DeltaAngle(yaw, demo.body.transform.eulerAngles.y);
-                        step.tcpSequence = body.TcpSequence;
-                        step.bodyActive = body.BodyActive;
-                        step.error = controller.Error;
-                        report.steps.Add(step);
-                        File.WriteAllText(path, JsonUtility.ToJson(report, true));
-                        Debug.Log("NATIVE_ACTION_STEP " + actions[i] + " repeat=" + repeat + " applied=" + step.applied);
-                        if (!step.applied || !step.bodyActive) break;
-                        if (actions[i] != "STOP")
-                        {
-                            applied = controller.AppliedActions;
-                            controller.SendPlayerText("止まって");
-                            deadline = Time.realtimeSinceStartupAsDouble + 8;
+                            RestoreBaseline(demo, baseline);
+                            report.physicsResetCount++;
+                            bool groundReady = false;
+                            yield return WaitForGroundSettle(demo, 1, 20, ready => groundReady = ready);
+                            report.sourceMaintainedDuringPreparation &= demo.controller.MotorSource == demo.live;
+                            if (!groundReady)
+                            {
+                                report.steps.Add(new ActionStep { action = actions[i], repeat = repeat, error = "case_ground_settle_timeout" });
+                                abortCases = true;
+                                break;
+                            }
+                            var step = new ActionStep { action = actions[i], repeat = repeat, sourceMaintained = report.sourceMaintainedDuringPreparation };
+                            int applied = controller.AppliedActions, rejected = controller.RejectedActions;
+                            controller.SendPlayerText(phrases[i]);
+                            deadline = Time.realtimeSinceStartupAsDouble + 10;
                             while (Time.realtimeSinceStartupAsDouble < deadline && controller.BodyControlActive
-                                && !(controller.AppliedActions > applied && controller.LastAppliedAction == "STOP")) yield return null;
-                            if (controller.AppliedActions <= applied || controller.LastAppliedAction != "STOP") break;
+                                && controller.RejectedActions == rejected && !(controller.AppliedActions > applied
+                                    && controller.LastAppliedAction == actions[i] && controller.LastAppliedSequence > 0
+                                    && body.TcpSequence >= controller.LastAppliedSequence)) yield return null;
+                            step.applied = controller.AppliedActions > applied && controller.LastAppliedAction == actions[i]
+                                && controller.LastAppliedSequence > 0 && body.TcpSequence >= controller.LastAppliedSequence;
+                            step.requestId = controller.LastAppliedRequestId;
+                            step.appliedSequence = controller.LastAppliedSequence;
+                            step.startPosition = demo.body.Position;
+                            Transform thoraxTransform = demo.body.Thorax == null ? demo.body.transform : demo.body.Thorax.transform;
+                            Vector3 startForward = Vector3.ProjectOnPlane(thoraxTransform.forward, Vector3.up).normalized;
+                            Vector3 startRight = Vector3.ProjectOnPlane(thoraxTransform.right, Vector3.up).normalized;
+                            Vector3 previousPosition = step.startPosition;
+                            float previousYaw = thoraxTransform.eulerAngles.y;
+                            step.phaseStartRadians = demo.controller.Phase;
+                            float previousPhase = step.phaseStartRadians;
+                            // The voice intent permits eight seconds.  Three seconds gives the
+                            // smoothed CPG and the physical stance/swing cycle time to manifest.
+                            deadline = Time.realtimeSinceStartupAsDouble + 3;
+                            double stopTailAt = deadline - .5;
+                            bool stopTailSettled = true;
+                            while (step.applied && controller.BodyControlActive && Time.realtimeSinceStartupAsDouble < deadline)
+                            {
+                                var frame = demo.client.LatestBrainFrame;
+                                if (frame != null && frame.motor != null)
+                                {
+                                    step.motorForward = frame.motor.forward;
+                                    step.motorTurn = frame.motor.turn;
+                                    step.brainStepWallMs = frame.performance == null ? 0 : frame.performance.stepWallTimeMs;
+                                    step.brainSessionId = frame.metadata == null ? null : frame.metadata.sessionId;
+                                    step.brainInstanceId = frame.metadata == null ? null : frame.metadata.instanceId;
+                                }
+                                step.sampleCount++;
+                                step.sourceMaintained &= demo.controller.MotorSource == demo.live;
+                                var currentMotor = demo.controller.CurrentMotor;
+                                step.currentMotorForwardPeakAbs = Mathf.Max(step.currentMotorForwardPeakAbs, Mathf.Abs(currentMotor.forward));
+                                step.currentMotorTurnPeakAbs = Mathf.Max(step.currentMotorTurnPeakAbs, Mathf.Abs(currentMotor.turn));
+                                step.finalCurrentMotorForward = currentMotor.forward;
+                                step.finalCurrentMotorTurn = currentMotor.turn;
+                                step.groundContactMax = Mathf.Max(step.groundContactMax, demo.body.GroundContactCount);
+                                if (demo.body.GroundContactCount > 0) step.groundedSampleCount++;
+                                int attached = 0;
+                                foreach (var leg in demo.body.Legs) if (leg != null && leg.FootAdhesion != null && leg.FootAdhesion.Attached) attached++;
+                                step.attachedMax = Mathf.Max(step.attachedMax, attached);
+                                step.thoraxSpeedMax = Mathf.Max(step.thoraxSpeedMax, demo.body.LinearVelocity.magnitude);
+                                if (!double.IsInfinity(demo.live.LatestFrameAgeSeconds) && !double.IsNaN(demo.live.LatestFrameAgeSeconds))
+                                    step.frameAgeMaxSeconds = Mathf.Max(step.frameAgeMaxSeconds, (float)demo.live.LatestFrameAgeSeconds);
+                                float phase = demo.controller.Phase;
+                                step.phaseAbsoluteTravelRadians += Mathf.Abs(Mathf.DeltaAngle(previousPhase * Mathf.Rad2Deg, phase * Mathf.Rad2Deg)) * Mathf.Deg2Rad;
+                                previousPhase = phase;
+                                Transform currentThorax = demo.body.Thorax == null ? demo.body.transform : demo.body.Thorax.transform;
+                                Vector3 position = demo.body.Position;
+                                Vector3 horizontalStep = Vector3.ProjectOnPlane(position - previousPosition, Vector3.up);
+                                Vector3 currentForward = Vector3.ProjectOnPlane(currentThorax.forward, Vector3.up).normalized;
+                                step.forwardProjectedTravel += Vector3.Dot(horizontalStep, currentForward);
+                                previousPosition = position;
+                                float yaw = currentThorax.eulerAngles.y;
+                                step.yawDegrees += Mathf.DeltaAngle(previousYaw, yaw);
+                                previousYaw = yaw;
+                                if (actions[i] == "STOP" && Time.realtimeSinceStartupAsDouble >= stopTailAt)
+                                {
+                                    step.stopTailSampleCount++;
+                                    Vector3 velocity = Vector3.ProjectOnPlane(demo.body.LinearVelocity, Vector3.up);
+                                    stopTailSettled &= velocity.magnitude < .05f
+                                        && Mathf.Abs(currentMotor.forward) < .03f && Mathf.Abs(currentMotor.turn) < .03f;
+                                }
+                                yield return null;
+                            }
+                            step.endPosition = demo.body.Position;
+                            Vector3 delta = step.endPosition - step.startPosition;
+                            step.horizontalDisplacement = new Vector2(delta.x, delta.z).magnitude;
+                            Vector3 horizontalDelta = Vector3.ProjectOnPlane(delta, Vector3.up);
+                            step.forwardDisplacement = Vector3.Dot(horizontalDelta, startForward);
+                            step.lateralDisplacement = Vector3.Dot(horizontalDelta, startRight);
+                            step.endHeightDelta = step.endPosition.y - baseline.rootPosition.y;
+                            step.phaseEndRadians = demo.controller.Phase;
+                            step.tcpSequence = body.TcpSequence;
+                            step.bodyActive = body.BodyActive;
+                            // STOP deliberately freezes the CPG; every commanded movement
+                            // must advance it, while STOP is checked by its settled motor.
+                            step.phaseAdvanced = actions[i] == "STOP" || step.phaseAbsoluteTravelRadians > .1f;
+                            bool forwardAction = actions[i] == "FORWARD" || actions[i] == "FORWARD_R" || actions[i] == "FORWARD_L";
+                            // Curved forward-turn trials can face beyond the start tangent; use
+                            // accumulated local-forward travel there, while pure FORWARD must
+                            // finish ahead of its starting body direction.
+                            step.forwardPassed = !forwardAction || (actions[i] == "FORWARD"
+                                ? step.forwardDisplacement > .001f : step.forwardProjectedTravel > .001f);
+                            step.movementPassed = !forwardAction || (step.horizontalDisplacement > .001f && step.forwardPassed);
+                            step.groundedPassed = step.groundedSampleCount > 0;
+                            step.heightPassed = step.endHeightDelta >= -.5f;
+                            int turnSign = actions[i].EndsWith("_R") ? 1 : actions[i].EndsWith("_L") ? -1 : 0;
+                            step.turnPassed = turnSign == 0 || (turnSign > 0 ? step.yawDegrees > .1f : step.yawDegrees < -.1f);
+                            step.stopSettled = actions[i] != "STOP" || (step.stopTailSampleCount > 0 && stopTailSettled);
+                            step.validationPassed = step.applied && step.bodyActive && step.sampleCount > 0 && step.sourceMaintained
+                                && step.phaseAdvanced && step.movementPassed && step.groundedPassed && step.heightPassed && step.turnPassed && step.stopSettled;
+                            step.error = controller.Error;
+                            if (!step.validationPassed && string.IsNullOrEmpty(step.error))
+                                step.error = "motion_validation_failed";
+                            report.steps.Add(step);
+                            File.WriteAllText(path, JsonUtility.ToJson(report, true));
+                            if (repeat == 1)
+                                ScreenCapture.CaptureScreenshot(Path.Combine(Path.GetDirectoryName(path), "motion-" + actions[i] + ".png"));
+                            Debug.Log("NATIVE_ACTION_STEP " + actions[i] + " repeat=" + repeat + " applied=" + step.applied + " motion=" + step.validationPassed);
+                            if (!controller.BodyControlActive || !step.bodyActive) break;
                         }
                     }
                 }
                 report.backend = controller.Backend;
                 report.brainReady = controller.BrainReady;
                 report.sequence = controller.Sequence;
-                report.error = controller.Error;
+                if (string.IsNullOrEmpty(report.error)) report.error = controller.Error;
                 if (body.BodyActive)
                 {
+                    bool finalStopReady = false;
+                    yield return WaitForAppliedBrainStop(controller, body, demo, 20, ready => finalStopReady = ready);
+                    report.sourceMaintainedDuringPreparation &= demo.controller.MotorSource == demo.live;
+                    if (!finalStopReady && string.IsNullOrEmpty(report.error)) report.error = "final_brain_stop_timeout";
                     demo.client.Disconnect();
                     yield return new WaitForSecondsRealtime(.3f);
                     report.disconnectStopped = !body.BodyActive && !controller.BodyControlActive && Time.timeScale == 0;
@@ -205,14 +327,119 @@ namespace Flylingual.Conversation
                 yield return new WaitForSecondsRealtime(3);
                 report.stopped = !body.BodyActive && !controller.ConversationLive && controller.BufferedMilliseconds == 0;
                 report.sentAudioChunks = controller.SentAudioChunks;
-                report.result = report.steps.Count == 18 && report.steps.TrueForAll(step => step.applied && step.bodyActive)
-                    && report.disconnectStopped && report.noAutomaticResume && report.stopped && report.sentAudioChunks == 0
-                    ? "native_actions_transport_pass" : "incomplete";
+                report.result = report.steps.Count == 18 && report.steps.TrueForAll(step => step.validationPassed)
+                    && report.automaticVoiceControl && report.sourceMaintainedDuringPreparation && report.disconnectStopped && report.noAutomaticResume
+                    && report.stopped && report.sentAudioChunks == 0 && string.IsNullOrEmpty(report.error)
+                    ? "native_actions_motion_pass" : "incomplete";
             }
             else report.error = "action_probe_requires_no_microphone_and_real_body";
             File.WriteAllText(path, JsonUtility.ToJson(report, true));
             Debug.Log("NATIVE_ACTION_RESULT " + report.result);
             if (Array.IndexOf(Environment.GetCommandLineArgs(), "-flyConversationProbeQuit") >= 0) Application.Quit();
+        }
+
+        static IEnumerator WaitForAppliedBrainStop(ConversationSessionController controller, NativeConversationBody body,
+                                                    FlyVisualDemo.WindowsReplayDemo demo, float timeoutSeconds,
+                                                    Action<bool> completed)
+        {
+            int appliedBefore = controller.AppliedActions;
+            controller.SendPlayerText("止まって");
+            double deadline = Time.realtimeSinceStartupAsDouble + timeoutSeconds;
+            double stableSince = -1;
+            while (Time.realtimeSinceStartupAsDouble < deadline && controller.BodyControlActive && body.BodyActive)
+            {
+                bool applied = controller.AppliedActions > appliedBefore && controller.LastAppliedAction == "STOP"
+                    && controller.LastAppliedSequence > 0 && body.TcpSequence >= controller.LastAppliedSequence;
+                var frame = demo.client.LatestBrainFrame;
+                bool zeroBrainMotor = frame != null && frame.motor != null
+                    && Mathf.Abs(frame.motor.forward) < .01f && Mathf.Abs(frame.motor.turn) < .01f;
+                if (applied && zeroBrainMotor)
+                {
+                    if (stableSince < 0) stableSince = Time.realtimeSinceStartupAsDouble;
+                    if (Time.realtimeSinceStartupAsDouble - stableSince >= .5)
+                    {
+                        completed(true);
+                        yield break;
+                    }
+                }
+                else stableSince = -1;
+                if (!string.IsNullOrEmpty(controller.Error)) break;
+                yield return null;
+            }
+            completed(false);
+        }
+
+        static IEnumerator WaitForGroundSettle(FlyVisualDemo.WindowsReplayDemo demo, float settleSeconds,
+                                               float timeoutSeconds, Action<bool> completed)
+        {
+            double deadline = Time.realtimeSinceStartupAsDouble + timeoutSeconds;
+            double groundedSince = -1;
+            while (Time.realtimeSinceStartupAsDouble < deadline)
+            {
+                if (demo.body.GroundContactCount >= 5)
+                {
+                    if (groundedSince < 0) groundedSince = Time.realtimeSinceStartupAsDouble;
+                    if (Time.realtimeSinceStartupAsDouble - groundedSince >= settleSeconds)
+                    {
+                        completed(true);
+                        yield break;
+                    }
+                }
+                else groundedSince = -1;
+                yield return null;
+            }
+            completed(false);
+        }
+
+        static void CaptureBaseline(FlyVisualDemo.WindowsReplayDemo demo, PhysicsBaseline baseline, ActionReport report)
+        {
+            var root = demo.body.Thorax;
+            baseline.rootPosition = root.transform.position;
+            baseline.rootRotation = root.transform.rotation;
+            baseline.jointPositions = new List<float>();
+            root.GetJointPositions(baseline.jointPositions);
+            baseline.phaseRadians = demo.controller.Phase;
+            report.initialRootPosition = baseline.rootPosition;
+            report.initialRootRotation = baseline.rootRotation;
+            report.initialPhaseRadians = baseline.phaseRadians;
+            report.initialGroundContactCount = demo.body.GroundContactCount;
+            report.physicsResetMethod = "TeleportRoot+joint_positions+zero_velocities+preset_adhesion+reflex_reset+phase_restore+expire_contact_hold";
+        }
+
+        static void RestoreBaseline(FlyVisualDemo.WindowsReplayDemo demo, PhysicsBaseline baseline)
+        {
+            var root = demo.body.Thorax;
+            root.TeleportRoot(baseline.rootPosition, baseline.rootRotation);
+            root.SetJointPositions(new List<float>(baseline.jointPositions));
+            var zeros = new List<float>(baseline.jointPositions.Count);
+            for (int i = 0; i < baseline.jointPositions.Count; i++) zeros.Add(0);
+            root.SetJointVelocities(zeros);
+            root.SetJointForces(zeros);
+            root.linearVelocity = Vector3.zero;
+            root.angularVelocity = Vector3.zero;
+            foreach (var rigidbody in demo.body.GetComponentsInChildren<Rigidbody>())
+            {
+                rigidbody.linearVelocity = Vector3.zero;
+                rigidbody.angularVelocity = Vector3.zero;
+            }
+            foreach (var leg in demo.body.Legs)
+            {
+                if (leg == null) continue;
+                leg.Coxa.SetTarget(0);
+                leg.Femur.SetTarget(0);
+                leg.Tibia.SetTarget(0);
+            }
+            var preset = demo.gameplayPreset;
+            demo.controller.ConfigureFootAdhesion(true, preset.normalAdhesion, preset.shearAdhesion,
+                                                  preset.attachDelay, preset.detachThreshold);
+            if (demo.controller.ReflexLayer != null) demo.controller.ReflexLayer.ResetState();
+            demo.controller.SetPhaseForDiagnostics(baseline.phaseRadians);
+            Physics.SyncTransforms();
+            foreach (var leg in demo.body.Legs)
+            {
+                if (leg == null || leg.FootContact == null) continue;
+                for (int i = 0; i < 3; i++) leg.FootContact.AdvanceAdhesionTick();
+            }
         }
     }
 }

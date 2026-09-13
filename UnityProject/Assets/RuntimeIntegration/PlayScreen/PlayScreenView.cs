@@ -25,7 +25,7 @@ namespace Flylingual.PlayScreen
         ConversationSessionController controller;
         ConversationNativeBootstrap bootstrap;
         Image gameImage, neuralImage;
-        Label statusLabel, captionLabel, portraitSource, portraitObservation, neuralStatus, diagnostics, transcriptLabel;
+        Label statusLabel, controlModeLabel, actionFeedbackLabel, captionLabel, portraitSource, portraitObservation, neuralStatus, diagnostics, transcriptLabel;
         FlyPortraitElement portrait;
         TextField textInput, personaText;
         Slider volume, gain;
@@ -116,12 +116,14 @@ namespace Flylingual.PlayScreen
 
             var controls = Card(); controls.style.flexShrink = 0; controls.style.paddingTop = 9; controls.style.paddingBottom = 9; root.Add(controls); RegisterControlSurface(controls);
             var actions = Row("actions"); actions.style.alignItems = Align.Center; actions.style.flexWrap = Wrap.Wrap; controls.Add(actions);
-            startButton = MakeButton("会話を再開", () => controller?.StartConversation()); actions.Add(startButton);
+            startButton = MakeButton("会話のみ開始", () => controller?.StartConversation()); actions.Add(startButton);
             stopButton = MakeButton("会話を終了", () => controller?.StopConversation()); actions.Add(stopButton);
             var emergency = MakeButton("身体を停止", () => controller?.EmergencyStop()); emergency.style.backgroundColor = new Color(.64f, .18f, .13f); emergency.style.color = Color.white; emergency.style.unityFontStyleAndWeight = FontStyle.Bold; actions.Add(emergency);
             muteButton = MakeButton("マイクをミュート", () => { if (controller != null) controller.SetMicrophoneMuted(!controller.MicrophoneMuted); }); actions.Add(muteButton);
             voiceButton = MakeButton("声で操作を有効にする", () => controller?.EnableVoiceActions()); actions.Add(voiceButton);
             actions.Add(Spacer()); settingsButton = MakeButton("設定と診断", ToggleSettingsDrawer); actions.Add(settingsButton);
+            controlModeLabel = Label("操作状況: 停止中", 13, mint, FontStyle.Bold); controlModeLabel.style.marginTop = 5; controls.Add(controlModeLabel);
+            actionFeedbackLabel = Label(string.Empty, 13, cream); actionFeedbackLabel.style.whiteSpace = WhiteSpace.Normal; controls.Add(actionFeedbackLabel);
             captionLabel = Label("字幕: 接続待ち", 14, cream); captionLabel.style.marginTop = 7; captionLabel.style.whiteSpace = WhiteSpace.Normal; captionLabel.style.maxHeight = 42; captionLabel.style.overflow = Overflow.Hidden; controls.Add(captionLabel);
             diagnostics = Label(string.Empty, 11, cream); diagnostics.style.opacity = .66f; diagnostics.style.display = DisplayStyle.None; controls.Add(diagnostics);
             settingsDrawer = Card(); settingsDrawer.style.position = Position.Absolute; settingsDrawer.style.right = 16; settingsDrawer.style.bottom = 96; settingsDrawer.style.width = 430; settingsDrawer.style.maxHeight = 360; settingsDrawer.style.display = DisplayStyle.None; root.Add(settingsDrawer); RegisterControlSurface(settingsDrawer);
@@ -188,6 +190,8 @@ namespace Flylingual.PlayScreen
             if (controller == null)
             {
                 SetActionAvailability(false);
+                controlModeLabel.text = "操作状況: 停止中";
+                actionFeedbackLabel.text = string.Empty;
                 string bootstrapError = bootstrap == null ? null : bootstrap.StartupError;
                 statusLabel.text = string.IsNullOrEmpty(bootstrapError) ? "起動中: 会話コントローラを待機中" : "起動エラー: " + bootstrapError;
                 return;
@@ -207,8 +211,12 @@ namespace Flylingual.PlayScreen
             stopButton.SetEnabled(controller.IsSessionRequested || controller.EnablingVoiceActions);
             settingsButton?.SetEnabled(true);
             settingsDrawer?.SetEnabled(true);
-            voiceButton.text = controller.EnablingVoiceActions ? "声で操作：準備中" : "声で操作を有効にする";
+            voiceButton.text = controller.EnablingVoiceActions ? "声で操作：準備中" : controller.BodyControlActive ? "声で操作中" : "声で操作を有効にする";
             voiceButton.SetEnabled(controller.Ready && controller.VoiceActionsAvailable && !controller.EnablingVoiceActions && !controller.BodyControlActive);
+            string controlMode = controller.BodyControlActive ? "声で操作中" : controller.EnablingVoiceActions ? "停止中（声で操作の準備中）"
+                : controller.ConversationLive && controller.ConversationInteraction == "chat_only" ? "会話のみ" : "停止中";
+            controlModeLabel.text = "操作状況: " + controlMode;
+            actionFeedbackLabel.text = string.IsNullOrEmpty(controller.ActionFeedback) ? string.Empty : "直近の操作案内: " + controller.ActionFeedback;
             muteButton.text = controller.MicrophoneMuted ? "マイクをオン" : "マイクをミュート";
             muteButton.SetEnabled(!controller.MicrophoneCaptureDisabled);
             volume?.SetValueWithoutNotify(controller.Volume);

@@ -18,6 +18,13 @@ import time
 from typing import Any
 
 try:
+    # ``windows_native.py`` is normally invoked as a script by Unity, while
+    # tests import it as ``tools.windows_native``.
+    from tools.windows_native_job import JobError, KillOnCloseJob
+except ModuleNotFoundError:
+    from windows_native_job import JobError, KillOnCloseJob
+
+try:
     import psutil
 except ModuleNotFoundError:
     psutil = None
@@ -124,6 +131,7 @@ def owner_alive(pid: int, created: float) -> bool:
 
 
 class Owned:
+    """Legacy verification helper; launch() deliberately uses Job Object ownership."""
     def __init__(self, process: subprocess.Popen[str]):
         self.process = process
         self.identity: dict[int, float] = {process.pid: process_identity(process.pid)}
@@ -177,16 +185,12 @@ def bridge_listening(port: int) -> bool:
         return False
 
 
-def graceful_stop(owned: Owned, shutdown: Path, status: Path, seconds: float = 25.0) -> None:
-    """Ask Bridge to close its API session before identity-checked termination."""
+def graceful_stop(process: subprocess.Popen[str], shutdown: Path, status: Path, seconds: float = 5.0) -> None:
+    """Request Bridge shutdown, then let the closing owner job kill survivors."""
     shutdown.touch()
     deadline = time.monotonic() + seconds
-    while owned.process.poll() is None and time.monotonic() < deadline:
-        owned.refresh()
+    while process.poll() is None and time.monotonic() < deadline:
         time.sleep(0.1)
-    # The wrapper can exit while a previously observed descendant survives.
-    # Always reconcile the complete owned identity set, even after a clean exit.
-    owned.stop()
     write_status(status, "stopped")
 
 
@@ -220,15 +224,18 @@ def launch(stack: dict[str, Any], status: Path, stop: Path, heartbeat: Path, own
     write_status(status, "starting", endpoint=endpoint, profile="windows-local", ownerPid=owner_pid)
     command = bridge_command(stack, stop)
     log = status.parent / "bridge.log"
-    with log.open("w", encoding="utf-8", newline="\n") as output:
-        process = subprocess.Popen(command, cwd=ROOT, env=scrubbed_environment(), stdin=subprocess.DEVNULL,
-                                   stdout=output, stderr=subprocess.STDOUT, text=True,
-                                   creationflags=subprocess.CREATE_NO_WINDOW)
-    owned = Owned(process)
+    # Assign the helper before spawning.  The non-inheritable KILL_ON_CLOSE job
+    # then automatically contains only this Bridge and its Brain descendants.
+    job = KillOnCloseJob()
+    job.assign_current_process()
+    process: subprocess.Popen[str] | None = None
     try:
+        with log.open("w", encoding="utf-8", newline="\n") as output:
+            process = subprocess.Popen(command, cwd=ROOT, env=scrubbed_environment(), stdin=subprocess.DEVNULL,
+                                       stdout=output, stderr=subprocess.STDOUT, text=True,
+                                       creationflags=subprocess.CREATE_NO_WINDOW, close_fds=True)
         deadline = time.monotonic() + stack["startupSeconds"]
         while time.monotonic() < deadline:
-            owned.refresh()
             if stop.exists():
                 return 0
             if process.poll() is not None:
@@ -248,7 +255,6 @@ def launch(stack: dict[str, Any], status: Path, stop: Path, heartbeat: Path, own
         else:
             raise NativeError(f"Bridge did not listen within {stack['startupSeconds']} seconds; see {log}")
         while True:
-            owned.refresh()
             if stop.exists():
                 return 0
             if process.poll() is not None:
@@ -263,7 +269,12 @@ def launch(stack: dict[str, Any], status: Path, stop: Path, heartbeat: Path, own
                 return 0
             time.sleep(0.25)
     finally:
-        graceful_stop(owned, stop, status)
+        if process is not None:
+            graceful_stop(process, stop, status)
+        # Do not close ``job`` here.  This process belongs to KILL_ON_CLOSE; its
+        # final handle closes on interpreter exit after the status handoff, which
+        # forcibly removes any Bridge/Brain survivor without touching other jobs.
+        _ = job
 
 
 def main() -> int:
@@ -287,7 +298,7 @@ def main() -> int:
     try:
         return launch(read_stack(args.config), status, repo_path(args.stop), repo_path(args.heartbeat),
                       args.owner_pid, args.owner_created)
-    except (NativeError, OSError, ValueError) as exc:
+    except (NativeError, JobError, OSError, ValueError) as exc:
         write_status(status, "failed", message=str(exc))
         print(f"windows-native error: {exc}", file=sys.stderr)
         return 2

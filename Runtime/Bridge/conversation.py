@@ -185,6 +185,12 @@ class ConversationAdapter:
                 headers={'Authorization': 'Bearer ' + key},
                 max_msg_size=2 * 1024 * 1024, heartbeat=20,
             )
+            # Transcript timestamps belong to this session's timeline.  A new
+            # connection cannot reuse the previous session's cursor or IDs.
+            # Same-session epoch invalidation still uses clear_context().
+            self.last_offset = self.max_offset = -1
+            self.fragments.clear()
+            self.delegations.clear()
             instructions = build_voice_instructions(self.settings)
             if self.interaction == 'chat_only':
                 instructions += ('\nThis is conversation-only mode. Have a natural voice conversation. '

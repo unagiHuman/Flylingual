@@ -1,5 +1,7 @@
 # Windows Local Stack（Windows ローカル構成）
 
+現在の正式ネイティブプレイ画面は `Start-UnityConversation.cmd` から起動します。[Unity起動手順](Unity-Startup-Handoff.md)を参照してください。本書はブラウザ／WebRTCを使う別構成の手順です。両方を同時に起動しないでください。
+
 この手順は Flylingual の Windows 1 台構成を対象にします。Unity Windows Player、MaleCNS Brain、Bridge、ローカル WebRTC 映像サービス、ブラウザ Player は同じ PC の loopback で動作します。GPT Live と Responses API は Bridge から Windows の外部 OpenAI API へ接続します。この構成はオフライン代替ではありません。
 
 ## 初回設定

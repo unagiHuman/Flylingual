@@ -1,5 +1,9 @@
 # Windows handoff
 
+現在の正式プレイ画面は `artifacts/windows-native-conversation/unity/FlylingualConversation.exe` を直接起動します。Brain・Bridge・GPT Liveも自動起動し、Unityの正常・異常終了で所有サービスも終了します。従来の `Start-UnityConversation.cmd` も使用できます。再ビルドはUnity 6000.5.9f1の `Flylingual > Play Screen > Build Windows Player`、対象シーンは `FlylingualPlay.unity` です。[現在のUnity起動手順](Docs/windows/Unity-Startup-Handoff.md)を参照してください。
+
+以下は初期のReplay／データ構築の記録です。現在の通常起動手順や実行許可として使用しません。
+
 ## Stage 1: Unity and replay
 
 Clone `main` to receive the frozen Shiu source and Unity project. Open `UnityProject` with Unity 6000.5.5f1. Use `Contracts/fixtures/shiu_game_brain_controller_frames.jsonl` for the established Shiu six-action replay.

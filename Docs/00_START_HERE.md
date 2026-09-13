@@ -1,6 +1,6 @@
 # FlyBrain：MaleCNS検証とWindows並列開発
 
-Windows 1台での通常起動は [Windowsローカル構成](windows/Windows-Local-Stack.md) を参照する。Brain・Bridge・Unity・Web UI・WebRTCをこのPCで起動し、Macを必須にしない。下記の初期検証計画より、現在の実行指示とAGENTS.mdを優先する。
+現在の正式プレイ画面は `artifacts/windows-native-conversation/unity/FlylingualConversation.exe` の直接起動でBrain・Bridge・GPT Liveも自動起動し、Unityの正常・異常終了で所有サービスも終了する。従来の `Start-UnityConversation.cmd` も使用できる。[Unity起動手順](windows/Unity-Startup-Handoff.md)に、Unity 6000.5.9f1での再ビルドと正式シーン `FlylingualPlay.unity` のEditor起動をまとめた。Brain・Bridge・UnityはWindows内で動作し、通常起動にブラウザ・WebRTC・Macは不要。[Windowsローカル構成](windows/Windows-Local-Stack.md)は別のブラウザ／WebRTC構成用である。下記の初期検証計画より、現在の実行指示とAGENTS.mdを優先する。
 
 作成日：2026-09-11（JST）／版：1.0
 

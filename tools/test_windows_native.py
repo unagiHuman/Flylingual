@@ -1,6 +1,10 @@
 import json
+import os
 from pathlib import Path
+import subprocess
+import sys
 from tempfile import TemporaryDirectory
+import time
 import unittest
 from unittest.mock import patch
 
@@ -64,19 +68,59 @@ class WindowsNativeTests(unittest.TestCase):
     def test_graceful_stop_marks_stopped_when_child_already_exited(self):
         class Exited:
             def poll(self): return 0
-        class Owned:
-            process = Exited()
-            reconciled = False
-            def refresh(self): raise AssertionError("exited child should not refresh")
-            def stop(self): self.reconciled = True
         with TemporaryDirectory() as directory:
             directory = Path(directory)
             shutdown, status = directory / "stop", directory / "status.json"
-            owned = Owned()
-            windows_native.graceful_stop(owned, shutdown, status, seconds=0)
-            self.assertTrue(owned.reconciled, 'Tracked orphans must be reconciled after wrapper exit')
+            windows_native.graceful_stop(Exited(), shutdown, status, seconds=0)
             self.assertTrue(shutdown.exists())
             self.assertEqual(json.loads(status.read_text(encoding="utf-8"))["state"], "stopped")
+
+    @unittest.skipUnless(os.name == "nt", "Windows Job Object test")
+    def test_kill_on_close_job_ends_only_probe_sleep_child(self):
+        with TemporaryDirectory() as directory:
+            pid_path = Path(directory) / "child.pid"
+            probe = subprocess.run([sys.executable, "-m", "tools.windows_native_job", "--owner-probe", str(pid_path)],
+                                   cwd=windows_native.ROOT, capture_output=True, text=True, timeout=15)
+            self.assertEqual(probe.returncode, 0, probe.stderr)
+            child_pid = int(pid_path.read_text(encoding="ascii"))
+            deadline = time.monotonic() + 5
+            while psutil.pid_exists(child_pid) and time.monotonic() < deadline:
+                time.sleep(.05)
+            self.assertFalse(psutil.pid_exists(child_pid), "job-owned sleep child survived its owner")
+
+    @unittest.skipUnless(os.name == "nt", "Windows Job Object test")
+    def test_kill_on_close_job_forced_owner_exit_ends_descendants_but_not_sibling(self):
+        def wait_for_file(path: Path) -> int:
+            deadline = time.monotonic() + 5
+            while not path.exists() and time.monotonic() < deadline:
+                time.sleep(.05)
+            self.assertTrue(path.exists(), f"missing probe output: {path}")
+            return int(path.read_text(encoding="ascii"))
+
+        def wait_for_exit(pid: int) -> None:
+            deadline = time.monotonic() + 5
+            while psutil.pid_exists(pid) and time.monotonic() < deadline:
+                time.sleep(.05)
+            self.assertFalse(psutil.pid_exists(pid), f"job descendant {pid} survived forced owner exit")
+
+        with TemporaryDirectory() as directory:
+            directory = Path(directory)
+            child_path, grandchild_path = directory / "child.pid", directory / "grandchild.pid"
+            sibling = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(60)"], close_fds=True)
+            probe = subprocess.Popen([sys.executable, "-m", "tools.windows_native_job", "--owner-probe", str(child_path),
+                                      "--grandchild-pid", str(grandchild_path), "--hold"], cwd=windows_native.ROOT,
+                                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, text=True)
+            try:
+                child_pid = wait_for_file(child_path)
+                grandchild_pid = wait_for_file(grandchild_path)
+                probe.terminate()
+                self.assertIsNotNone(probe.wait(timeout=10))
+                wait_for_exit(child_pid)
+                wait_for_exit(grandchild_pid)
+                self.assertTrue(psutil.pid_exists(sibling.pid), "unrelated sibling was captured by the job")
+            finally:
+                if probe.poll() is None: probe.kill(); probe.wait(timeout=5)
+                if sibling.poll() is None: sibling.terminate(); sibling.wait(timeout=5)
 
 
 if __name__ == "__main__":

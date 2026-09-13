@@ -43,6 +43,9 @@ def main():
             command.append('-flyConversationNoMicrophone')
         if args.actions:
             command.append('-flyVoiceActionsProbe')
+        else:
+            # Audio-only validation intentionally retains the legacy chat-only path.
+            command.append('-flyConversationChatOnly')
         started = time.monotonic()
         process = subprocess.Popen(command, cwd=ROOT, env=scrubbed_environment(), stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
         owned = Owned(process)
@@ -80,8 +83,9 @@ def main():
         (output / 'summary.json').write_text(json.dumps(results, indent=2), encoding='utf-8')
         if remaining:
             owned.stop()  # Only this cycle's positively identified processes.
-        expected = 'native_actions_transport_pass' if args.actions else 'reply_audio_pass_no_microphone' if args.no_microphone else 'transport_audio_pass'
-        if report['result'] != expected or remaining or timeout or rejected is not True or exception_count != 0:
+        expected = 'native_actions_motion_pass' if args.actions else 'reply_audio_pass_no_microphone' if args.no_microphone else 'transport_audio_pass'
+        automatic_voice_ok = not args.actions or report.get('automaticVoiceControl') is True
+        if report['result'] != expected or not automatic_voice_ok or remaining or timeout or rejected is not True or exception_count != 0:
             return 1
     return 0
 

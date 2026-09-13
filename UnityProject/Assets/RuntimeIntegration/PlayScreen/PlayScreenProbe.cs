@@ -17,6 +17,8 @@ namespace Flylingual.PlayScreen
             public float time;
             public string backend, mode, state, dataset, error;
             public bool ready, fresh, schematic, outputInhibited;
+            public bool conversationLive;
+            public long receivedAudioBytes, transcriptDeltas;
             public long sequence, spikes;
             public int observed, pointCount;
             public double ageMs;
@@ -24,6 +26,7 @@ namespace Flylingual.PlayScreen
         [Serializable] sealed class Report
         {
             public string endpoint = "127.0.0.1:18766", unity;
+            public string runDirectory;
             public int width, height;
             public bool uiBuilt, gameTexture, neuralTexture, emergencyVisible, settingsOpened, settingsClosed;
             public List<Sample> samples = new List<Sample>();
@@ -48,6 +51,7 @@ namespace Flylingual.PlayScreen
                 yield return new WaitForSecondsRealtime(.2f);
             }
             report.uiBuilt = view != null && view.IsBuilt;
+            report.runDirectory = FindFirstObjectByType<ConversationNativeBootstrap>()?.RunDirectory;
             var neural = FindFirstObjectByType<NeuralVisualizationPanel>();
             var root = view == null ? null : view.GetComponent<UIDocument>().rootVisualElement;
             report.neuralTexture = neural != null && neural.DisplayTexture != null;
@@ -67,6 +71,9 @@ namespace Flylingual.PlayScreen
                     schematic = observer != null && observer.IsSchematic, sequence = observer?.Sequence ?? -1,
                     spikes = observer?.SpikeCount ?? 0, observed = observer?.ObservedCount ?? 0, pointCount = observer?.PointCount ?? 0,
                     ageMs = observer?.FrameAgeMs ?? -1, outputInhibited = controller == null || controller.OutputInhibited,
+                    conversationLive = controller != null && controller.ConversationLive,
+                    receivedAudioBytes = controller?.ReceivedAudioBytes ?? 0,
+                    transcriptDeltas = controller?.ReceivedTranscriptDeltas ?? 0,
                     error = controller == null ? "controller unavailable" : controller.Error ?? controller.SchemaError });
                 if (i == 20) ScreenCapture.CaptureScreenshot(Path.Combine(directory, "play-screen.png"));
                 yield return new WaitForSecondsRealtime(.25f);

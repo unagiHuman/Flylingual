@@ -1,5 +1,7 @@
 # Windows Replay demo
 
+現在の正式プレイ画面は、リポジトリ直下の `Start-UnityConversation.cmd` で起動します。[現在のUnity起動手順](Unity-Startup-Handoff.md)を参照してください。以下は旧Replayデモの履歴であり、記載のUnity版・checkout・Replay実行手順は現在の通常起動には使用しません。
+
 Integrated `main` commit `c0abf753283dc794ab09c29d0828d7fd55e4338a`.
 The frozen Shiu/physics baseline remains `89d1791ebdf1633e57cda5150ea43ff47921313a`.
 MaleCNS is not part of this demo. The default source is **REPLAY (Shiu recording)**.

@@ -578,6 +578,10 @@ class Bridge:
                 self.last_summary = time.monotonic()
                 summary = self.summary()
                 self.emit({'type': 'brain_summary', 'summary': summary})
+                self.log('voice_pipeline', interaction=self.conversation_interaction,
+                         state=self.conversation.state, owner=self.arbiter.owner,
+                         outputInhibited=self.arbiter.inhibited,
+                         audioDiagnostics=self.conversation.diagnostics())
                 if self.conversation_interaction == 'chat_only':
                     continue  # General voice remains valid without fresh Brain data.
                 semantic = (summary['stale'], summary['interpretation'], self.arbiter.inhibited)

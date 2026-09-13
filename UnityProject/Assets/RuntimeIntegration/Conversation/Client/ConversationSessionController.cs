@@ -11,7 +11,7 @@ using UnityEngine;
 namespace Flylingual.Conversation
 {
     /// <summary>
-    /// Unity voice endpoint. Explicit voice control uses the Bridge's fresh STOP/resume gate.
+    /// Unity voice endpoint. Startup voice control uses the Bridge's fresh STOP/resume gate.
     /// A bootstrap must explicitly call ConnectAsync; Awake/Start deliberately do not connect.
     /// </summary>
     public sealed class ConversationSessionController : MonoBehaviour
@@ -27,6 +27,7 @@ namespace Flylingual.Conversation
         int requestNumber;
         bool requestedStart;
         bool autoStartPending = true;
+        bool startChatOnly;
         bool captureAttempted;
         string expectedSettingsRequestId;
         string selectedDevice;
@@ -92,7 +93,7 @@ namespace Flylingual.Conversation
         public string BrainInstanceId { get; private set; }
         public string BridgeMotorHost { get; private set; }
         public int BridgeMotorPort { get; private set; }
-        public string ActionFeedback { get; private set; } = "会話のみ。声で操作を有効にすると移動できます";
+        public string ActionFeedback { get; private set; } = "接続後に音声操作を開始します";
         public int SubmittedActions { get; private set; }
         public int AppliedActions { get; private set; }
         public int RejectedActions { get; private set; }
@@ -107,6 +108,8 @@ namespace Flylingual.Conversation
 
         void Awake()
         {
+            startChatOnly = Array.IndexOf(Environment.GetCommandLineArgs(), "-flyConversationChatOnly") >= 0;
+            if (startChatOnly) ActionFeedback = "会話のみ。身体操作は停止しています";
             MicrophoneCaptureDisabled = Array.IndexOf(Environment.GetCommandLineArgs(), "-flyConversationNoMicrophone") >= 0;
             MicrophoneMuted = MicrophoneCaptureDisabled;
             if (FindAnyObjectByType<AudioListener>() == null)
@@ -139,7 +142,12 @@ namespace Flylingual.Conversation
                 action();
             }
             if (autoStartPending && Ready && OutputInhibited && transport != null && transport.IsConnected)
-                StartConversation();
+            {
+                // One startup attempt only. StopConversation consumes this flag,
+                // so faults, expiry and an explicit stop never re-arm the body.
+                if (startChatOnly) StartConversation();
+                else if (VoiceActionsAvailable) EnableVoiceActions();
+            }
             UpdateMicrophone();
             if (bodyArmed && !BodyControlActive) BodyFault("voice_control_stopped_or_stale");
         }
