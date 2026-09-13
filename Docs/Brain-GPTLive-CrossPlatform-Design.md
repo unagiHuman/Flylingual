@@ -89,6 +89,10 @@ manual と GPT の操作権は明示的に排他切替する。observer は解�
 質問、移動意思が不明な相談、方向の矛盾、未対応の停止条件は推測実行しない。
 計画の監視・中断はBridge側。局所観測が欠損／古い場合は計画を拒否・停止し、
 既存期限、操作権、epoch、明示resume、Brain経路を維持する。
+Unity地形センサーの新鮮な局所安全観測と現在有効な操作を解釈の根拠へ接続する。
+大まかな表現・丁寧な依頼・明確な言い直しは受け付けるが、未観測の経路を推測しない。
+Native音声controlでは通常の計画完了／期限を通常Actionと同じSTOP＋待受継続に揃える。
+これは危険時の抑止解除ではなく、危険・観測失効・接続障害・STOP送信失敗は引き続きfull inhibitとする。
 詳細と未検証事項は[限定行動計画](integration/Bounded-Action-Plans.md)を参照する。
 
 操作提案は action、commandId、controlEpoch、validForMs を持ち、Bridge の単調時計で期限・上限を管理する。重複、期限切れ、旧 session、非所有者の要求を拒否し、切替・再接続で未適用要求を自動再送しない。GPT 操作中の接続断、明示的な会話終了、緊急停止、または期限切れによる安全停止では Unity 出力も抑止する。Native音声controlの通常TTL期限切れは epoch、session、TCP、待受を維持し、次の新音声Actionをそのまま受け付ける。音声STOPは `source=gpt` の通常STOPであり、safety STOPとは区別する。Unity motor TCP、制御WS、Live、一時的 staleのfaultでは古い motor 出力を抑止し、新しい voice session／fresh STOP／`resume` で自動復旧する。上流Bridge→Brain TCPの物理断やBrainサービス終了は自動復旧を保証しない。明示的な緊急停止、会話終了、mute、chat_only、アプリ終了はユーザー指定を優先する。manual 中は会話障害だけで操作権を奪わない。Legacy非nativeの抑止規則は維持する。

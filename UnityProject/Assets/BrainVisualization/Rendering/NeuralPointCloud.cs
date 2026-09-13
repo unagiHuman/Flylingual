@@ -25,6 +25,8 @@ namespace FlyBrainVisualization
         [SerializeField, Min(1f)] private float rateForFullGlowHz = 45f;
         [SerializeField, Min(0.01f)] private float membraneScaleMv = 2f;
         [SerializeField, Range(1f, 1.5f)] private float spikeScale = 1.5f;
+        [SerializeField, Range(1f, 3f)] private float spikeHaloScale = 2.4f;
+        [SerializeField, Range(0.25f, 4f)] private float spikeGlowGain = 2f;
         [SerializeField] private bool showMembranePotential;
         [SerializeField, Range(0f, 4f)] private float displayGain = 1f;
         [SerializeField] private bool inheritLayer = true;
@@ -192,6 +194,8 @@ namespace FlyBrainVisualization
             rateForFullGlowHz = Mathf.Max(1f, rateForFullGlowHz);
             membraneScaleMv = Mathf.Max(0.01f, membraneScaleMv);
             spikeScale = Mathf.Clamp(spikeScale, 1f, 1.5f);
+            spikeHaloScale = Mathf.Clamp(spikeHaloScale, 1f, 3f);
+            spikeGlowGain = Mathf.Clamp(spikeGlowGain, 0.25f, 4f);
             displayGain = Mathf.Clamp(displayGain, 0f, 4f);
             materialDirty = true;
             UpdateChunkBounds();
@@ -277,8 +281,8 @@ namespace FlyBrainVisualization
                 maximum = Vector3.Max(maximum, position);
             }
             Bounds bounds = new Bounds((minimum + maximum) * 0.5f, maximum - minimum);
-            // The largest real spike can enlarge a billboard by spikeScale.
-            bounds.Expand(pointSize * spikeScale);
+            // The transient halo, rather than the warm core, determines the largest billboard.
+            bounds.Expand(pointSize * Mathf.Max(spikeScale, spikeHaloScale));
             return bounds;
         }
 
@@ -319,6 +323,8 @@ namespace FlyBrainVisualization
             runtimeMaterial.SetFloat("_AfterglowSeconds", spikeAfterglowSeconds);
             runtimeMaterial.SetFloat("_DisplayGain", displayGain);
             runtimeMaterial.SetFloat("_SpikeScale", spikeScale);
+            runtimeMaterial.SetFloat("_SpikeHaloScale", spikeHaloScale);
+            runtimeMaterial.SetFloat("_SpikeGlowGain", spikeGlowGain);
             runtimeMaterial.SetFloat("_ShowMembranePotential", showMembranePotential ? 1f : 0f);
             runtimeMaterial.SetFloat("_DisplayTime", Time.unscaledTime);
             materialDirty = false;

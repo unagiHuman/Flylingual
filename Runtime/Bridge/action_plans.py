@@ -93,6 +93,16 @@ class LocalSafetyObservation:
             return 'body_unsafe'
         return None
 
+    def summary(self, now=None):
+        """A small local-only view; expired values must not reach the interpreter."""
+        now = time.monotonic() if now is None else now
+        age = max(0, (now - self.sample_at) * 1000) if self.sample is not None else None
+        fresh = age is not None and age < 750
+        return {'source': 'unity_local_sensors', 'sequence': self.sequence,
+                'ageMs': round(age, 1) if age is not None else None,
+                'fresh': fresh, 'concern': self.concern(now),
+                'facts': dict(self.sample) if fresh else {}}
+
 
 class BoundedPlanRunner:
     """One sequential plan. The existing arbiter and STOP/inhibit remain authoritative."""
@@ -159,6 +169,9 @@ class BoundedPlanRunner:
             while self.active is plan:
                 reason = self.guard(epoch, generation, plan['deadline'])
                 if reason:
+                    if reason == 'plan_expired':
+                        await b.finish_plan(plan, reason)
+                        return
                     b.log('plan_stopped', planId=plan['planId'], reason=reason)
                     await b.inhibit(reason)
                     return
@@ -182,7 +195,7 @@ class BoundedPlanRunner:
                     short_turn = (len(steps) == 2 and plan['step'] == 0) or plan['name'].startswith('nudge_')
                     if short_turn and time.monotonic() - applied_at >= .5:
                         if plan['step'] + 1 == len(steps):
-                            await b.inhibit('plan_finished')
+                            await b.finish_plan(plan, 'plan_finished')
                             return
                         plan['step'] += 1
                         phase_sent = False

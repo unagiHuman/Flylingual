@@ -16,6 +16,14 @@ Backendへ追加。完全な自律ナビゲーションではなく、短い既�
 | 右は危ない？／右がいいかな？ | question | 新しいActionなし |
 | あそこへ／左右同時に／未対応条件 | clarify | 新しいActionなし、短く確認 |
 
+「右のほうへお願い」「右へ進んでくれる？」も右旋回→前進、
+「もう少し右」「Turn a touch left」は短い旋回として扱う。
+「前へ様子を見ながら」は条件付き前進。「右、いや左」の明確な言い直しは最後の方向を使う。
+一方、「右がいいかな？」は相談であり操作しない。
+「そのまま進んで」「違和感があったら止まれ」だけの指示は、Bridgeの現在有効なGPT操作を根拠にする。
+有効な操作がない、期限切れ、STOP済み、旧epochなら方向を短く確認する。
+「砂糖まで」「安全な方へ」の経路決定は安全フラグだけから推測しない。
+
 英語にも同じ5計画を定義。GPT Liveは音声とclient delegationを担当し、
 Responsesが既存のJSON schemaで `kind=plan` と許可されたpresetを提案する。
 ASR断片の自動実行、キーワードだけによるLive操作fallback、別APIへの自動切替は追加しない。
@@ -54,7 +62,8 @@ nearの実距離やbodyUnsafeの閾値は、実ハエとセンサーで検証す
 - nudgeも適用確認後500ms、または先に来る絶対期限で終了する。
 - ACKだけ、適用なし、拒否／supersededでは次のActionへ進めない。
 - 500msは刺激の区間であり、回転角・身体方向の達成保証ではない。閉ループ方位合わせは未実装。
-- 危険・期限・計画完了は既存inhibit＋STOP。自動resumeしない。再開には既存の明示再開／必要な音声再接続を使う。
+- Native音声controlでは、新鮮で危険のない観測・Brain・操作権・音声接続が揃った通常の期限／計画完了はSTOPだけを送り、epoch・音声・motor TCPを維持する。次の新しい音声指示を受け付ける。自動で前の計画を再開することはない。
+- 危険・古い観測・接続断・STOP送信失敗は既存inhibit＋STOP。Legacy非Nativeも従来の抑止を維持する。安全停止後の復旧は既存の明示再開／Native復旧手順に従い、旧計画は再送しない。
 
 ハエは解釈を「少し右を向いて、進むね。」程度に返す。これは提案・開始の説明で、移動完了の宣言ではない。
 観測がない場合は「周りがまだわからないから、進めない。」と短く答える。
@@ -74,6 +83,22 @@ chat_only、observer、出力抑止中には開始できない。readyを変更�
 - `Runtime/Bridge/server.py`：既存Action経路、観測受信、世代・中断処理へ接続。
 - [bounded-action-plans-v1契約](../../Contracts/bridge-v1/bounded-action-plans-v1.md)。
 
+## Unity地形センサーとの接続（2026-09-13）
+
+`3377cf5`で追加された既存producerを再利用する。Unity側の新規実装・Scene変更は不要。
+`FlyTerrainRuntime`→`ConversationSessionController.SendLocalSafetyObservation`→
+既存control WebSocket→`Bridge.accept_local_observation`→計画の危険監視。
+groundedTripodGaitリグへの自動追加、10Hz送信、UnityのFresh判定（250ms以内）、
+overflow時のunknown変換は既存実装。[地形センサー仕様](../windows/Fly-Terrain-Sensing.md)を参照。
+
+Bridgeは受信した5種類の安全観測を`localSafety`としてResponsesへ渡し、
+周囲への質問にも新しい観測で答える。750ms以上の古いfactsは空にし、地形を捏造しない。
+stateにはsequence／ageMs／fresh／concernが出る。初回・危険状態変化は
+`local_observation_received`ログで確認できる。観測はBrainのfreshnessやreadyを更新しない。
+Liveには意味が変わった観測だけを既存の2秒周期でthinkingへ渡す。センサー更新だけで長い説明を発話しない。
+この会話用更新周期と、50msの計画監視・危険通知受信直後のSTOPは別処理。
+安全フラグは全体地図・ランドマーク・進路・身体の移動完了を意味しない。
+
 OpenAI Docsの[Live delegation](https://developers.openai.com/api/docs/guides/live-delegation)の
 役割分担に従い、発話指示だけで中断済みとせず、Backend側が操作を管理する。
 
@@ -84,9 +109,27 @@ OpenAI Docsの[Live delegation](https://developers.openai.com/api/docs/guides/li
 epoch／GPT停止／control切断／不正観測による中断をスタブで検証。
 Brain freshnessとsensor freshnessは独立に試験する。構文とdiffも確認する。
 
-未実施：GPT Live/Responsesによる実発話の分類精度、Unityセンサーproducer、
-Windows実Brain＋Unityでの移動、NEAR閾値・余動、Brain適用待ちを含む操作感。
-現時点ではproducer未接続のため、新計画は観測不足で開始を拒否する。
+今回の追加検証：既存Pythonテスト30件成功。5計画の通常STOP→次音声Action、
+6種類の危険／unknownによる抑止、期限・STOP配信中の新指示の維持、質問による非操作、
+古い観測の除外、Legacy／STOP送信失敗をオフラインのprotocol stubで確認。
+これはUnityや実Brainの動作テストではない。
+
+実Responses API（既存gpt-5.6-luna、store=false、日英の合成テキスト＋安全snapshot例）では、
+初回18件中17件一致。「Turn a touch left」が通常TURN_Lになったため、
+小さな旋回をnudge計画へ優先分類する指示に修正した。
+修正版22件は22件一致（日本語11件、英語11件。問題の英語例は3回ともnudge_left）。
+質問／相談、丁寧な移動依頼、言い直し、現在操作あり／なし、未観測の目的地、発話停止と身体STOPを含む。
+API解釈時間は982〜2296ms。これは音声認識やBrain／身体の遅延を含まない。
+限られた例文の分類試験であり、任意の音声発話の成功率ではない。
+API到達前のsandbox DNS失敗は分類試験の母数に含めない。
+
+Live向け観測更新は、sequenceだけの更新で再注入しないこと、変化／失効をthinkingだけで通知すること、
+失効factsを残さないことをwatchdogのオフライン検査で確認した。
+
+未実施：今回の変更を通したGPT Live実マイク／音声、Windows実Brain＋Unityでの移動、
+センサー→音声計画の実機往復、NEAR閾値・余動、Brain適用待ちを含む操作感。
+producerはソース上で接続済みだが、起動中のアプリへ反映したことは確認していない。
+新鮮なsnapshotが届けば計画開始を許可し、欠損なら引き続き拒否する。
 台本用blind_run_cueは部分的な観測なので、安全snapshotとして流用しない。
-モデルが全ての曖昧な発話を正しく解釈する保証はなく、日英の実API評価が次のgate。
-サーバー再起動、API呼出し、commit/pushは今回行わない。
+モデルが全ての曖昧な発話を正しく解釈する保証はない。
+サーバー再起動、Unity起動、commit/pushは今回行わない。Responses分類だけを実APIで検証する。

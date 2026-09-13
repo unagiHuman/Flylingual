@@ -74,6 +74,8 @@ launcher が自動でこの flag を付けることはない。Windows owner が
 | `NeuralPointCloud` | `displayGain` | `1` |
 | `NeuralPointCloud` | `inheritLayer` | `true` |
 | `NeuralPointCloud` | `spikeScale` | `1.5` |
+| `NeuralPointCloud` | `spikeHaloScale` | `2.4` |
+| `NeuralPointCloud` | `spikeGlowGain` | `2` |
 | `NeuralPointCloud` | `showMembranePotential` | `false` |
 | `NeuralVisualizationPanel` | `observer` / `pointCloud` / `brainCamera` / `displayRoot` | null → 各生成component参照 |
 | `NeuralVisualizationPanel` | `visible` | `true` |
@@ -107,7 +109,7 @@ launcher が自動でこの flag を付けることはない。Windows owner が
 
 ## 白灰・赤橙デザイン（2026-09-13）
 
-既存の24,000 somaサンプルを保持し、未観測の構造は灰色、スパイク窓を観測済みでゼロの点は白、実測発火は赤橙で表す。発火後0.25秒の表示残光と最大1.5倍の点径を使う。高い発火率では中心を淡い暖色にし、奥の点をわずかに暗くする。premultiplied alpha合成で密集部の加算による白飛びを避ける。電圧のみの点は「発火なし」と判定しない。膜電位色は既定OFFで、必要時に `ShowMembranePotential` またはInspectorから有効にする。
+既存の24,000 somaサンプルを保持し、未観測の構造は灰色、スパイク窓を観測済みでゼロの点は白、実測発火は赤橙で表す。発火後0.25秒の表示残光と最大1.5倍の中心径を使う。奥の点をわずかに暗くする。構造はpremultiplied alpha合成とし、発火部分のグローは後述の強調設定を使う。電圧のみの点は「発火なし」と判定しない。膜電位色は既定OFFで、必要時に `ShowMembranePotential` またはInspectorから有効にする。
 
 既定の画角は脳の拡大表示。独立パネルの `FULL CNS` / `BRAIN FOCUS` ボタンで切り替える。`SetBrainFocus(bool)` は埋め込み先からも呼べる。既存Play Screenの `SetEmbedded` / `Rotate` / `Zoom` / `DisplayTexture` APIは維持し、そのファイルは変更しない。埋め込み中は独立パネルのボタンを表示しないため、専用切替ボタンを必要とする場合はWindows側UI担当がこのAPIへ接続する。既存のホイールによる拡大縮小は引き続き使える。
 
@@ -120,3 +122,14 @@ launcher が自動でこの flag を付けることはない。Windows owner が
 2026-09-13 03:25 UTC確認：対象projectは6000.5.9f1、Macのインストール済みEditorは6000.5.5f1のため、一時コピーで同じC#・shaderソースとPackagesを使ってコンパイル・静止描画した。エラー0、可視化コードの警告0、他のC#警告47種類。全体・拡大のPNGを目視確認済み。6000.5.9f1自体の検証、PlayMode、発火・残光の実測とは区別する。ソース側のProjectVersion/ProjectSettingsは変更していない。
 
 今回の再生成Prefab/materialは既存の生成asset GUIDを保持してローカルのGeneratedへ反映済み。開始時に変更中だった9ファイルは内容のSHA-256一致を確認。追加された他タスクのファイルもそのまま保持した。commit/pushは未実施。新規ログキーはなく、静止画出力には既存の `NEURAL_VIS_STATIC_PREVIEW` を使用する。
+
+
+## 発火グロー強調（2026-09-13）
+
+発火した点は暖白色の中心と赤橙色の広い光で強調する。既存の非ゼロ `window_spike_count` を受け取った時刻から短いフラッシュと残光を描き、低い発火率も見分けやすくする。これは受信窓を読みやすくする表示効果であり、個々のスパイクの正確な時刻を再現するものではない。周期的・ランダムな点滅は追加せず、電圧だけの観測では発光させない。新たなゼロ窓では直前の残光が減衰し、stale/disconnectの既存 `ClearActivity` では即座に消える。
+
+光は専用点群shader内で合成するため、既存のLDR RenderTextureでも使用できる。共有Bloom、Volume、カメラ設定、Play Screen、受信処理、Sceneは変更しない。灰白色の構造表示と表示ゲイン操作を維持する。多数の点が同時発火するとLDR出力の明部が飽和しうるため、最終的な強さと密集部の見え方はWindows実Brainで確認する。
+
+追加調整項目は `spikeHaloScale=2.4`（光の最大径倍率）と `spikeGlowGain=2`（実測活動から表示強度への変換ゲイン）。既存 `spikeScale=1.5` は中心径、`spikeAfterglowSeconds=0.25` は残光時間を維持する。フラッシュは残光時間の32%（既定80ms）、実測窓の到着ごとに更新する。
+
+2026-09-13 05:53 UTC検証：対象と同じUnity 6000.5.9f1で、Assets/Packages/ProjectSettingsを複製した一時projectをコンパイルし、活動入力なしの静的anatomyを描画。C#・shaderコンパイルエラー0、可視化C#警告0、他のC#警告48種類。描画ソースの一致と脳拡大PNGを確認した。ログ・静止画・validation.jsonは `artifacts/neural-visualization/glow/`。生成Prefab/materialを既存GUIDを保持してローカルGeneratedへ反映。Windows実Brain、PlayMode、実際のグロー・点滅・描画負荷は未検証。変更は描画2ファイルと本定義ファイルのみで、並行作業中のBridge変更は保持。新規ログキーなし、commit/pushなし。

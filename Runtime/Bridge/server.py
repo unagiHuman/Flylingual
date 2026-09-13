@@ -29,7 +29,7 @@ VOICE_TEST_EVENTS = frozenset({
     'voice_intent_dispatch', 'intent_classified', 'intent_rejected',
     'command_submitted', 'command_applied', 'command_accepted', 'command_superseded',
     'command_expired', 'output_inhibited', 'plan_started', 'plan_step_submitted',
-    'plan_stopped', 'audio_fixture_sent', 'delegation_observed',
+    'plan_stopped', 'local_observation_received', 'audio_fixture_sent', 'delegation_observed',
 })
 VOICE_TEST_FIELDS = frozenset({
     'commandId', 'requestId', 'sequence', 'action', 'source', 'kind', 'plan',
@@ -116,6 +116,22 @@ class Bridge:
     def summary(self):
         return summarize(self.frame, self.age_ms(), self.config['control']['staleMs'], self.conversation.settings['language'])
 
+    def intent_context(self):
+        # Only a current, still-running GPT command can ground "a little more".
+        # Never use assistant speech, a past target, or motor signs as an order.
+        active = None
+        if (not self.arbiter.inhibited and self.arbiter.owner == 'gpt'
+                and self.arbiter.deadline is not None and not self.arbiter.expired()
+                and not self.summary()['stale']):
+            item = next(reversed(self.requests.values()), None)
+            if (item and item['epoch'] == self.arbiter.epoch and item['source'] == 'gpt'
+                    and item['action'] != 'STOP' and not item.get('rejected')
+                    and not item.get('superseded')):
+                active = {'action': item['action'], 'brainApplied': item['applied'],
+                          'plan': self.plans.active['name'] if self.plans.active else None}
+        return {**self.summary(), 'localSafety': self.local_observation.summary(),
+                'activeCommand': active}
+
     def text(self, key):
         return message_text(key, self.conversation.settings['language'])
 
@@ -130,6 +146,7 @@ class Bridge:
                 'capabilities': ['conversation_only_v1', 'native_voice_actions_v1', 'blind_run_script_v1', 'bounded_action_plans_v1'],
                 'actionPlan': ({k: self.plans.active[k] for k in ('planId', 'name', 'step', 'requestId')}
                                if self.plans.active else None),
+                'localSafety': self.local_observation.summary(),
                 'conversationInteraction': self.conversation_interaction,
                 'conversationGeneration': self.conversation_generation,
                 'conversationStopping': bool(self.conversation_operation and not self.conversation_operation.done()),
@@ -415,7 +432,7 @@ class Bridge:
         started = time.monotonic()
         replaced_plan = False
         try:
-            proposal = await self.conversation.interpret(text, self.summary(),
+            proposal = await self.conversation.interpret(text, self.intent_context(),
                 self.config['control']['defaultActionMs'], self.config['control']['maxActionMs'])
             interpretation_ms = (time.monotonic()-started)*1000
             self.log('intent_classified', commandId=command_id,
@@ -452,17 +469,17 @@ class Bridge:
                                        self.conversation_generation, deadline)
                 reply = PLAN_REPLY[self.conversation.settings['language']][proposal['plan']]
             elif proposal['kind'] == 'question':
-                if self.blind_script.run_id is not None:
-                    nearby = self.blind_script.current_fact() or (
-                        '今の周りは、まだわからない。' if self.conversation.settings['language'] == 'ja'
-                        else 'I do not have a fresh view right now.')
-                    reply = ('Answer only the question, in one short sentence. '
-                             'Nearby sensor report: ' + nearby + ' Neural report (not body motion): '
-                             + self.summary()['interpretation'])
-                else:
-                    reply = self.summary()['interpretation'] + ' ' + self.text('disclosure')
+                reply = ('Answer only the current question in one short sentence, using these '
+                         'fresh local observations. Empty facts mean unknown, not safe. '
+                         'Edge samples describe nearby support, not a route or a visible landmark. '
+                         'No new Action was sent; a previous command may still be running. '
+                         + json.dumps({'localSafety': self.local_observation.summary(),
+                                       'sceneCue': self.blind_script.current_fact(),
+                                       'neuralReport': self.summary()['interpretation']}, ensure_ascii=False))
             else:
-                reply = self.text('clarify')
+                # The interpreter can ask for the missing direction/condition,
+                # instead of rejecting every colloquial request generically.
+                reply = proposal['reply'] or self.text('clarify')
             if self.conversation.mode == 'mock':
                 self.emit({'type': 'conversation_text', 'role': 'assistant', 'text': '[MOCK] ' + reply, 'append': False})
             else:
@@ -537,6 +554,7 @@ class Bridge:
         if (type(event.get('conversationGeneration')) is not int
                 or event['conversationGeneration'] != self.conversation_generation):
             raise ControlError('old_conversation_generation')
+        previous = self.local_observation.summary()
         try:
             self.local_observation.accept(event)
         except (ControlError, TypeError, KeyError):
@@ -545,7 +563,11 @@ class Bridge:
                 await self.inhibit('invalid_local_observation')
             raise ControlError('invalid_local_observation') from None
         concern = self.local_observation.concern()
+        if not previous['fresh'] or previous['concern'] != concern:
+            self.log('local_observation_received', sequence=self.local_observation.sequence,
+                     reason=concern or 'clear')
         if self.plans.active and concern:
+            self.log('plan_stopped', planId=self.plans.active['planId'], reason=concern)
             await self.inhibit(concern)
 
     async def blind_run_cue(self, event):
@@ -720,6 +742,37 @@ class Bridge:
             await self.conversation.stop()
         self.conversation_operation = self.task(stop())
 
+    def can_keep_voice_listening(self):
+        return (self.native_voice_control and self.conversation_interaction == 'control'
+                and self.conversation_accepting and self.arbiter.owner == 'gpt'
+                and self.conversation.state == 'live'
+                and self.voice_control_epoch == self.arbiter.epoch
+                and not self.arbiter.inhibited
+                and bool(self.adapter and self.adapter.connected)
+                and not self.summary()['stale']
+                and not self.switching and not self.release_unknown)
+
+    async def finish_plan(self, plan, reason):
+        if self.plans.active is not plan:
+            return  # The newer instruction already owns the deadline and STOP.
+        concern = self.local_observation.concern()
+        keep_listening = (self.can_keep_voice_listening() and concern is None
+                          and self.control_ws is not None and not self.closed)
+        self.log('plan_stopped', planId=plan['planId'], reason=concern or reason,
+                 continuedListening=keep_listening)
+        # Consume this plan before yielding. A later command must survive the
+        # previous plan's STOP delivery, like ordinary native Action expiry.
+        self.plans.cancel()
+        if not keep_listening:
+            await self.inhibit(concern or reason)
+            return
+        self.arbiter.deadline = None
+        try:
+            await self.submit('STOP', 'safety', 'plan-stop-' + str(uuid.uuid4()))
+        except (ControlError, BrainAdapterError, ConnectionError, OSError):
+            await self.inhibit('plan_stop_send_failed')
+        self.emit(self.state())
+
     async def check_control_safety(self):
         if self.arbiter.inhibited:
             return
@@ -729,12 +782,10 @@ class Bridge:
             return
         if not self.arbiter.expired():
             return
-        keep_listening = (self.native_voice_control and self.conversation_interaction == 'control'
-                          and self.conversation_accepting and self.arbiter.owner == 'gpt'
-                          and self.conversation.state == 'live'
-                          and self.voice_control_epoch == self.arbiter.epoch
-                          and bool(self.adapter and self.adapter.connected)
-                          and not self.switching and not self.release_unknown)
+        if self.plans.active:
+            await self.finish_plan(self.plans.active, 'plan_expired')
+            return
+        keep_listening = self.can_keep_voice_listening()
         self.log('command_expired', continuedListening=keep_listening)
         if not keep_listening:
             await self.inhibit('command_expired')
@@ -762,15 +813,20 @@ class Bridge:
                          audioDiagnostics=self.conversation.diagnostics())
                 if self.conversation_interaction == 'chat_only':
                     continue  # General voice remains valid without fresh Brain data.
-                semantic = (summary['stale'], summary['interpretation'], self.arbiter.inhibited)
+                local = self.local_observation.summary()
+                brain_semantic = (summary['stale'], summary['interpretation'], self.arbiter.inhibited)
+                # Do not resend merely because sequence/age changed at 10 Hz.
+                semantic = (brain_semantic, local['fresh'], tuple(local['facts'].items()))
                 if semantic != self.last_spoken_state:
+                    brain_changed = self.last_spoken_state is None or self.last_spoken_state[0] != brain_semantic
                     self.last_spoken_state = semantic
                     context = json.dumps({'observation': summary['interpretation'],
                         'stale': summary['stale'], 'outputInhibited': self.arbiter.inhibited,
+                        'localSafety': local,
                         'bodyMovementVerified': False}, ensure_ascii=False)
                     # Changes of *observed* state drive character speech; no
                     # speech is generated just because an action was requested.
-                    channel = ('commentary' if self.conversation_announced and self.blind_script.run_id is None
+                    channel = ('commentary' if brain_changed and self.conversation_announced and self.blind_script.run_id is None
                                else 'thinking')
                     self.conversation_announced = self.conversation.state in ('live', 'mock')
                     self.task(self.conversation.append(channel, context))
