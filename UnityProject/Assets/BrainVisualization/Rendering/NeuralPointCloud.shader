@@ -4,10 +4,10 @@ Shader "FlyBrain/Neural Point Cloud"
     {
         _PointSize ("Point size", Float) = 0.016
         _RestingBrightness ("Resting brightness", Range(0, 1)) = 0.5
-        _AfterglowSeconds ("Spike afterglow seconds", Float) = 0.25
+        _AfterglowSeconds ("Spike afterglow seconds", Float) = 0.45
         _DisplayGain ("Display gain", Range(0, 4)) = 1
         _SpikeScale ("Spike scale", Range(1, 1.5)) = 1.5
-        _SpikeHaloScale ("Spike halo scale", Range(1, 3)) = 2.4
+        _SpikeHaloScale ("Spike halo scale", Range(1, 5)) = 4
         _SpikeGlowGain ("Spike glow gain", Range(0.25, 4)) = 2
         _ShowMembranePotential ("Show membrane potential", Float) = 0
         [HideInInspector] _DisplayTime ("Unscaled display time", Float) = 0

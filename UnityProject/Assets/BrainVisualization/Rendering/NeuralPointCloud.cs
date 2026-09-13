@@ -21,11 +21,11 @@ namespace FlyBrainVisualization
         [SerializeField] private Material renderMaterial;
         [SerializeField, Min(0.001f)] private float pointSize = 0.016f;
         [SerializeField, Range(0f, 1f)] private float restingBrightness = 0.5f;
-        [SerializeField, Min(0.01f)] private float spikeAfterglowSeconds = 0.25f;
+        [SerializeField, Min(0.01f)] private float spikeAfterglowSeconds = 0.45f;
         [SerializeField, Min(1f)] private float rateForFullGlowHz = 45f;
         [SerializeField, Min(0.01f)] private float membraneScaleMv = 2f;
         [SerializeField, Range(1f, 1.5f)] private float spikeScale = 1.5f;
-        [SerializeField, Range(1f, 3f)] private float spikeHaloScale = 2.4f;
+        [SerializeField, Range(1f, 5f)] private float spikeHaloScale = 4f;
         [SerializeField, Range(0.25f, 4f)] private float spikeGlowGain = 2f;
         [SerializeField] private bool showMembranePotential;
         [SerializeField, Range(0f, 4f)] private float displayGain = 1f;
@@ -194,7 +194,7 @@ namespace FlyBrainVisualization
             rateForFullGlowHz = Mathf.Max(1f, rateForFullGlowHz);
             membraneScaleMv = Mathf.Max(0.01f, membraneScaleMv);
             spikeScale = Mathf.Clamp(spikeScale, 1f, 1.5f);
-            spikeHaloScale = Mathf.Clamp(spikeHaloScale, 1f, 3f);
+            spikeHaloScale = Mathf.Clamp(spikeHaloScale, 1f, 5f);
             spikeGlowGain = Mathf.Clamp(spikeGlowGain, 0.25f, 4f);
             displayGain = Mathf.Clamp(displayGain, 0f, 4f);
             materialDirty = true;

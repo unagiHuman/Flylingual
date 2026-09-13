@@ -112,7 +112,9 @@ namespace Flylingual.PlayScreen
 
             var side = new VisualElement(); side.style.flexGrow = 3; side.style.flexBasis = 0; side.style.minWidth = 260; side.style.flexDirection = FlexDirection.Column; main.Add(side);
             var neuralCard = Card(); neuralCard.style.flexGrow = 1; neuralCard.style.flexBasis = 0; neuralCard.style.marginBottom = 12; side.Add(neuralCard);
-            neuralCard.Add(Label("脳・神経活動 / NEURAL ACTIVITY", 13, mint, FontStyle.Bold));
+            var neuralTitle = Label("脳・神経活動 · 橙色は実測発火", 13, mint, FontStyle.Bold);
+            neuralTitle.tooltip = "受信した計測窓で発火した細胞が光ります。短い残光を含みます。灰色は細胞の位置で、発火ではありません。";
+            neuralCard.Add(neuralTitle);
             neuralImage = new Image { scaleMode = ScaleMode.ScaleToFit }; neuralImage.style.flexGrow = 1; neuralImage.style.minHeight = 90; neuralImage.style.marginTop = 7; neuralCard.Add(neuralImage);
             neuralStatus = Label("可視化データを待機中", 12, cream); neuralStatus.style.opacity = .8f; neuralStatus.style.whiteSpace = WhiteSpace.Normal; neuralCard.Add(neuralStatus);
             RegisterControlSurface(neuralCard);
