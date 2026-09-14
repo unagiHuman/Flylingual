@@ -1,6 +1,6 @@
 # 危険イベントの実Brain接続（2026-09-14）
 
-実装済み。通常Windows Brain Serverで危険入力とFORWARDの併用、解除、STOP、切断後の取消を確認した。Unityはコンパイル・Playerビルドまで成功。実GPT Liveを伴うPlayer試験は外部送信の自動承認レビューで拒否され、未実施。ゲーム上の警告から実況までの完了判定は保留する。
+実装済み。通常Windows Brain Serverで危険入力とFORWARDの併用、解除、STOP、切断後の取消を確認した。ユーザーの外部送信許可後、実GPT Live＋Windows実Brainを使うUnity Player試験も `visual_threat_pass`。ゲームの警告から神経入力・DNp01観測・解除・移動と停止まで確認した。危険の場面実況は確認できたが、DNp01実測値の発話と固有のthinking受理は未確認。
 
 ## 実装境界
 
@@ -36,10 +36,20 @@ STOPはmotorのlatest slotと同じlockでsensoryを取消し、後続FORWARDが
 
 親実行の関連純粋テストはBridge 47件、Brain 11件PASS。Unity 6000.5.9f1のrecompileはerrors=[]、compilationFailed=false。safe-compileスクリプトは旧uloop設定が未導入で起動できなかったため、編集モード確認後に現行Unity CLIで実施。Dev-Localビルドは10:56:14→10:56:36 UTC、Succeeded。記録された1 errorはCLI応答の5秒タイムアウトで、BuildReport本文で確認した。
 
-次のコマンドは未実行:
+ユーザー許可後に実行した最終Player試験:
 
 ```powershell
 & tools/neural_player_trial.ps1 -Name visual-threat-ja -Language ja -Question 0 -VisualThreat
 ```
 
-試験はマイクなし、固定文「止まって」「前に進んで」「今どういう状態？」とゲーム／神経観測をOpenAI Live（`wss://api.openai.com/v1/live/sessions`）およびResponses（`https://api.openai.com/v1/responses`）へ送る。ローカル自由記述personaTextは試験中だけ空にし、元設定はfinallyで復元する。自動承認レビューは具体的な外部送信へのユーザー承認を要求した。承認後、既存ルートの実接触・警告開始・解除・DNp01入力ON/OFF・次の移動と停止を同じPlayerで検証する。英語の実発話、目視、ゴール到達、被弾・落下後の再プレイは別途未検証。
+試験はマイクなし、固定文「止まって」「前に進んで」「今どういう状態？」とゲーム／神経観測をOpenAI Live（`wss://api.openai.com/v1/live/sessions`）およびResponses（`https://api.openai.com/v1/responses`）へ送った。ローカル自由記述personaTextは試験中だけ空にし、終了後に元設定を復元した。当初の自動承認レビュー拒否後、ユーザーが最終試験に必要な事項を明示許可したため実施した。
+
+### 最終Player実測
+
+コード `65a35fe` の既存Dev-Local buildを使用。`127.0.0.1:18766`／MALECNS_EXPERIMENTAL／LIVE、ready=false。Brain session `42854100-49f6-49a8-9065-847e2bc86d33`、instance `6c5ddda3-e7e1-43a0-877a-eca0899df4d7`。`visual_threat_pass`、error空、fresh=true、STOP適用確認、Player exit 0。診断用の初期位置移動後、実Brain由来の歩行で2.965m進んだ。果汁接触1、警告開始1、警告解除1。固定motorや接触イベント注入は使用していない。
+
+Brain受信285 unique frame（起動待ち中を含む）、操作区間sequence 44→299、neural観測282、身体相関51。警告environmentSequence 16／Brain sequence 228から、入力request -1のsequence 230～232で外部入力1,531／1,501／1,604件を観測。各50ms窓のDNp01 R/L発火数は6/7、6/7、7/7、合計19/21。TTL送信値749ms。sequence 233は入力0で残留発火1/1、解除後request -2の235～241は入力0・発火0。保存されたvisual観測11件はbrainSequence重複なし、ON3窓／OFF8窓、同じsession/instance/epoch/generationで一致した。感覚データageMsは0～16msでfreshness範囲内。
+
+Unity frame p95 16.74ms、Player RSS sample最大574,492,672 bytes（約547.9MiB）。metricsの子孫RSSは各processのsample最大であり、Brain単体のピークには帰属させない。終了後に18765/18766のlistenerがないことを確認。原本は `artifacts/neural-feedback/visual-threat-ja.json`、`.json.events.jsonl`、`-metrics.json`、`-player.log`、`-bridge.jsonl`と`.1`。
+
+実assistant発話に「ハエたたきが来る! 動かなきゃ」「ハエたたきの予告は解除」があり、危険の場面実況を確認。状態質問にはSTOP刺激の適用と因果未確定を説明した。一方、全101 assistant断片にはDNp01・左右発火率・Hz・代理入力ON/OFFの説明がなく、Bridgeログにも視覚文脈に固有の受理証拠はない。したがって今回の成功判定は神経入力・観測とゲーム操作の統合であり、実測値の実況やthinking受理の実証ではない。次に実況を検証する場合は、視覚文脈の送信・受理を特定できる計測を追加する。英語の実発話、目視、ゴール到達、被弾・落下後の再プレイも未検証。
