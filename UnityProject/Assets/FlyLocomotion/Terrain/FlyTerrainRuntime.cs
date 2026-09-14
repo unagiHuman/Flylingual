@@ -68,6 +68,14 @@ namespace FlyLocomotionPoC
                 conversation.SendLocalSafetyObservation(++wireSequence, Mathf.Max(0f, (Time.unscaledTime - o.sampledAt) * 1000f),
                     o.groundPresent && !o.queryOverflow, o.queryOverflow ? "unknown" : o.leftEdge, o.queryOverflow ? "unknown" : o.rightEdge,
                     o.forwardBlocked, o.bodyUnsafe, TravelMeters, HorizontalSpeedMetersPerSecond);
+                if (body.Thorax != null)
+                {
+                    Vector3 heading = Vector3.ProjectOnPlane(body.Thorax.transform.forward, Vector3.up);
+                    if (heading.sqrMagnitude > .0001f)
+                        conversation.SendBodyResponseObservation(wireSequence, HorizontalSpeedMetersPerSecond,
+                            Vector3.Dot(body.LinearVelocity, heading.normalized),
+                            Vector3.Dot(body.AngularVelocity, Vector3.up) * Mathf.Rad2Deg, TravelMeters);
+                }
             }
             if (log != null)
             {

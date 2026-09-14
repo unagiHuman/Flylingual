@@ -25,6 +25,8 @@ from .control import ControlArbiter, ControlError
 from .conversation import ConversationAdapter, ConversationError
 from .conversation_settings import SettingsError, options_message, validate_settings
 from .translation import message_text, summarize
+from .neural_response import NeuralResponseAnalyzer, number
+from .neural_feedback import NeuralFeedbackScheduler, compact_summary, SPONTANEOUS
 
 
 VOICE_TEST_EVENTS = frozenset({
@@ -116,6 +118,165 @@ class Bridge:
         self.closed = False
         self.log_file = None
         self.voice_test_observation = False
+        feedback = config.get('neuralFeedback', {})
+        self.neural = NeuralResponseAnalyzer({**feedback, 'staleMs': config['control']['staleMs']})
+        self.conversation.neural_feedback_enabled = self.neural.enabled
+        self.neural_scheduler = NeuralFeedbackScheduler(feedback)
+        self.neural_subscribed = False
+        self.neural_body = None
+        self.neural_sender = None
+        self.neural_output_at = -1e15
+        self.neural_last_hud = None
+        self.neural_last_context = None
+        self.neural_context_appends = 0
+        self.neural_max_chars = 0
+
+    def clear_neural(self):
+        self.neural.reset()
+        self.neural_scheduler.reset()
+        self.neural_body = None
+        self.neural_last_context = self.neural_last_hud = None
+        if self.neural_sender is not None and not self.neural_sender.done():
+            self.neural_sender.cancel()
+
+    def neural_snapshot(self):
+        body = self.neural_body
+        now = time.monotonic() * 1000
+        if body is not None:
+            body = {**body, 'ageMs': body['initialAgeMs'] + now - body['receivedMonotonicMs']}
+        return self.neural.snapshot(now, self.age_ms(), self.arbiter.epoch,
+                                    self.conversation_generation, body=body)
+
+    def observe_neural(self, frame):
+        if not self.neural.enabled:
+            return
+        started = time.monotonic() * 1000
+        analysis_started = time.perf_counter()
+        item = self.requests.get(self.request_counter)
+        request = ({'requestId': self.request_counter, 'action': item['action'],
+                    'sentMonotonicMs': item['sent'] * 1000}
+                   if item and item['epoch'] == self.arbiter.epoch else None)
+        event = self.neural.observe(frame, identity=self.adapter.status if self.adapter else {},
+            epoch=self.arbiter.epoch, generation=self.conversation_generation,
+            received_ms=started, age_ms=self.age_ms(), request=request, inhibited=self.arbiter.inhibited)
+        if event:
+            self.neural_scheduler.offer(event)
+        self.log('neural_observation', sequence=frame.get('sequence'),
+                 eventType=event.get('eventType') if event else None,
+                 analysisMs=(time.perf_counter()-analysis_started)*1000, bufferedFrames=self.neural.buffered_frames)
+
+    def accept_neural_body(self, event):
+        required = {'type', 'controlEpoch', 'conversationGeneration', 'sequence', 'ageMs',
+                    'brainSequence', 'brainSessionId', 'brainInstanceId'}
+        optional = {'horizontalSpeedMetersPerSecond', 'forwardSpeedMetersPerSecond',
+                    'yawRateDegreesPerSecond', 'travelMeters', 'unityMonotonicMs'}
+        if (not required <= set(event) or set(event) - required - optional
+                or any(type(event[k]) is not int or event[k] < 0 for k in
+                       ('controlEpoch', 'conversationGeneration', 'sequence', 'brainSequence'))
+                or any(number(event[k]) is None for k in ('ageMs',) + tuple(optional & set(event)))
+                or any(type(event[k]) is not str or not 0 < len(event[k]) <= 256 for k in ('brainSessionId', 'brainInstanceId'))
+                or any(event[k] < 0 for k in ('horizontalSpeedMetersPerSecond', 'travelMeters', 'unityMonotonicMs') if k in event)
+                or not 0 <= event['ageMs'] <= self.config['control']['staleMs']):
+            raise ControlError('invalid_body_response_observation')
+        if not self.neural.enabled or not self.neural_subscribed:
+            return
+        status = self.adapter.status if self.adapter else {}
+        if (event['controlEpoch'] != self.arbiter.epoch
+                or event['conversationGeneration'] != self.conversation_generation
+                or event['brainSessionId'] != status.get('sessionId')
+                or event['brainInstanceId'] != status.get('instanceId')):
+            return  # Queued old observations are never gameplay errors.
+        previous = self.neural_body
+        if previous and event['sequence'] <= previous['sequence']:
+            return
+        self.neural_body = {'source': 'unity', 'fresh': True,
+            'sequence': event['sequence'], 'brainSequence': event['brainSequence'],
+            'sessionId': event['brainSessionId'], 'instanceId': event['brainInstanceId'],
+            'controlEpoch': event['controlEpoch'], 'conversationGeneration': event['conversationGeneration'],
+            'ageMs': event['ageMs'], 'initialAgeMs': event['ageMs'], 'receivedMonotonicMs': time.monotonic()*1000,
+            'horizontalSpeed': event.get('horizontalSpeedMetersPerSecond'),
+            'forwardSpeed': event.get('forwardSpeedMetersPerSecond'),
+            'yawRateDegPerSec': event.get('yawRateDegreesPerSecond'),
+            'travelMeters': event.get('travelMeters'), 'unityMonotonicMs': event.get('unityMonotonicMs')}
+
+    async def send_neural_context(self, channel, event):
+        # A single consumer. Validate again immediately before the only API await.
+        current = self.neural_snapshot()
+        if (not current or not current.get('fresh') or self.arbiter.inhibited
+                or self.conversation_interaction != 'control' or not self.conversation_accepting
+                or self.conversation.state != 'live'
+                or current.get('controlEpoch') != event.get('controlEpoch')
+                or current.get('conversationGeneration') != event.get('conversationGeneration')
+                or current.get('identity') != event.get('identity')
+                or (event.get('current') or {}).get('requestedRequestId') != self.request_counter
+                or (current.get('current') or {}).get('requestedRequestId') != self.request_counter
+                or (channel == 'commentary' and (current.get('eventType') not in SPONTANEOUS
+                    or current.get('eventType') != event.get('eventType')
+                    or current.get('allowedClaims') != event.get('allowedClaims')
+                    or time.monotonic()-self.conversation.last_voice_end_at < 1
+                    or time.monotonic()*1000-self.neural_output_at < 1500 or bool(self.intent_tasks)))
+                or time.monotonic()*1000 < self.neural_scheduler.blocked_until_ms):
+            return
+        content = compact_summary(current, self.conversation.settings['language'],
+                                  no_sarcasm=self.neural_scheduler.no_sarcasm)
+        self.log('neural_context_append', eventId=current['eventId'], channel=channel, chars=len(content))
+        self.neural_context_appends += 1
+        self.neural_max_chars = max(self.neural_max_chars, len(content))
+        await self.conversation.append(channel, content)
+
+    def publish_neural(self):
+        if not self.neural.enabled:
+            return
+        event = self.neural_snapshot()
+        if not event:
+            return
+        # Nonessential HUD traffic cannot fill the control queue or close it.
+        if self.neural_subscribed and self.control_queue is not None and self.control_queue.qsize() < 96:
+            self.control_queue.put_nowait({'type': 'neural_response', **event})
+        if self.neural_sender is not None and not self.neural_sender.done():
+            return
+        # Body measurements arrive after their Brain frame; refresh the one
+        # pending event with the correlated snapshot before presentation.
+        self.neural_scheduler.offer(event)
+        now = time.monotonic()*1000
+        busy = (now - self.conversation.last_voice_end_at*1000 < 1000
+                or now - self.neural_output_at < 1500 or bool(self.intent_tasks))
+        selected, reason = self.neural_scheduler.take(now, epoch=self.arbiter.epoch,
+            generation=self.conversation_generation, request_id=self.request_counter,
+            session_id=(event.get('identity') or {}).get('sessionId'), inhibited=self.arbiter.inhibited,
+            chat_only=self.conversation_interaction == 'chat_only', busy=busy)
+        if selected:
+            self.neural_sender = self.task(self.send_neural_context('commentary', selected))
+        elif not busy and now >= self.neural_scheduler.blocked_until_ms:
+            # One factual thinking update per applied request, without unsolicited speech.
+            current = event.get('current') or {}
+            key = (event.get('controlEpoch'), event.get('conversationGeneration'), current.get('appliedRequestId'), event.get('fresh'))
+            if key != self.neural_last_context and current.get('stimulusApplied') and event.get('fresh'):
+                self.neural_last_context = key
+                self.neural_sender = self.task(self.send_neural_context('thinking', event))
+
+    def neural_user_input(self, text):
+        self.neural_scheduler.interrupt(time.monotonic()*1000)
+        self.neural_scheduler.preference(text)
+
+    async def speak_non_action(self, context, delegation_id=None):
+        if self.neural.enabled:
+            # Commentary is paraphrased as speech; factual context belongs in
+            # thinking, followed by a short behavioral redirect for questions.
+            self.neural_context_appends += 1
+            self.neural_max_chars = max(self.neural_max_chars, len(context))
+            self.log('neural_question_context', chars=len(context))
+            await self.conversation.append('thinking', context, delegation_id)
+            instruction = ('最新のプレイヤーの質問・雑談に直接答えて。台本の続きや移動の催促に置き換えず、'
+                           '事実と未確認を区別して短い1〜2文で。一般質問にはその話題で答えて。'
+                           if self.conversation.settings['language'] == 'ja' else
+                           'Answer the latest player question or chat directly in one or two short sentences. '
+                           'Do not continue tutorial lines or ask them to move. Preserve unknowns. Answer general topics normally. ')
+            if self.neural_scheduler.no_sarcasm:
+                instruction += '皮肉なし。' if self.conversation.settings['language'] == 'ja' else 'No sarcasm. '
+            await self.conversation.append('instructions', instruction)
+        else:
+            await self.conversation.append('commentary', context, delegation_id)
 
     def log(self, event, **fields):
         stamp = round(time.monotonic()*1000, 3)
@@ -346,7 +507,7 @@ class Bridge:
                 'target': {'host': self.target['host'], 'port': self.target['port']},
                 'brainConnected': bool(self.adapter and self.adapter.connected), 'brainReady': False,
                 'conversationState': self.conversation.state, 'conversationMode': self.conversation.mode,
-                'capabilities': ['conversation_only_v1', 'native_voice_actions_v1', 'blind_run_script_v1', 'local_visual_observation_v1', 'bounded_action_plans_v1', 'persistent_intents_v1', 'distance_intents_v1'],
+                'capabilities': ['conversation_only_v1', 'native_voice_actions_v1', 'blind_run_script_v1', 'local_visual_observation_v1', 'bounded_action_plans_v1', 'persistent_intents_v1', 'distance_intents_v1'] + (['neural_response_v1'] if self.neural.enabled else []),
                 'activeExecution': self.execution_state(),
                 'actionPlan': ({k: self.plans.active[k] for k in ('planId', 'name', 'step', 'requestId')}
                                if self.plans.active else None),
@@ -391,6 +552,7 @@ class Bridge:
             queue.put_nowait(event)
 
     def invalidate(self, preserve_conversation=False):
+        self.clear_neural()
         self.clear_execution('invalidated')
         self.last_execution_context = None
         self.plans.cancel()
@@ -448,6 +610,7 @@ class Bridge:
         while len(self.requests) > 4096:
             self.requests.popitem(last=False)
         if action == 'STOP':
+            self.neural_scheduler.interrupt(time.monotonic()*1000)
             if preserve_execution is None:
                 self.clear_execution('stop')
             else:
@@ -497,6 +660,7 @@ class Bridge:
             identity = tuple(event.get(k) for k in ('instanceId', 'sessionId', 'backendId', 'datasetId'))
             if self.brain_identity is not None and identity != self.brain_identity:
                 self.stop_conversation_session()
+                self.clear_neural()
             self.brain_identity = identity
             self.log('brain_identity', **{k: event.get(k) for k in (
                 'instanceId', 'sessionId', 'backendId', 'datasetId', 'sourceHash', 'configHash',
@@ -530,6 +694,13 @@ class Bridge:
                 outgoing['appliedRequestId'] = (item['unityId'] if item and item['source'] == 'manual_tcp'
                     and item['epoch'] == self.arbiter.epoch and item['unityGeneration'] == self.unity_generation else 0)
                 self.motor_emit(outgoing)
+            # Read-only analysis happens after motor forwarding, with no API await.
+            try:
+                self.observe_neural(event)
+            except Exception as exc:
+                self.neural.reset()
+                self.neural_scheduler.pending = None
+                self.log('neural_observation_failed', error=type(exc).__name__)
         elif kind == 'ack':
             item = self.requests.get(event['requestId'])
             if item and item['epoch'] == self.arbiter.epoch:
@@ -544,6 +715,7 @@ class Bridge:
             self.emit({'type': 'error', 'error': 'brain_transport_error'})
 
     async def connect_brain(self, target):
+        self.clear_neural()
         self.frame = None
         self.stop_applied = False
         adapter = BrainAdapter(self.brain_message)
@@ -609,6 +781,10 @@ class Bridge:
             self.emit(self.state())
 
     async def conversation_event(self, event):
+        if event.get('type') == 'audio':
+            self.neural_output_at = time.monotonic()*1000
+        elif event.get('type') == 'conversation_text' and event.get('role') == 'user':
+            self.neural_user_input(event.get('text'))
         if event['type'] == 'voice_test_diagnostic':
             if self.voice_test_observation and event.get('event') in VOICE_TEST_EVENTS:
                 self.log(event['event'], **{k: v for k, v in event.items() if k in VOICE_TEST_FIELDS})
@@ -637,6 +813,7 @@ class Bridge:
         self.emit(event)
 
     async def voice_utterance(self, text, delegation_id, generation):
+        self.neural_user_input(text)
         if generation == self.conversation.context_generation:
             if self.conversation_interaction == 'chat_only':
                 # Do not invoke Responses or construct an Action in this mode.
@@ -660,6 +837,7 @@ class Bridge:
             self.log('voice_intent_dispatch', outcome='stale_context')
 
     async def transcript_utterance(self, text, candidate):
+        self.neural_user_input(text)
         # Classification is speculative. A caption (including a question or an
         # incomplete correction) must not cancel any pending command by itself.
         epoch, revision = self.arbiter.epoch, self.intent_revision
@@ -698,7 +876,7 @@ class Bridge:
                     return
                 if not self.conversation.claim_transcript(candidate):
                     return
-                await self.conversation.append('commentary',
+                await self.speak_non_action(
                     self.non_action_reply_context(text, proposal['kind']), candidate.get('delegationId'))
                 return
             if not self.conversation.claim_transcript(candidate):
@@ -719,6 +897,12 @@ class Bridge:
     def non_action_reply_context(self, text, kind, visual_direction=None):
         # Live already has the utterance. Keep a complete observation payload
         # inside ConversationAdapter.append's 380-character transport limit.
+        if self.conversation_interaction == 'chat_only':
+            return compact_summary(None, self.conversation.settings['language'], question=True,
+                                   no_sarcasm=self.neural_scheduler.no_sarcasm)
+        if self.neural.enabled and kind != 'local_visual_question' and self.conversation_interaction == 'control':
+            return compact_summary(self.neural_snapshot(), self.conversation.settings['language'],
+                                   question=True, no_sarcasm=self.neural_scheduler.no_sarcasm)
         context = self.intent_context()
         active = context.get('activeCommand')
         local = context.get('localSafety', {})
@@ -929,8 +1113,28 @@ class Bridge:
             else:
                 # Voice Actions receive their result only when Brain application
                 # is observed, so a late "sent" reply cannot follow completion.
+                if not voice and proposal['kind'] in ('question', 'clarify'):
+                    # Typed input was never heard by GPT-Live. Send its actual
+                    # words as bounded, explicitly numbered context fragments;
+                    # the final factual reply still has its own 380-char limit.
+                    parts, part = [], ''
+                    for character in text:
+                        if len(json.dumps(part + character, ensure_ascii=False)) > 270:
+                            parts.append(part)
+                            part = ''
+                        part += character
+                    if part:
+                        parts.append(part)
+                    for index, part in enumerate(parts, 1):
+                        check_transcript()
+                        await self.conversation.append('thinking',
+                            'Latest player typed question; join verbatim parts (' + str(index) + '/' + str(len(parts)) + '): '
+                            + json.dumps(part, ensure_ascii=False))
                 if proposal['kind'] != 'action' or not voice:
-                    await self.conversation.append('commentary', reply, delegation_id)
+                    if proposal['kind'] in ('question', 'clarify'):
+                        await self.speak_non_action(reply, delegation_id)
+                    else:
+                        await self.conversation.append('commentary', reply, delegation_id)
                 if (proposal['kind'] == 'update' and voice
                         and epoch == self.arbiter.epoch and revision == self.intent_revision
                         and notice_generation == self.conversation_generation
@@ -1119,6 +1323,8 @@ class Bridge:
         if event.get('cue') != 'link_error':
             self.require_fresh()
         text, speak = self.blind_script.accept(event, self.conversation.settings['language'])
+        if speak:
+            self.neural_scheduler.interrupt(time.monotonic()*1000, 4000)
         # Send only the selected line, never the catalog, run ID or cue name.
         instruction = ('Blind Sugar Run。今回確認された場面のセリフだけを短く伝える。'
                        '意味を変えず一言に言い換えてよいが、事実・進路・原因を足さない。'
@@ -1138,7 +1344,15 @@ class Bridge:
         if not isinstance(event, dict):
             raise ControlError('invalid_message')
         kind = event.get('type')
-        if kind == 'voice_test_observation':
+        if kind == 'neural_observation_subscribe':
+            if set(event) != {'type', 'controlEpoch', 'conversationGeneration', 'enabled'} or type(event.get('enabled')) is not bool:
+                raise ControlError('invalid_neural_subscription')
+            if (type(event['controlEpoch']) is int and event['controlEpoch'] == self.arbiter.epoch
+                    and type(event['conversationGeneration']) is int and event['conversationGeneration'] == self.conversation_generation):
+                self.neural_subscribed = self.neural.enabled and event['enabled']
+        elif kind == 'body_response_observation':
+            self.accept_neural_body(event)
+        elif kind == 'voice_test_observation':
             if (set(event) != {'type', 'enabled'} or type(event['enabled']) is not bool
                     or self.control_ws is None):
                 raise ControlError('invalid_voice_test_observation')
@@ -1187,6 +1401,7 @@ class Bridge:
                                 event.get('controlEpoch'), event.get('validForMs'))
             await self.submit(event['action'], 'manual_ui', event['commandId'])
         elif kind == 'player_text':
+            self.neural_user_input(event.get('text'))
             self.emit({'type': 'conversation_text', 'role': 'user', 'text': str(event.get('text', ''))[:2000], 'append': False})
             if self.conversation.mode != 'text' and self.is_local_visual_question(event.get('text')):
                 if self.conversation_interaction == 'chat_only':
@@ -1231,6 +1446,7 @@ class Bridge:
             self.native_voice_control = native_voice_control
             self.conversation.interaction = interaction
             self.blind_script.reset()
+            self.clear_neural()
             self.conversation_generation += 1
             self.local_observation.clear()
             self.local_visual.clear()
@@ -1271,6 +1487,7 @@ class Bridge:
             raise ControlError('unknown_message')
 
     def stop_conversation_session(self):
+        self.clear_neural()
         had_plan = self.plans.active is not None
         had_execution = self.active_execution is not None
         self.plans.cancel()
@@ -1502,6 +1719,7 @@ class Bridge:
             await self.check_control_safety()
             self.emit(self.state())
             self.publish_execution_context()
+            self.publish_neural()
             if time.monotonic()-self.last_summary > 2:
                 self.last_summary = time.monotonic()
                 summary = self.summary()
@@ -1509,9 +1727,18 @@ class Bridge:
                 self.log('voice_pipeline', interaction=self.conversation_interaction,
                          state=self.conversation.state, owner=self.arbiter.owner,
                          outputInhibited=self.arbiter.inhibited,
+                         neuralDiagnostics={'enabled': self.neural.enabled,
+                             'pending': int(self.neural_scheduler.pending is not None),
+                             'senderTasks': int(self.neural_sender is not None and not self.neural_sender.done()),
+                             'allTasks': len(self.tasks), 'intentTasks': len(self.intent_tasks),
+                             'controlQueueDepth': self.control_queue.qsize() if self.control_queue else 0,
+                             'motorQueueDepth': self.motor_queue.qsize() if self.motor_queue else 0,
+                             'contextAppends': self.neural_context_appends, 'maxSummaryChars': self.neural_max_chars},
                          audioDiagnostics=self.conversation.diagnostics())
                 if self.conversation_interaction == 'chat_only':
                     continue  # General voice remains valid without fresh Brain data.
+                if self.neural.enabled:
+                    continue  # The bounded neural consumer owns observation commentary.
                 local = self.local_observation.summary()
                 brain_semantic = (summary['stale'], summary['interpretation'], self.arbiter.inhibited)
                 # Do not resend merely because sequence/age changed at 10 Hz.
@@ -1627,6 +1854,7 @@ class Bridge:
                 sender.cancel()
                 await asyncio.gather(sender, return_exceptions=True)
             if self.control_ws is ws:
+                self.neural_subscribed = False
                 self.control_ws = self.control_queue = None
                 self.voice_test_observation = False
                 self.conversation.voice_test_observation = False

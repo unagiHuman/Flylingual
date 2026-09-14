@@ -1,0 +1,160 @@
+# 神経応答の表示・会話還流
+
+更新: 2026-09-14。仕様書 `Flylingual_Brain_Feedback_Codex_Astra_Spec.md` の実装・検証記録。Windows実Brain→Playerの移動・STOP、観測配送、同一LIF列の非干渉を確認した。Phase Bは12主試行＋再現性対照を実行し、増分の履歴効果を支持せず、未校正のためINCONCLUSIVEで探索終了。**LiveDialogueGroundingはPARTIAL、実マイクとHUD目視は未確認**。`ready=false`／productReady=falseを維持し、身体因果もunknown。
+
+## 実装と境界
+
+`Runtime/Bridge/neural_response.py` の `NeuralResponseAnalyzer` が新規BrainFrameの少数readoutだけを解析する。`server.py` が適用requestとidentityを対応付け、`neural_feedback.py` の単一consumer・最新1件の待機枠を通じて既存ConversationAdapterへ最大380文字の事実を送る。神経readerでGPT応答を待たない。
+
+Unityは `ConversationSessionController` で任意購読し、`NeuralResponsePanel` を `PlayScreenView` の神経パネルへ追加する。`FlyTerrainRuntime` は既存センサー送信位置でThoraxの速度と角速度、既存odometerを読み取る。Brain/LIF/RNG/decoder/CPG/物理/Actionへ書き込まない。
+
+HUDは要求、刺激適用、selected VNC raw、motor、身体速度を分離する。raw曲線はmV可変軸、motor曲線は±1固定軸、横軸は**除外した適用frameの終端から0–200脳内ms**。薄い線は前回比較曲線。欠測・stale・相関不成立はunknownでありゼロに補完しない。body対応sequenceが最新神経sequenceより古い場合は、両sequenceと脳内時間差を明示する。
+
+## 設定
+
+既存Bridge configの最上位 `neuralFeedback` に以下を指定できる。
+
+| キー | 既定値 | 意味 |
+|---|---|---|
+| enabled | true | 読み取り解析と新capability。有効化しても運動経路を変更しない |
+| spontaneousEnabled | true | 適格eventの低優先度実況 |
+| cooldownMs | 4000 | 実時間。4000–60000の整数 |
+| rawThresholdMv / filteredThresholdMv | null | 選択raw／平滑化rawの検出閾値、mV |
+| motorThreshold | null | 無次元motorの検出閾値 |
+| changeThresholdMv | null | 前回差の最低mV閾値 |
+| thresholdVersion / calibrationEvidence | null | 校正の版と根拠参照 |
+| bodyResponseGraceMs | null | 身体応答を待つ実時間ms |
+| bodySpeedThresholdMetersPerSecond | null | 前方身体速度の閾値、m/s |
+| bodyYawThresholdDegPerSec | null | 身体yaw速度の閾値、degree/s |
+| bodyMotorThreshold | null | 身体比較に使うmotor閾値、無次元 |
+| bodyYawSign | null | 実機校正したyawとmotor turnの符号対応、±1 |
+| bodyThresholdVersion / bodyCalibrationEvidence | null | 身体判定の校正版と根拠参照 |
+
+閾値は正の有限数値のみ。版・校正根拠がない閾値は有効にしない。**既定は未校正なので、応答検出・強弱・残留を推測で実況しない。** 数値表示と質問用の事実要約は別に扱う。鮮度は既存control.staleMs（通常750ms）に従い、緩めて合格させない。
+
+解析バッファは脳内10秒かつ512frame以下。適用境界の最初のframeは比較窓から除外し、以後200msを時間加重で集計する。`comparison.timeOrigin=end_of_excluded_application_frame` は、その除外frameの**終端**が比較相対時刻0であることを示す。刺激送信時刻や実時間0ではない。同一Actionの維持更新は新刺激立ち上がりとしない。epoch・会話世代・Brain identity変更で参照を失効させる。
+
+## Control WebSocket追加契約 v1
+
+既存BrainFrame/motor契約は変更しない。`bridge_state.capabilities` のstring配列に `neural_response_v1` がある場合だけ、Unityは以下を送る。旧Bridgeや機能無効時は追加送受信を行わない。
+
+```json
+{"type":"neural_observation_subscribe","controlEpoch":1,"conversationGeneration":1,"enabled":true}
+```
+
+購読者だけが `type=neural_response`、`schemaVersion=1` を受信する。任意HUD trafficは制御queueを詰まらせず、過負荷では破棄する。
+
+| 受信field | 単位・意味 |
+|---|---|
+| controlEpoch / conversationGeneration / sequence | 現行世代とBrain sequence。過去世代を現在値にしない |
+| identity | instanceId/sessionId/backendId/datasetId/sourceHash/graphHash/configHash。欠けたhashはunknown |
+| mode / fresh / ageMs | LIVE等の受信mode、鮮度、観測ageの実時間ms |
+| current.requestedAction / requestedRequestId | 要求。受付と適用待ちを適用成功から区別 |
+| current.observedAction / appliedRequestId / stimulusApplied | frame由来の刺激適用相関。身体成功を意味しない |
+| current.raw.forward/turn | selected VNC readout、mV。turnは符号付き |
+| current.populationDeltaMv.forward/turn.L/R | 左右populationの膜電位変化、mV |
+| current.filteredRaw / motor | 前者mV、後者無次元。decoder残留と神経rawを分離 |
+| current.brainStartMs/brainEndMs/windowMs | 脳内時間。wall timeとは別の軸 |
+| current.readoutHz / stepWallTimeMs | 選択DNのHz／1計算窓の実時間ms |
+| comparison / currentCurve / previousCurve | 比較適格性・理由、最大32点の適用相対曲線 |
+| body | 相関済み実測速度。brainSequence/currentSequence/brainTimeOffsetMsで遅れを明示 |
+| allowedClaims / causalStatus / residualLayer | 許される限定主張。通常比較の原因は未確定 |
+
+Unity→Bridgeの身体観測は `type=body_response_observation`。必須はcontrolEpoch、conversationGeneration、独自sequence、ageMs、brainSequence、brainSessionId、brainInstanceId。任意測定値は以下。
+
+| field | 単位・由来 |
+|---|---|
+| horizontalSpeedMetersPerSecond | world水平面のThorax速度の大きさ、m/s |
+| forwardSpeedMetersPerSecond | Thorax前方向への水平速度射影、符号付きm/s |
+| yawRateDegreesPerSecond | Thorax角速度のworld Y成分、degree/s |
+| travelMeters | 既存odometerの水平移動距離、m。テレポート等で無効なら送らない |
+| unityMonotonicMs | Unity realtimeSinceStartup由来ms。他processの時計と直接減算しない |
+
+ageMsは送信queue滞在時間を加算する。Bridge受信時の単調時計を別途付ける。前方軸は既存 `FlyTerrainSensor.Forward` と同じThorax前方投影を根拠とする。**yawの正符号とmotor turnの符号対応は実機未校正**で、HUDにも表示する。これらは最新観測との相関であり、身体が神経状態だけで動いたという因果証明ではない。
+
+## 会話と判定の制限
+
+chat_onlyでは現在のBrain／身体観測を会話へ流さない。controlでも抑止、切断、古い世代、発話中、危険scene cue等の条件で低優先度実況を落とす。「実況を減らして」「皮肉なし」の希望は提示側で扱う。人格は事実の言い方だけを変える。
+
+`MOTOR_BODY_DISCREPANCY` の判定経路は実装済み。ただし7つの身体校正設定が既定nullなので、**通常設定ではuncalibrated／unknownを維持**する。校正済みでも同一requestの相関、新しい身体sampleが2件以上・100ms以上、応答猶予、鮮度等を要求し、snapshot再送で成立させない。不一致は機構の原因を証明しない。速度を受信できたことだけでbodyMovementVerifiedをtrueにしない。rawゼロを全脳静止、motorゼロを身体停止と説明せず、弱い反応を疲労・拒否・気分として認定しない。
+
+新しいLive向け回答policyは機能enabled時だけ適用し、disabledでは従来経路を維持する。型付きテキスト質問の本文をLiveへ渡す経路を補い、`speak_non_action` は事実を `thinking` へ渡した後、`instructions` で最新質問へ短く直接回答するよう指示する。台本継続や移動催促に置き換えない。このchannelの責務に沿った接続は[公式Live delegation資料](https://developers.openai.com/api/docs/guides/live-delegation)を参照した。最終修正後の実回答品質はまだ検証途中で、実装済みと受入完了を分ける。
+
+日英の要約作例（実APIの発言ではない）:
+
+- 「選択VNCの値は測れてる。身体の動作と原因はまだ確認できてない。」
+- “Selected VNC values are available. Body movement and the cause remain unverified.”
+
+## Phase B準備と受入gate
+
+`tools/neural_history_diagnostic.py` は本番から独立した準備済みrunner。Phase A成立後だけ実行する。100ms共通baseline、500msの無刺激またはTURN_R履歴、300msの固定FORWARDまたは無刺激、50ms集計。独立Generatorのcell/tick列とSHAを揃え、実LIFを初期から計算して全状態を持ち越す。主12試行＋A+再現性対照1件。D_totalとD_increment、decoder共通初期／持ち越しを分ける。未校正の既定は12主試行でINCONCLUSIVE。事前登録された校正根拠・方向・mean/integral/peak閾値があり主3seedと再現性対照を通過した場合だけ、未使用3seedを追加して主試行最大24とする。方法・seed・source/data・criteriaのhashを固定し、不一致をSTIMULUS_NOT_CONTROLLEDとして保存する。観測非干渉報告は別の受入参照としてmanifestに記録できる。
+
+| gate | 本記録時点 |
+|---|---|
+| 解析・提示の単体 | Bridge関連の最新167件合格。実機の代替ではない |
+| 診断runnerの純粋単体 | 別途8件合格。イベント・差分・基準・12/24試行制限等 |
+| Unity compile/HUD描画 | Windows Playerの実描画起動まで確認。PNGが保存されず、HUDの目視確認は未実施 |
+| 同一実LIF入力で観測OFF/ON非干渉 | 30frameのraw/motor/RNG一致、初回PASS。解析p95 0.409ms。`artifacts/neural-feedback/noninterference.json` |
+| Windows実Brain→Unity | `127.0.0.1:18766`、MALECNS_EXPERIMENTAL/LIVE、ready=false。最終日本語ON:155frame/154神経観測/147身体相関、sequence20→163、2.937m後STOP。OFF:159frame/観測0、sequence19→162、2.868m後STOP。両Player error空 |
+| 実GPT-Live日英 | PARTIAL。日英の恐怖質問で感情・拒否を断定しない実回答を確認。日本語stateは11秒で回答途中、古いscene introが残る。一般雑談等と実マイクは未検証 |
+| Phase B履歴診断 | 12主試行＋1対照、再現完全一致。D_incrementほぼ0。閾値未校正INCONCLUSIVE、holdoutなし、探索終了 |
+| Phase C身体受入 | 通常移動・STOPと観測配送を上記で確認。履歴による身体差の因果は未証明。姿勢・接触・CPG・慣性の交絡は残る |
+| latency p50/p95・RSS | 最新ON解析n171、p50 0.1893ms/p95 0.2955ms。step・RSSは下表。操作適用latencyは各n6で確証不可 |
+
+初期Windows証跡は `artifacts/neural-feedback/windows-ja-state.json`、`windows-en-state.json` と同名の `-metrics.json`、`-player.log`、`.json.events.jsonl`。旧4問を連続する試験では20秒のハエたたきが発動し、会話受入れの条件として不適切だったため1回1問へ変更した。旧試験の失敗を合格に書き換えず、最終grounding指示の効果は下記の限定的な日英回答までとして記録する。
+
+## 確定した最終測定
+
+最新の比較原本は `artifacts/neural-feedback/windows-ja-on-final-summary.json` と `windows-ja-off-final-summary.json`。入力は明示した合成テキストで、実GPT-Live/API/Brain/Unityを通す。音声入力の受入れではない。
+
+| 指標 | ON | OFF |
+|---|---:|---:|
+| 一意BrainFrame数 | 171 | 169 |
+| step実時間 p50 / p95 ms | 110.2793 / 135.1676 | 111.7901 / 133.3757 |
+| 解析実時間 p50 / p95 ms | 0.1893 / 0.2955（n171） | 解析なし |
+| submitted→applied p50 / p95 ms | 218.5 / 234.0（n6） | 211.0 / 230.25（n6） |
+| Unity frame p95 ms | 16.7438 | 17.0485 |
+| sampledPlayerPeakRssBytes | 565936128 | 565809152 |
+| control queue最大深さ | 4 | 2 |
+| 事実context追加件数 / 最大文字数 | 1 / 152 | 0 / 0 |
+
+解析はperf_counter系の単調時計で計測。stepはほぼ同程度だが、別のLive試行の時刻・身体条件は同一ではなく、小Nの操作latencyから「遅延増加なし」を統計的に確証しない。RSSは5秒間隔のsampled値で、瞬間peakや全graph常駐量ではない。ownedProcessTreeのPID別値は別母集団なので単純に同じPlayer指標と混ぜない。OFFログには終了時のbackground_failedが1件あり、Playerのerror空だけで全ログ無例外とはしない。
+
+`windows-en-emotion-v2.json` は163frame/162神経観測/162身体相関、2.864m後STOP、Player error空。恐怖質問への実回答には “I’m not measuring fear” が含まれる。一方、日本語stateは11秒の観測窓で回答が終わらず、古いscene introも残った。`windows-en-emotion-final` のstartup_timeoutは別作業のタイトル画面で停止した既知失敗として保持し、probeは修正済み。成功したv2と失敗したfinalを取り違えない。
+
+最終日本語render試行 `windows-ja-emotion-render.json` はcontrol_pass、155frame/154神経観測/151身体相関、2.859884m移動後STOP、error空、ready=false。実回答は「『STOP』刺激は適用済み。それで運動出力がゼロになってるっていう測定があるだけで、怖さや拒否とは結びつかないよ。」だった。先頭に旧sceneの「でわかる。」が残ったため、日英とも感情を断定しない回答が確認できても全体のgrounding受入れはPARTIALを維持する。
+
+同名 `-summary.json` は所有process treeのRSSも記録し、sampledPlayerPeakRssBytes=645386240。実描画ON試行なのでbatch OFFとの直接性能比較はしない。実描画起動はしたがPNGが得られずHUD目視は未確認。追加試行は行わず、実マイク、一般雑談、古いscene発言の混入を残課題とする。
+
+最終Unity再コンパイルはcompleted、failed=false、errors=[]。render試行終了時のbackground_failed1件はPlayer終了後のClientConnectionResetErrorで、神経解析例外はなかった。通常local設定はja/live/hiroyuki_likeへ復元済み。Git統合は親担当の後続作業で、この記録だけでcommit/push済みとはしない。
+
+### Phase Bの陰性・不確定結果
+
+原本 `artifacts/neural-feedback/history-diagnostic/manifest.json`／`results.json`。seed1701/1702/1703、A+/A0/B+/B0、各9000tick（100+500+300脳内ms）、N=166700、E=19670694。同じ刺激cell/tick列を実LIFに入力し、A+再現性対照のraw/motor差は完全0。入力hash対照も通過。
+
+| seed | D_total平均 F / T mV | D_increment平均 F / T mV |
+|---|---|---|
+| 1701 | 0.001486 / 0.023382 | −2.22e−10 / −3.98e−10 |
+| 1702 | 0.001609 / 0.017543 | 1.33e−15 / −6.11e−15 |
+| 1703 | 0.002081 / 0.025647 | 1.78e−15 / 5.17e−15 |
+
+D_totalには残留を含む差があるが、新刺激増分への履歴効果を支持する結果ではない。seed1701の正peakもF=2.21e−6/T=3.96e−6mV程度で、平均だけで全時点が厳密ゼロとは言わない。意味差の工学閾値を捏造せずcriteria=null、最終INCONCLUSIVE、holdout未実行で止めた。主試行wall timeは1.542–1.985秒、windowごとの最大sampled RSSは92459008bytes。mmapをwarm-touchしておらず、低RSSを全graph常駐の証拠にしない。Brain、刺激、decoder、物理を変更して差を作っていない。
+
+### 再現情報と実行入口
+
+Windows Unity6000.5.9f1、Python3.10.12、NumPy1.24.3。実行ラベル `8820d3b-plus-neural-feedback` は作業差分込みで、完成commit hashを意味しない。Phase Bの登録SHAは `92e47cf5cbca68f6ab4e6c04bcfe3ff2958cd6a8befb4397dd063dc3fb817a36`。config SHAは全測定で `4a2a785741f58ba07022618dcb91b8f99b5e5d2a1cc515017015b60119dfad96`。全source/dataのファイル別SHAはmanifestに保存済み。
+
+Live最終summaryのsourceHashは `7551dbf610622af15be53ac8c33846d9be7a687e0455417ed3a7773843939e21`、graphHashは `dd49c763a2eb2e03a0d1f450a7743bf9f3a13922e2dab02b0f348f44aaf4a569`。非干渉runnerの集約hashとは算出対象が異なるため、文字列の違いを同一方式での不一致と扱わない。Phase A受入参照ファイルSHAは `3ffc3a801e902fdf2b2fc342c90eb863a1dbf3760a5f1e6520ba3c19407bad09`。
+
+repoルートからの数値検証入口（実行済みmanifest/resultsを上書きしない）:
+
+```powershell
+artifacts/windows-malecns/.venv/Scripts/python.exe -m unittest tools.test_neural_history_diagnostic -v
+artifacts/windows-malecns/.venv/Scripts/python.exe tools/neural_noninterference.py --graph artifacts/neuron_checkpoint --config Brain/MaleCNS/config/analog_temporal_v1.json --output <NEW-REPORT.json>
+artifacts/windows-malecns/.venv/Scripts/python.exe tools/neural_history_diagnostic.py prepare --graph artifacts/neuron_checkpoint --config Brain/MaleCNS/config/analog_temporal_v1.json --output <NEW-DIRECTORY> --commit-label <EXECUTION-LABEL> --phase-a-evidence artifacts/neural-feedback/noninterference.json
+artifacts/windows-malecns/.venv/Scripts/python.exe tools/neural_history_diagnostic.py run --manifest <NEW-DIRECTORY>/manifest.json --phase-a-accepted
+```
+
+Windows実機probe入口はPlayerの `-neuralFeedbackProbe <OUTPUT.json>`、英語は `-neuralFeedbackEnglish`、質問選択は `-neuralFeedbackQuestion <0..3>`。これらは明示的な試験専用引数で、通常起動へ自動適用しない。実行時は親所有の単一Bridge→Windows Brain接続を使い、別Brain probeやMockへ置き換えない。今回の陰性結果を理由に追加seed探索を再開しない。
+
+結果が陰性ならNO_MEANINGFUL_EFFECTまたはINCONCLUSIVEを残して終了する。刺激、重み、decoder、物理を変えて効果を作らない。Phase B/Cの未証明を隠さず、Phase Aの実用性と分けて報告する。

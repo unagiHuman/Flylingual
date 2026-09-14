@@ -192,7 +192,8 @@ class ConversationAdapter:
             self.transcript_overflow = False
             self.fragments.clear()
             self.delegations.clear()
-            instructions = build_voice_instructions(self.settings, self.interaction)
+            instructions = build_voice_instructions(self.settings, self.interaction,
+                neural_feedback=getattr(self, 'neural_feedback_enabled', False))
             if self.interaction == 'control':
                 instructions += ('\nBody-control mode: The player\'s standalone "止まって", '
                     '"止まれ", "ストップ", or "stop" requests stopping the fly. '

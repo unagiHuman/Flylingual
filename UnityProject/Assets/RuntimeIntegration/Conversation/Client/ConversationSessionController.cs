@@ -26,6 +26,10 @@ namespace Flylingual.Conversation
         UnityMicrophoneCapture microphone;
         UnityReplyAudioPlayer replyAudio;
         int requestNumber;
+        int neuralSubscribedEpoch = -1, neuralSubscribedGeneration = -1;
+        public bool NeuralResponseAvailable { get; private set; }
+        public NeuralResponsePanel.Observation NeuralResponse { get; private set; }
+        public double NeuralResponseReceivedAt { get; private set; } = double.NegativeInfinity;
         bool requestedStart;
         bool autoStartPending = true;
         bool startChatOnly;
@@ -432,6 +436,7 @@ namespace Flylingual.Conversation
             switch (header.type)
             {
                 case "bridge_state": HandleBridgeState(JsonUtility.FromJson<BridgeState>(json)); break;
+                case "neural_response": HandleNeuralResponse(json); break;
                 case "conversation_options": Options = JsonUtility.FromJson<ConversationOptions>(json) ?? Options; break;
                 case "conversation_settings": HandleSettings(JsonUtility.FromJson<ConversationSettingsMessage>(json)); break;
                 case "conversation_state": HandleConversationState(JsonUtility.FromJson<ConversationStateMessage>(json)); break;
@@ -453,6 +458,7 @@ namespace Flylingual.Conversation
             bool boundary = state.epoch != ControlEpoch || state.sessionId != BrainSessionId || state.instanceId != BrainInstanceId;
             if (boundary)
             {
+                ResetNeuralResponse();
                 frameReceivedAt = double.NegativeInfinity;
                 Sequence = -1;
                 pendingActions.Clear();
@@ -469,6 +475,8 @@ namespace Flylingual.Conversation
             Ready = HasCapability(state.capabilities, "conversation_only_v1");
             BlindRunScriptAvailable = HasCapability(state.capabilities, "blind_run_script_v1");
             LocalVisualAvailable = HasCapability(state.capabilities, "local_visual_observation_v1");
+            NeuralResponseAvailable = HasCapability(state.capabilities, "neural_response_v1");
+            if (!NeuralResponseAvailable) ResetNeuralResponse();
             if (Ready) Status = "connected";
             Backend = state.backend;
             BrainReady = state.brainReady;
@@ -491,6 +499,40 @@ namespace Flylingual.Conversation
             SettingsRevision = state.conversationSettingsRevision;
             if (resumePending && ControlEpoch == armedEpoch && !OutputInhibited && HasFreshBrain && voiceControlAvailable)
             { bodyArmed = true; resumePending = false; }
+            if (NeuralResponseAvailable && ConversationGeneration >= 0 &&
+                (neuralSubscribedEpoch != ControlEpoch || neuralSubscribedGeneration != ConversationGeneration))
+            {
+                Send(new NeuralSubscribe { controlEpoch = ControlEpoch, conversationGeneration = ConversationGeneration });
+                neuralSubscribedEpoch = ControlEpoch; neuralSubscribedGeneration = ConversationGeneration;
+            }
+        }
+
+        void ResetNeuralResponse()
+        {
+            NeuralResponse = null; NeuralResponseReceivedAt = double.NegativeInfinity;
+            neuralSubscribedEpoch = neuralSubscribedGeneration = -1;
+        }
+
+        void HandleNeuralResponse(string json)
+        {
+            if (!NeuralResponseAvailable || json.Length > 65536) return;
+            // Optional diagnostics must never disconnect the control channel.
+            try
+            {
+                var value = NeuralResponsePanel.Parse(json);
+                if (value == null || value.schemaVersion != 1 || value.controlEpoch != ControlEpoch ||
+                    value.conversationGeneration != ConversationGeneration || value.identity == null ||
+                    value.identity.sessionId != BrainSessionId || value.identity.instanceId != BrainInstanceId) return;
+                NeuralResponse = value; NeuralResponseReceivedAt = Time.realtimeSinceStartupAsDouble;
+            }
+            catch (ArgumentException) { }
+        }
+
+        [Serializable] sealed class NeuralSubscribe
+        {
+            public string type = "neural_observation_subscribe";
+            public int controlEpoch, conversationGeneration;
+            public bool enabled = true;
         }
 
         void HandleConversationState(ConversationStateMessage state)
@@ -575,6 +617,7 @@ namespace Flylingual.Conversation
 
         void ResetGeneration(int next)
         {
+            ResetNeuralResponse();
             ConversationGeneration = next;
             Caption = string.Empty;
             captionRole = null;
@@ -743,6 +786,35 @@ namespace Flylingual.Conversation
                 travelMeters = double.IsNaN(travelMeters) || double.IsInfinity(travelMeters) ? -1 : travelMeters,
                 horizontalSpeedMetersPerSecond = float.IsNaN(horizontalSpeedMetersPerSecond) || float.IsInfinity(horizontalSpeedMetersPerSecond) ? -1 : horizontalSpeedMetersPerSecond });
         }
+
+        public void SendBodyResponseObservation(int sequence, float horizontalSpeed, float forwardSpeed, float yawRate, double travel)
+        {
+            if (!NeuralResponseAvailable || !HasFreshBrain || transport == null || !transport.IsConnected ||
+                transport.QueueDepth >= 4 || Sequence < 0 || string.IsNullOrEmpty(BrainInstanceId) ||
+                float.IsNaN(horizontalSpeed) || float.IsInfinity(horizontalSpeed) || horizontalSpeed < 0 ||
+                float.IsNaN(forwardSpeed) || float.IsInfinity(forwardSpeed) ||
+                float.IsNaN(yawRate) || float.IsInfinity(yawRate) || double.IsNaN(travel) || double.IsInfinity(travel) || travel < 0) return;
+            var observation = new BodyResponseObservation { sequence = sequence,
+                controlEpoch = ControlEpoch, conversationGeneration = ConversationGeneration,
+                brainSequence = Sequence, brainSessionId = BrainSessionId, brainInstanceId = BrainInstanceId,
+                horizontalSpeedMetersPerSecond = horizontalSpeed, forwardSpeedMetersPerSecond = forwardSpeed,
+                yawRateDegreesPerSecond = yawRate, travelMeters = travel,
+                unityMonotonicMs = Time.realtimeSinceStartupAsDouble * 1000 };
+            string json = JsonUtility.ToJson(observation);
+            json = json.Substring(0, json.Length - 1) + ",\"ageMs\":__OBSERVATION_AGE__}";
+            try { transport.EnqueueFresh(json, 0); }
+            catch (ConversationTransportException) { } // Drop optional observations under pressure.
+        }
+
+        [Serializable] sealed class BodyResponseObservation
+        {
+            public string type = "body_response_observation";
+            public int controlEpoch, conversationGeneration, sequence;
+            public float horizontalSpeedMetersPerSecond, forwardSpeedMetersPerSecond, yawRateDegreesPerSecond;
+            public long brainSequence;
+            public string brainSessionId, brainInstanceId;
+            public double travelMeters, unityMonotonicMs;
+        }
         [Serializable] sealed class LocalSafetyMessage
         {
             public string type = "local_safety_observation";
@@ -761,6 +833,7 @@ namespace Flylingual.Conversation
         }
         void Disconnected(string code)
         {
+            NeuralResponseAvailable = false; ResetNeuralResponse();
             Status = "disconnected"; Ready = false; requestedStart = false; ConversationLive = false; TextConversation = false;
             ActiveExecution = null;
             autoStartPending = false;

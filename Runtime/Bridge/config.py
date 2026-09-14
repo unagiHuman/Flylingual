@@ -35,8 +35,10 @@ _SOURCE_FILES = (
     "lif_kernels.py",
     "temporal_motor_decoder.py",
 )
-_TOP_LEVEL = {"profile", "bridge", "brain", "conversation", "control", "logPath"}
+_TOP_LEVEL = {"profile", "bridge", "brain", "conversation", "control", "logPath", "neuralFeedback"}
 _CHILD_KEYS = {
+    "neuralFeedback": {"enabled", "spontaneousEnabled", "cooldownMs", "rawThresholdMv", "filteredThresholdMv", "motorThreshold", "changeThresholdMv", "thresholdVersion", "calibrationEvidence",
+                       "bodyResponseGraceMs", "bodySpeedThresholdMetersPerSecond", "bodyYawThresholdDegPerSec", "bodyMotorThreshold", "bodyCalibrationEvidence", "bodyYawSign", "bodyThresholdVersion"},
     "bridge": {"host", "tcpPort", "controlPort"},
     "brain": {
         "host", "port", "expectedBackend", "expectedDataset", "expectedConfigHash",
@@ -48,6 +50,12 @@ _CHILD_KEYS = {
 }
 
 _DEFAULT: dict[str, Any] = {
+    "neuralFeedback": {"enabled": True, "spontaneousEnabled": True, "cooldownMs": 4000,
+                       "rawThresholdMv": None, "filteredThresholdMv": None, "motorThreshold": None,
+                       "changeThresholdMv": None, "thresholdVersion": None, "calibrationEvidence": None,
+                       "bodyResponseGraceMs": None, "bodySpeedThresholdMetersPerSecond": None,
+                       "bodyYawThresholdDegPerSec": None, "bodyMotorThreshold": None,
+                       "bodyCalibrationEvidence": None, "bodyYawSign": None, "bodyThresholdVersion": None},
     "profile": "mac-local",
     "bridge": {"host": "127.0.0.1", "tcpPort": 8770, "controlPort": 8771},
     "brain": {
@@ -185,6 +193,23 @@ def _require_loopback(value: Any, name: str) -> None:
 
 
 def _validate(config: dict[str, Any]) -> None:
+    feedback = config['neuralFeedback']
+    for key in ('enabled', 'spontaneousEnabled'):
+        if type(feedback[key]) is not bool:
+            raise ConfigError('neuralFeedback.' + key + ' must be boolean')
+    if type(feedback['cooldownMs']) is not int or not 4000 <= feedback['cooldownMs'] <= 60000:
+        raise ConfigError('neuralFeedback.cooldownMs must be an integer from 4000 through 60000')
+    for key in ('rawThresholdMv', 'filteredThresholdMv', 'motorThreshold', 'changeThresholdMv',
+                'bodyResponseGraceMs', 'bodySpeedThresholdMetersPerSecond', 'bodyYawThresholdDegPerSec', 'bodyMotorThreshold'):
+        value = feedback[key]
+        if value is not None and (not _is_number(value) or not math.isfinite(value) or not 0 < value <= 1e6):
+            raise ConfigError('neuralFeedback.' + key + ' must be null or a positive finite number')
+    if feedback['bodyYawSign'] is not None and (type(feedback['bodyYawSign']) is not int or feedback['bodyYawSign'] not in (-1, 1)):
+        raise ConfigError('neuralFeedback.bodyYawSign must be null or -1/+1')
+    for key in ('thresholdVersion', 'calibrationEvidence', 'bodyThresholdVersion', 'bodyCalibrationEvidence'):
+        value = feedback[key]
+        if value is not None and (not isinstance(value, str) or not 0 < len(value) <= 256):
+            raise ConfigError('neuralFeedback.' + key + ' must be null or a bounded string')
     if not isinstance(config["profile"], str) or not config["profile"]:
         raise ConfigError("profile must be a non-empty string")
     _require_loopback(config["bridge"]["host"], "bridge.host")

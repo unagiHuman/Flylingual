@@ -22,6 +22,7 @@ namespace Flylingual.PlayScreen
         Font uiFont;
         Texture gameTexture;
         NeuralVisualizationPanel neural;
+        NeuralResponsePanel neuralResponse;
         ConversationSessionController controller;
         ConversationNativeBootstrap bootstrap;
         Image gameImage, neuralImage;
@@ -123,6 +124,7 @@ namespace Flylingual.PlayScreen
             neuralImage = new Image { scaleMode = ScaleMode.ScaleToFit }; neuralImage.style.flexGrow = 1; neuralImage.style.minHeight = 90; neuralImage.style.marginTop = 7; neuralCard.Add(neuralImage);
             neuralStatus = Label(GameLanguage.Text("可視化データを待機中", "Waiting for visualization data"), 12, cream); neuralStatus.style.opacity = .8f; neuralStatus.style.whiteSpace = WhiteSpace.Normal; neuralCard.Add(neuralStatus);
             RegisterControlSurface(neuralCard);
+            neuralResponse = new NeuralResponsePanel(); neuralCard.Add(neuralResponse);
             neuralImage.RegisterCallback<PointerMoveEvent>(evt => { if (evt.pressedButtons != 0 && neural != null) neural.Rotate(evt.deltaPosition); });
             neuralImage.RegisterCallback<WheelEvent>(evt => { if (neural != null) { neural.Zoom(evt.delta.y); evt.StopPropagation(); } });
 
@@ -191,6 +193,7 @@ namespace Flylingual.PlayScreen
 
         void Refresh()
         {
+            neuralResponse?.Refresh(controller);
             if (neural != null)
             {
                 neuralImage.image = neural.DisplayTexture;
