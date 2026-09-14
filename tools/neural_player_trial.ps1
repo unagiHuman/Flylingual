@@ -6,14 +6,15 @@ param(
     [switch]$RenderScreenshot,
     [switch]$EnvironmentFeedback,
     [switch]$VisualThreat,
-    [switch]$ConnectionStability
+    [switch]$ConnectionStability,
+    [switch]$NativePlayer
 )
 $ErrorActionPreference = 'Stop'
 $trialRoot = Split-Path $PSScriptRoot -Parent
 $trialOutput = Join-Path $trialRoot 'artifacts/neural-feedback'
 if ($Name -notmatch '^[a-z0-9-]+$') { throw 'Use a simple trial name' }
 $trialConfig = Join-Path $trialRoot 'Runtime/Config/local.json'
-$trialExe = Join-Path $trialRoot 'artifacts/hayeringual-builds/Dev-Local/FlylingualConversation.exe'
+$trialExe = Join-Path $trialRoot $(if ($NativePlayer) { 'artifacts/windows-native-conversation/unity/FlylingualConversation.exe' } else { 'artifacts/hayeringual-builds/Dev-Local/FlylingualConversation.exe' })
 if (Get-Process FlylingualConversation -ErrorAction SilentlyContinue) { throw 'A Player is already running; do not interrupt it' }
 $originalBytes = [IO.File]::ReadAllBytes($trialConfig)
 $trialProcess = $null

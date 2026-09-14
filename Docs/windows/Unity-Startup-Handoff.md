@@ -46,6 +46,18 @@ Bridgeの準備ができると会話のみ（`chat_only`）を自動開始し、
 
 「会話を終了」は会話だけを止める操作で、PlayerやBrainの終了とは異なります。ウィンドウを背面にするだけでは終了しません。Unityのheartbeatが既定10秒途絶えた場合も監視ヘルパーは後片付けします。
 
+## 通常版と検証用ビルドの更新先
+
+通常起動先は `artifacts/windows-native-conversation/unity/FlylingualConversation.exe`。`NativeConversationBuilder.Build()` でこのファイルを更新する。`HayeringualBuildWindow.Build(Dev, Local)` の出力は別の `artifacts/hayeringual-builds/Dev-Local/` であり、通常版の更新にはならない。
+
+通常版を更新した後の実Brain検証は、runnerに `-NativePlayer` を付けて同じexeを起動する。以下は実GPT Live/APIを使うマイクなしの診断試験で、通常の遊び方ではない。
+
+```powershell
+& tools/neural_player_trial.ps1 -Name native-swatter-fix -Language ja -Question 0 -ConnectionStability -NativePlayer -RenderScreenshot
+```
+
+既存の試験名は上書きせず、新しい名前を使う。2026-09-14の通常版更新漏れと検証は [Windows Player更新記録](Native-Player-Swatter-Fix.md) を参照。
+
 ## 初回設定・別PCでの準備
 
 設定済みの本PCでは既存local設定を使用します。ランチャーは `Runtime/Config/windows-native.local.json` を優先し、なければ `Runtime/Config/windows-stack.local.json` を使用します。既存ファイルへexampleを上書きしないでください。
