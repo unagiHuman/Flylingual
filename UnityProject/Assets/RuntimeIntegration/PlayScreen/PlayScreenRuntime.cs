@@ -37,7 +37,6 @@ namespace Flylingual.PlayScreen
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         static void InstallForNativePlayer()
         {
-            if (FindAnyObjectByType<TitleScreen>() != null) return;
             if (NativeConversationRuntime.Enabled && FindFirstObjectByType<PlayScreenRuntime>() == null)
                 new GameObject("Flylingual Play Screen").AddComponent<PlayScreenRuntime>();
         }

@@ -48,7 +48,6 @@ namespace Flylingual.Conversation
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void CreateForCommandLine()
         {
-            if (FindAnyObjectByType<Flylingual.PlayScreen.TitleScreen>() != null) return;
             if (!NativeConversationRuntime.Requested || FindFirstObjectByType<ConversationNativeBootstrap>() != null) return;
             new GameObject("ConversationNativeBootstrap").AddComponent<ConversationNativeBootstrap>();
         }

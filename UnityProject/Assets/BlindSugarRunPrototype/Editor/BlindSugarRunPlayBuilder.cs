@@ -91,10 +91,7 @@ public static class BlindSugarRunPlayBuilder
             throw new InvalidOperationException("Start floor does not support the initial Fly position.");
         if (!EditorSceneManager.SaveScene(scene, PlayScreenBuilder.ScenePath))
             throw new InvalidOperationException("Could not save the startup scene.");
-        var buildScenes = EditorBuildSettings.scenes.Where(item => item.path != PlayScreenBuilder.ScenePath).ToList();
-        buildScenes.Insert(0, new EditorBuildSettingsScene(PlayScreenBuilder.ScenePath, true));
-        EditorBuildSettings.scenes = buildScenes.ToArray();
-        if (File.Exists(Flylingual.PlayScreen.TitleScreen.ScenePath)) TitleScreenBuilder.RegisterScenes();
+        TitleScreenBuilder.RegisterScenes();
         AssetDatabase.SaveAssets();
         Debug.Log("BLIND_SUGAR_STARTUP_SCENE_PASS scene=" + PlayScreenBuilder.ScenePath +
             " preservedBodyComponents=" + bodySnapshot.Count + " removedEnvironmentRoots=" + removed.Count +

@@ -185,7 +185,7 @@ namespace Flylingual.Conversation
             if (keepVoiceControl && Ready && Time.realtimeSinceStartupAsDouble - stateReceivedAt > 3)
                 Disconnected("control_state_timeout");
             PrepareSelectedLanguage();
-            if (autoStartPending && SelectedLanguageReady && Ready && OutputInhibited && transport != null && transport.IsConnected)
+            if (!TitleScreen.BlocksGameplay && autoStartPending && SelectedLanguageReady && Ready && OutputInhibited && transport != null && transport.IsConnected)
             {
                 // The bootstrap starts once; continuous control owns subsequent recovery.
                 if (startChatOnly) StartConversation();
@@ -216,6 +216,7 @@ namespace Flylingual.Conversation
 
         void MaintainVoiceControl()
         {
+            if (TitleScreen.BlocksGameplay) return;
             if (!keepVoiceControl || applicationQuitting || Time.realtimeSinceStartupAsDouble < nextRecoveryAt) return;
             if (transport == null && !string.IsNullOrEmpty(lastControlEndpoint))
             {

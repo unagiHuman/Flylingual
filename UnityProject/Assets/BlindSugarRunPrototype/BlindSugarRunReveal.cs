@@ -22,7 +22,8 @@ namespace Flylingual.BlindSugarRun
         PanelSettings settings;
         Font font;
         VisualElement shade;
-        Label title;
+        Label title, note;
+        string displayedLanguage;
         Button retry;
         Vector3 fromPosition, fromFocus, destination, focus;
         Quaternion fromRotation;
@@ -100,7 +101,7 @@ namespace Flylingual.BlindSugarRun
             title.style.top = 42; title.style.left = 40; title.style.right = 40;
             title.style.fontSize = 36; title.style.color = new Color(1, .87f, .58f);
             title.style.unityTextAlign = TextAnchor.MiddleCenter; root.Add(title);
-            var note = new Label(worldCamera != null ? GameLanguage.Text("ここを、歩いてきた。", "This is where we walked.") : GameLanguage.Text("砂糖に到着しました。カメラを利用できません。", "You reached the sugar. The camera is unavailable."));
+            note = new Label(worldCamera != null ? GameLanguage.Text("ここを、歩いてきた。", "This is where we walked.") : GameLanguage.Text("砂糖に到着しました。カメラを利用できません。", "You reached the sugar. The camera is unavailable."));
             note.style.position = Position.Absolute; note.style.bottom = 106; note.style.left = 40; note.style.right = 40;
             note.style.fontSize = 23; note.style.color = Color.white; note.style.unityTextAlign = TextAnchor.MiddleCenter; root.Add(note);
             retry = new Button(() => {
@@ -108,6 +109,7 @@ namespace Flylingual.BlindSugarRun
             }) { text = GameLanguage.Text("もう一度", "Play again") };
             retry.style.position = Position.Absolute; retry.style.bottom = 40; retry.style.width = 200;
             retry.style.height = 48; retry.style.alignSelf = Align.Center; retry.SetEnabled(false); root.Add(retry);
+            RefreshLanguage();
         }
 
         static void Fill(VisualElement element)
@@ -119,6 +121,7 @@ namespace Flylingual.BlindSugarRun
         void LateUpdate()
         {
             if (!begun) return;
+            if (displayedLanguage != GameLanguage.Code) RefreshLanguage();
             float elapsed = Time.unscaledTime - startedAt;
             if (shade != null) shade.style.opacity = 1f - Mathf.Clamp01(elapsed / FadeSeconds);
             if (worldCamera != null)
@@ -138,10 +141,18 @@ namespace Flylingual.BlindSugarRun
             if (elapsed < EndSeconds || Complete) return;
             StopFinishedGame();
             Complete = true; retry?.SetEnabled(true);
-            if (title != null) title.text = "CLEAR — SUGAR FOUND";
+            RefreshLanguage();
             Debug.Log("BLIND_SUGAR_REVEAL_COMPLETE camera=" + (worldCamera != null));
         }
 
+        void RefreshLanguage()
+        {
+            displayedLanguage = GameLanguage.Code;
+            if (title != null) title.text = Complete ? GameLanguage.Text("クリア — 砂糖を発見！", "CLEAR — SUGAR FOUND") : GameLanguage.Text("砂糖を発見！", "SUGAR FOUND");
+            if (note != null) note.text = worldCamera != null ? GameLanguage.Text("ここを、歩いてきた。", "This is where we walked.")
+                : GameLanguage.Text("砂糖に到着しました。カメラを利用できません。", "You reached the sugar. The camera is unavailable.");
+            if (retry != null) retry.text = GameLanguage.Text("もう一度", "Play again");
+        }
         void StopFinishedGame()
         {
             if (stopped) return;

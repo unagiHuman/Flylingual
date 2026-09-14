@@ -14,7 +14,9 @@ namespace Flylingual.BlindSugarRun
         VisualElement root;
         Label titleLabel, messageLabel, attemptLabel;
         Action retryHandler;
-        bool retryConsumed;
+        bool retryConsumed, busy;
+        string displayedLanguage, shownTitle, shownMessage;
+        int shownAttempt;
 
         public bool Visible => root != null && root.style.display == DisplayStyle.Flex;
         public Button RetryButton { get; private set; }
@@ -69,10 +71,8 @@ namespace Flylingual.BlindSugarRun
             Build();
             retryHandler = retry;
             retryConsumed = false;
-            titleLabel.text = string.IsNullOrEmpty(title) ? GameLanguage.Text("ゲームオーバー", "Game over") : title;
-            messageLabel.text = message ?? string.Empty;
-            attemptLabel.text = GameLanguage.Text("挑戦 ", "Attempt ") + Mathf.Max(1, attempt);
-            RetryButton.text = GameLanguage.Text("もう一度挑戦する", "Try again");
+            busy = false; shownTitle = title; shownMessage = message; shownAttempt = attempt;
+            RefreshLanguage();
             RetryButton.SetEnabled(true);
             root.style.display = DisplayStyle.Flex;
             document.rootVisualElement.style.display = DisplayStyle.Flex;
@@ -83,15 +83,47 @@ namespace Flylingual.BlindSugarRun
         {
             Build();
             retryConsumed = true;
-            titleLabel.text = GameLanguage.Text("リトライ中", "Retrying");
-            messageLabel.text = message ?? GameLanguage.Text("再開しています…", "Resuming…");
-            attemptLabel.text = GameLanguage.Text("挑戦 ", "Attempt ") + Mathf.Max(1, attempt);
-            RetryButton.text = GameLanguage.Text("再開中…", "Resuming…");
+            busy = true; shownTitle = null; shownMessage = message; shownAttempt = attempt;
+            RefreshLanguage();
             RetryButton.SetEnabled(false);
             root.style.display = DisplayStyle.Flex;
             document.rootVisualElement.style.display = DisplayStyle.Flex;
         }
 
+        void Update()
+        {
+            if (Visible && displayedLanguage != GameLanguage.Code) RefreshLanguage();
+        }
+
+        void RefreshLanguage()
+        {
+            displayedLanguage = GameLanguage.Code;
+            titleLabel.text = busy ? GameLanguage.Text("リトライ中", "Retrying")
+                : string.IsNullOrEmpty(shownTitle) ? GameLanguage.Text("ゲームオーバー", "Game over") : LocalizeKnownText(shownTitle);
+            messageLabel.text = shownMessage == null
+                ? (busy ? GameLanguage.Text("再開しています…", "Resuming…") : string.Empty) : LocalizeKnownText(shownMessage);
+            attemptLabel.text = GameLanguage.Text("挑戦 ", "Attempt ") + Mathf.Max(1, shownAttempt);
+            RetryButton.text = busy ? GameLanguage.Text("再開中…", "Resuming…") : GameLanguage.Text("もう一度挑戦する", "Try again");
+        }
+
+        // Show accepts caller-owned text. Re-render only known fixed messages; preserve diagnostics verbatim.
+        static readonly string[,] FixedMessages = {
+            { "ゲームオーバー", "GAME OVER" },
+            { "プレイを中断しました", "Play interrupted" },
+            { "再開の準備ができませんでした", "Unable to resume" },
+            { "開始地点と音声操作を準備しています…", "Preparing the starting point and voice controls…" },
+            { "開始地点へ戻っています…", "Returning to the starting point…" },
+            { "崖から落下しました。\n開始地点からもう一度挑戦できます。", "You fell off the edge.\nTry again from the starting point." },
+            { "落下時の接続状態を確認できませんでした。\n接続を確認して、開始地点からやり直してください。", "The connection could not be verified when you fell.\nCheck the connection and try again." },
+            { "動かずにいたため、ハエたたきに叩かれました。\n開始地点からもう一度挑戦できます。", "You stayed still and were hit by the fly swatter.\nTry again from the starting point." }
+        };
+        static string LocalizeKnownText(string value)
+        {
+            for (int i = 0; i < FixedMessages.GetLength(0); i++)
+                if (value == FixedMessages[i, 0] || value == FixedMessages[i, 1])
+                    return GameLanguage.Text(FixedMessages[i, 0], FixedMessages[i, 1]);
+            return value;
+        }
         public void Hide()
         {
             if (root != null) root.style.display = DisplayStyle.None;

@@ -34,6 +34,11 @@ namespace Flylingual.Conversation
 
         void Update()
         {
+            if (Flylingual.PlayScreen.TitleScreen.BlocksGameplay)
+            {
+                if (armed || bodyActive) Deactivate();
+                return;
+            }
             if (conversation == null || demo == null || demo.client == null || demo.live == null || demo.controller == null) return;
             if (!conversation.BodyControlActive)
             {
