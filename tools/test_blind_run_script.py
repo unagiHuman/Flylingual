@@ -97,6 +97,15 @@ class CueSelectorTests(unittest.TestCase):
         self.assertTrue(script.accept(cue('reveal', 4), 'ja', now=22)[1])
         self.assertFalse(script.accept(cue('reveal', 5), 'ja', now=26)[1])
 
+    def test_visible_motion_cues_keep_facts_without_speech(self):
+        script = self.started()
+        for sequence, name in enumerate(('still_moving', 'stable'), 2):
+            text, speak = script.accept(cue(name, sequence), 'ja', now=10 + sequence * 4)
+            self.assertFalse(speak)
+            self.assertEqual(script.sequence, sequence)
+            self.assertEqual(script.last_fact, text)
+        self.assertTrue(script.accept(cue('right_edge_urgent', 4), 'ja', now=30)[1])
+
     def test_swatter_warning_urgent_deduplicated_and_rearmed_by_escape(self):
         script = self.started()
         self.assertTrue(script.accept(cue('swatter_warning', 2), 'ja', now=10.1)[1])

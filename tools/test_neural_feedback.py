@@ -27,6 +27,14 @@ def evidence(request_id=1, sequence=1):
             'body': {'fresh': False, 'correlated': False}, 'residualLayer': 'unresolved'}
 
 
+def noteworthy(**kwargs):
+    event = evidence(**kwargs)
+    event['eventType'] = 'MOTOR_BODY_DISCREPANCY'
+    event['allowedClaims'].append('motor_body_discrepancy')
+    event['body'] = {'fresh': True, 'correlated': True}
+    return event
+
+
 def take(scheduler, now=1000, **changes):
     options = {'epoch': 1, 'generation': 1, 'request_id': 1, 'session_id': IDENTITY['sessionId'],
                'inhibited': False, 'chat_only': False, 'busy': False}
@@ -156,41 +164,53 @@ class AdapterContextBudgetTests(unittest.IsolatedAsyncioTestCase):
             adapter._send_event.assert_not_awaited()
 
 class SchedulerTests(unittest.TestCase):
+    def test_routine_response_is_silent_but_still_answers_questions(self):
+        scheduler = NeuralFeedbackScheduler()
+        event = evidence()
+        scheduler.offer(event)
+        self.assertEqual(take(scheduler), (None, 'not_allowlisted_or_disabled'))
+        for language in ('ja', 'en'):
+            answer = compact_summary(event, language, question=True)
+            self.assertIn('指示方向の応答' if language == 'ja' else 'requested direction', answer)
+        scheduler.offer(noteworthy())
+        self.assertIsNotNone(take(scheduler)[0])
+
+
     def test_pending_replaces_and_question_is_not_rate_limited(self):
         scheduler = NeuralFeedbackScheduler()
-        scheduler.offer(evidence(sequence=1))
-        scheduler.offer(evidence(sequence=2))
+        scheduler.offer(noteworthy(sequence=1))
+        scheduler.offer(noteworthy(sequence=2))
         event, reason = take(scheduler)
         self.assertEqual(event['eventId'], 'test-2')
         self.assertIsNone(reason)
         self.assertIsNone(scheduler.pending)
-        scheduler.offer(evidence(sequence=3))
+        scheduler.offer(noteworthy(sequence=3))
         self.assertEqual(take(scheduler, now=1001)[1], 'cooldown')
-        self.assertIn('最新の質問', compact_summary(evidence(), question=True))
+        self.assertIn('最新の質問', compact_summary(noteworthy(), question=True))
 
     def test_generation_request_session_freshness_and_priority_gates(self):
         for overrides in ({'epoch': 2}, {'generation': 2}, {'request_id': 2}, {'session_id': 'other'},
                           {'inhibited': True}, {'chat_only': True}, {'busy': True}):
             scheduler = NeuralFeedbackScheduler()
-            scheduler.offer(evidence())
+            scheduler.offer(noteworthy())
             self.assertIsNone(take(scheduler, **overrides)[0])
             self.assertIsNone(scheduler.pending)
         for expiry in (-1, float('nan'), float('inf')):
             scheduler = NeuralFeedbackScheduler()
-            scheduler.offer({**evidence(), 'expiresAt': expiry})
+            scheduler.offer({**noteworthy(), 'expiresAt': expiry})
             self.assertIsNone(take(scheduler)[0])
 
     def test_preferences_interrupt_and_disabled_do_not_block_questions(self):
         for preference in ('実況を減らして', 'stop commentary'):
             scheduler = NeuralFeedbackScheduler()
-            scheduler.offer(evidence())
+            scheduler.offer(noteworthy())
             scheduler.preference(preference)
             self.assertIsNone(scheduler.pending)
-            scheduler.offer(evidence())
+            scheduler.offer(noteworthy())
             self.assertIsNone(take(scheduler)[0])
-            self.assertTrue(compact_summary(evidence(), question=True))
+            self.assertTrue(compact_summary(noteworthy(), question=True))
         scheduler = NeuralFeedbackScheduler({'spontaneousEnabled': False})
-        scheduler.offer(evidence())
+        scheduler.offer(noteworthy())
         self.assertIsNone(take(scheduler)[0])
         scheduler.preference('皮肉はやめて')
         self.assertTrue(scheduler.no_sarcasm)
@@ -215,7 +235,7 @@ class BridgeFeedbackTests(unittest.IsolatedAsyncioTestCase):
     async def test_speech_started_after_scheduling_prevents_spontaneous_send(self):
         b = self.bridge
         b.conversation.last_voice_end_at = time.monotonic()
-        await b.send_neural_context('commentary', evidence())
+        await b.send_neural_context('commentary', noteworthy())
         b.conversation.append.assert_not_awaited()
 
     async def asyncSetUp(self):
@@ -233,7 +253,7 @@ class BridgeFeedbackTests(unittest.IsolatedAsyncioTestCase):
         b.arbiter.epoch = 1
         b.arbiter.inhibited = False
         b.request_counter = 1
-        b.neural_snapshot = Mock(return_value=evidence())
+        b.neural_snapshot = Mock(return_value=noteworthy())
 
     async def asyncTearDown(self):
         tasks = tuple(self.bridge.tasks | self.bridge.intent_tasks)
@@ -244,20 +264,20 @@ class BridgeFeedbackTests(unittest.IsolatedAsyncioTestCase):
     async def test_no_chat_only_observation_append_or_question_leak(self):
         b = self.bridge
         b.conversation_interaction = 'chat_only'
-        await b.send_neural_context('commentary', evidence())
+        await b.send_neural_context('commentary', noteworthy())
         b.conversation.append.assert_not_awaited()
         b.intent_context = Mock(side_effect=AssertionError('chat_only must not read Brain observations'))
         self.assertTrue(b.non_action_reply_context('今どう？', 'question'))
 
     async def test_queued_old_request_or_generation_cannot_append(self):
         b = self.bridge
-        old = evidence(request_id=1)
+        old = noteworthy(request_id=1)
         b.request_counter = 2
-        b.neural_snapshot.return_value = evidence(request_id=2)
+        b.neural_snapshot.return_value = noteworthy(request_id=2)
         await b.send_neural_context('commentary', old)
         b.conversation.append.assert_not_awaited()
         b.request_counter = 1
-        b.neural_snapshot.return_value = {**evidence(), 'conversationGeneration': 2}
+        b.neural_snapshot.return_value = {**noteworthy(), 'conversationGeneration': 2}
         await b.send_neural_context('commentary', old)
         b.conversation.append.assert_not_awaited()
 
@@ -267,7 +287,7 @@ class BridgeFeedbackTests(unittest.IsolatedAsyncioTestCase):
         b.conversation.append.side_effect = lambda *args: never_finish.wait()
         pending = b.task(never_finish.wait())
         b.neural_sender = pending
-        b.neural_scheduler.offer(evidence())
+        b.neural_scheduler.offer(noteworthy())
         await asyncio.wait_for(b.submit('STOP', 'safety', 'stop-test'), .1)
         b.adapter.send_action.assert_awaited_once_with('STOP', 2)
         self.assertIsNone(b.neural_scheduler.pending)
@@ -301,7 +321,7 @@ class BridgeFeedbackTests(unittest.IsolatedAsyncioTestCase):
         b = self.bridge
         pending = b.task(asyncio.Event().wait())
         b.neural_sender = pending
-        b.neural_scheduler.offer(evidence())
+        b.neural_scheduler.offer(noteworthy())
         b.neural_body = {'old': True}
         b.clear_neural()
         await asyncio.gather(pending, return_exceptions=True)

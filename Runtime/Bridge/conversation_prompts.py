@@ -123,4 +123,11 @@ def build_voice_instructions(settings, interaction='control', neural_feedback=Fa
                 'When the player starts speaking, immediately stop the script, tutorial or commentary instead of finishing it. '
                 'Listen and respond to their latest question or request. Do not automatically resume interrupted lines. '
                 'Even hazard narration must yield to the player. Preserve operation delegation and safety rules.')
-    return policy + '\n\n' + style + '\n\n' + boundary + '\n\n' + priority
+    relevance = ('ハエや脳の表示を見れば分かる停止・移動・安定や、単に脳が反応したことを自発的に逐一実況しません。'
+                 '危険予告、操作に必要な案内、見た目では分からない意味のある観測変化だけを短く伝えます。'
+                 'プレイヤーから質問された場合は、これらの状態についても観測に基づいて答えます。'
+                 if language == 'ja' else
+                 'Do not volunteer play-by-play of visible stopping, movement, steadiness, or merely that the Brain responded. '
+                 'Keep unsolicited remarks to hazard warnings, guidance needed for play, and meaningful observed changes not obvious on screen. '
+                 'When the player asks, still answer questions about these states using observations.')
+    return policy + ('\n\n' + relevance if interaction == 'control' else '') + '\n\n' + style + '\n\n' + boundary + '\n\n' + priority

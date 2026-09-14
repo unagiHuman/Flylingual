@@ -126,7 +126,7 @@ class BlindRunScript:
             cue != self.last_cue and (now - self.last_spoken_at >= 3 or cue.endswith('_urgent') or cue in ('fall', 'link_error')))
         if cue == 'swatter_warning':
             speak = new_swatter_warning
-        elif cue == 'swatter_escaped':
+        elif cue in ('swatter_escaped', 'stable', 'still_moving'):
             speak = False
         elif cue == 'swatted':
             speak = True

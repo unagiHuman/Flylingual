@@ -180,6 +180,10 @@ ageMsは送信queue滞在時間を加算する。Bridge受信時の単調時計�
 
 ## 会話と判定の制限
 
+2026-09-14のユーザー要望により、画面を見れば分かる状態の自発実況を抑止する。`RESPONSE_PRESENT`はHUD・質問用観測を維持し、自発発話のallowlistから除外。局所視界の安定通知と旧台本の`stable`/`still_moving`も発話せず、観測受理・sequence・質問用factsを保持する。発見・再訪の説明にも単なる身体状態を添えない。危険予告、経路案内、校正・鮮度等の既存条件を満たす応答変化・STOP後残留・motorと身体の不一致は対象に残す。日英の操作会話policyにも同方針を追加し、質問された状態には回答する。
+
+検証は`tools.test_neural_feedback`、`tools.test_local_visual_observation`、`tools.test_blind_run_script`の42件成功。発話選択の純粋テストであり、Unity/Brain操作・実Live音声の聴取試験ではない。人格テストの旧全文hash16件と旧文末判定2件の失敗は、変更前HEADでも同じ18件を再現し、本変更とは区別する。今回Player/ZIPの再生成はしていないため、既存v3 ZIPには未反映。通常の開発起動ではBridge/会話を再起動して反映する。
+
 chat_onlyでは現在のBrain／身体観測を会話へ流さない。controlでも抑止、切断、古い世代、発話中、危険scene cue等の条件で低優先度実況を落とす。「実況を減らして」「皮肉なし」の希望は提示側で扱う。人格は事実の言い方だけを変える。神経summaryは「設定中の人格・口調を維持して短く」と指示し、hiroyuki_likeの会話的なです・ます等を上書きしない。明示された「皮肉なし」は維持する。
 
 `MOTOR_BODY_DISCREPANCY` の判定経路は実装済み。ただし7つの身体校正設定が既定nullなので、**通常設定ではuncalibrated／unknownを維持**する。校正済みでも同一requestの相関、新しい身体sampleが2件以上・100ms以上、応答猶予、鮮度等を要求し、snapshot再送で成立させない。不一致は機構の原因を証明しない。速度を受信できたことだけでbodyMovementVerifiedをtrueにしない。rawゼロを全脳静止、motorゼロを身体停止と説明せず、弱い反応を疲労・拒否・気分として認定しない。

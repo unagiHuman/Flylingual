@@ -2,7 +2,8 @@
 import math
 
 
-SPONTANEOUS = {'RESPONSE_PRESENT', 'RESPONSE_CHANGED', 'POST_STOP_RESIDUAL', 'MOTOR_BODY_DISCREPANCY'}
+# Routine response is already visible in the fly/Brain UI; keep it available for questions.
+SPONTANEOUS = {'RESPONSE_CHANGED', 'POST_STOP_RESIDUAL', 'MOTOR_BODY_DISCREPANCY'}
 
 
 def compact_summary(event, language='ja', *, question=False, no_sarcasm=False):

@@ -89,6 +89,23 @@ class LocalVisualObservationTests(unittest.TestCase):
         observation.accept(hazard, now=106)
         self.assertEqual(observation.announcement(now=106)['kind'], 'hazard')
 
+    def test_motion_and_settlement_only_update_question_facts(self):
+        observation = LocalVisualObservation()
+        moving = event()
+        moving['facts'].update(moving=True, stable=False)
+        observation.accept(moving, now=100)
+        first = observation.announcement(now=100)
+        self.assertNotIn('身体', first['facts']['text'])
+        observation.accept(event(2), now=105)
+        self.assertIsNone(observation.announcement(now=105))
+        self.assertEqual(observation.sequence, 2)
+        self.assertTrue(observation.summary(now=105)['facts']['stable'])
+        self.assertIn('身体は安定', observation.describe(now=105))
+        hazard = event(3)
+        hazard['facts']['directions'][0].update(edge='very_near', edgeDistance=.2)
+        observation.accept(hazard, now=106)
+        self.assertEqual(observation.announcement(now=106)['kind'], 'hazard')
+
     def test_question_matching_is_exact_and_bilingual(self):
         self.assertEqual(Bridge.local_visual_question_direction('  右は危ない？ '), 'right')
         self.assertEqual(Bridge.local_visual_question_direction('What can you see?'), 'all')

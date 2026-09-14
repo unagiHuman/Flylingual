@@ -90,7 +90,7 @@ class LocalVisualObservation:
                        'revisited': facts['revisited'], 'directions': normalized}
         self.saw_motion |= facts['moving']
 
-    def describe(self, direction='all', language='ja', now=None):
+    def describe(self, direction='all', language='ja', now=None, *, include_body=True):
         """Compact, fresh-only description for a question or GPT context."""
         summary = self.summary(now)
         if not summary['fresh']:
@@ -125,7 +125,7 @@ class LocalVisualObservation:
         sentences = [sector_text(s) for s in chosen[:2]]
         if len(sentences) < 2:
             body = 'まだ身体が動いている' if facts['moving'] else '身体は安定している' if facts['stable'] else '安定は未確認'
-            sentences.append('足元は' + _KIND_LABELS[facts['ground']] + '、' + body)
+            sentences.append('足元は' + _KIND_LABELS[facts['ground']] + ('、' + body if include_body else ''))
         if facts['revisited'] and len(sentences) < 2: sentences.append('以前通った場所に戻った')
         # Keep whole facts rather than cutting a sentence halfway through a qualification.
         text = ''
@@ -152,18 +152,14 @@ class LocalVisualObservation:
         hazards = tuple((s['direction'], s['edge'], s['trend'] == 'closer') for s in facts['directions'] if s['edge'] in ('near', 'very_near'))
         objects = tuple((s['direction'], s['surface'], s['alignment']) for s in facts['directions'] if s['surface'] not in ('unknown', facts['ground']))
         signature = (facts['ground'], hazards, objects)
-        settled = self.saw_motion and facts['stable']
-        if signature == self.last_spoken_signature and not facts['revisited'] and not settled:
+        if signature == self.last_spoken_signature and not facts['revisited']:
             return None
         self.last_spoken_signature, self.last_spoken_at = signature, now
         if hazards:
             closest = min((s for s in facts['directions'] if s['edge'] in ('near', 'very_near')), key=lambda s:s['edgeDistance'] if s['edgeDistance'] >= 0 else 4)
             return {'kind': 'hazard', 'facts': {'text': self.describe(closest['direction'], now=now)}}
         if facts['revisited']:
-            return {'kind': 'memory', 'facts': {'text': '以前通った場所に戻った。今見える範囲: ' + self.describe('all', now=now)}}
-        if settled:
-            self.saw_motion = False
-            return {'kind': 'stable', 'facts': {'text': '身体が安定した。'}}
+            return {'kind': 'memory', 'facts': {'text': '以前通った場所に戻った。今見える範囲: ' + self.describe('all', now=now, include_body=False)}}
         if objects or facts['ground'] != 'unknown':
-            return {'kind': 'discovery', 'facts': {'text': self.describe('all', now=now)}}
+            return {'kind': 'discovery', 'facts': {'text': self.describe('all', now=now, include_body=False)}}
         return None
