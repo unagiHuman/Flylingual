@@ -1,4 +1,5 @@
 using Flylingual.Audio;
+using Flylingual.Conversation;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UIElements;
@@ -20,8 +21,12 @@ namespace Flylingual.PlayScreen
         PanelSettings panel;
         Font font;
         VisualElement cover, settingsDrawer;
-        Label heading, subtitle, instructions, settingsHeading;
-        Button start, settingsButton, japanese, english;
+        Label heading, subtitle, instructions, settingsHeading, connectionStatus;
+        Button start, settingsButton, japanese, english, retryConnection;
+        ConversationSessionController conversation;
+        ConversationNativeBootstrap bootstrap;
+        public bool CanStart => conversation != null && conversation.TitleReady;
+        public string ConnectionMessage => connectionStatus == null ? string.Empty : connectionStatus.text;
         bool coverVisible = true, tutorial, settingsOpen;
         string displayedLanguage;
 
@@ -74,7 +79,14 @@ namespace Flylingual.PlayScreen
             instructions.style.whiteSpace = WhiteSpace.Normal;
             instructions.style.maxWidth = 900; instructions.style.fontSize = 24;
             instructions.style.marginBottom = 28; cover.Add(instructions);
-            start = MakeButton("start-game", StartGame); start.style.width = 360; cover.Add(start);
+            connectionStatus = new Label { name = "title-connection-status" };
+            connectionStatus.style.fontSize = 22;
+            connectionStatus.style.whiteSpace = WhiteSpace.Normal;
+            connectionStatus.style.marginTop = 8;
+            cover.Add(connectionStatus);
+            start = MakeButton("start-game", StartGame); start.style.width = 360; start.SetEnabled(false); cover.Add(start);
+            retryConnection = MakeButton("retry-connection", () => conversation?.RetryTitleConnection());
+            retryConnection.style.width = 360; cover.Add(retryConnection);
             settingsDrawer = new VisualElement { name = "global-settings" };
             settingsDrawer.style.position = Position.Absolute;
             settingsDrawer.style.top = 86; settingsDrawer.style.right = 24;
@@ -115,8 +127,10 @@ namespace Flylingual.PlayScreen
             heading.text = tutorial ? GameLanguage.Text("遊び方", "How to play") : "FLYLINGUAL";
             subtitle.text = tutorial ? GameLanguage.Text("説明中はゲームの時間が止まっています。", "The game is paused while you read.")
                 : GameLanguage.Text("声を頼りに、危険を避けてゴールを目指そう。", "Avoid danger and reach the goal.");
-            instructions.style.display = tutorial ? DisplayStyle.Flex : DisplayStyle.None;
-            instructions.text = GameLanguage.Text(
+            instructions.style.display = DisplayStyle.Flex;
+            instructions.text = !tutorial ? GameLanguage.Text(
+                "声でハエを導く、探索ゲーム。\nハエの案内を聞きながら、崖や細い道を越えてゴールを目指します。たどり着くと、歩いてきた世界が見えます。\n\n話しかけよう\n「前へ」「右を向いて」「左を向いて」「止まって」\n\n立ち止まりすぎに注意\n開始後1分間はハエたたきに叩かれません。その後は20秒間ほとんど動かずにいると危険！ 予告が出たら動いて逃げましょう。\n\n失敗しても、もう一度挑戦できます。",
+                "An exploration game where your voice guides a fly.\nListen to the fly and navigate cliffs and narrow paths to reach the goal. Finish to reveal the world you travelled through.\n\nTalk to the fly\nSay “forward”, “turn right”, “turn left”, or “stop”.\n\nKeep moving\nYou are safe from the fly swatter for the first minute. After that, staying nearly still for 20 seconds puts you in danger! Move when the warning appears.\n\nIf you fail, you can try again.") : GameLanguage.Text(
                 "声でハエに話しかけて、危険を避けてゴールを目指しましょう。\n\n「前へ」「右を向いて」「左を向いて」「止まって」と伝えます。\nハエの案内を聞き、崖やハエたたきなどの危険を避けて進みましょう。ゴールに到着すると、歩いてきた世界が見えます。\n\n困ったときは「緊急停止」。マイクや文字入力はプレイ画面の「設定と診断」から設定できます。\n右上の設定ボタンから、いつでも表示言語を変更できます。",
                 "Talk to the fly. Avoid danger and reach the goal.\n\nSay “forward”, “turn right”, “turn left”, or “stop”.\nListen to the fly and avoid hazards such as edges and the fly swatter. Reach the goal to reveal the world you walked through.\n\nUse Emergency stop when needed. Microphone and text input options are in Settings and diagnostics on the play screen.\nChange the display language anytime using Settings at the top right.");
             start.text = tutorial ? GameLanguage.Text("わかった・遊ぶ", "Got it — play") : GameLanguage.Text("はじめる", "Start");
@@ -124,11 +138,28 @@ namespace Flylingual.PlayScreen
             settingsHeading.text = GameLanguage.Text("表示言語", "Display language");
             settingsDrawer.style.display = settingsOpen ? DisplayStyle.Flex : DisplayStyle.None;
             japanese.SetEnabled(!GameLanguage.IsJapanese); english.SetEnabled(GameLanguage.IsJapanese);
+            RefreshConnection();
+        }
+
+        void RefreshConnection()
+        {
+            if (conversation == null) conversation = FindAnyObjectByType<ConversationSessionController>();
+            if (bootstrap == null) bootstrap = FindAnyObjectByType<ConversationNativeBootstrap>();
+            bool failed = (bootstrap != null && !string.IsNullOrEmpty(bootstrap.StartupError))
+                || (conversation != null && !string.IsNullOrEmpty(conversation.Error));
+            bool retryable = failed && conversation != null && conversation.Ready;
+            connectionStatus.text = CanStart ? GameLanguage.Text("接続完了。ゲームを開始できます。", "Connected. Ready to start.")
+                : failed ? (retryable ? GameLanguage.Text("接続できませんでした。接続を確認し、再試行してください。", "Connection failed. Check your connection and retry.")
+                    : GameLanguage.Text("接続できませんでした。接続を確認し、アプリを起動し直してください。", "Connection failed. Check your connection and restart the app."))
+                : GameLanguage.Text("接続中… 準備が完了するまでお待ちください。", "Connecting… Please wait until everything is ready.");
+            start.SetEnabled(CanStart);
+            retryConnection.text = GameLanguage.Text("接続を再試行", "Retry connection");
+            retryConnection.style.display = retryable && !CanStart ? DisplayStyle.Flex : DisplayStyle.None;
         }
 
         public void StartGame()
         {
-            if (!coverVisible) return;
+            if (!coverVisible || !CanStart) return;
             if (!tutorial && PlayerPrefs.GetInt(TutorialKey, 0) == 0)
             {
                 tutorial = true; RefreshText(); return;
@@ -141,7 +172,11 @@ namespace Flylingual.PlayScreen
             if (!Flylingual.Conversation.NativeConversationRuntime.Enabled) Time.timeScale = 1f;
         }
 
-        void Update() { if (displayedLanguage != GameLanguage.Code) RefreshText(); }
+        void Update()
+        {
+            if (displayedLanguage != GameLanguage.Code) RefreshText();
+            else if (coverVisible) RefreshConnection();
+        }
         void LateUpdate() { if (coverVisible) Time.timeScale = 0f; }
         void OnDestroy()
         {

@@ -34,6 +34,9 @@ namespace Flylingual.Conversation
         bool requestedStart;
         bool autoStartPending = true;
         bool startChatOnly;
+        int titleRestartGeneration = -1;
+        bool TitleRestartReady => titleRestartGeneration < 0 || ConversationGeneration > titleRestartGeneration
+            && !conversationStopping && (bridgeConversationState == "off" || bridgeConversationState == "disconnected");
         bool keepVoiceControl, applicationQuitting;
         string lastControlEndpoint;
         double nextRecoveryAt, nextMicrophoneRetryAt;
@@ -185,8 +188,10 @@ namespace Flylingual.Conversation
             }
             if (keepVoiceControl && Ready && Time.realtimeSinceStartupAsDouble - stateReceivedAt > 3)
                 Disconnected("control_state_timeout");
+            if (titleRestartGeneration >= 0 && TitleRestartReady) titleRestartGeneration = -1;
+            PrepareTitleLanguage();
             PrepareSelectedLanguage();
-            if (!TitleScreen.BlocksGameplay && autoStartPending && SelectedLanguageReady && Ready && OutputInhibited && transport != null && transport.IsConnected)
+            if (TitleRestartReady && autoStartPending && !conversationStopping && SelectedLanguageReady && Ready && OutputInhibited && transport != null && transport.IsConnected)
             {
                 // The bootstrap starts once; continuous control owns subsequent recovery.
                 if (startChatOnly) StartConversation();
@@ -197,6 +202,37 @@ namespace Flylingual.Conversation
             MaintainVoiceControl();
         }
 
+        public bool TitleReady => Ready && SelectedLanguageReady && HasFreshBrain && ConversationActive
+            && titleRestartGeneration < 0 && !conversationStopping && !EnablingVoiceActions
+            && (startChatOnly ? OutputInhibited : BodyControlActive
+                && GetComponent<NativeConversationBody>() != null && GetComponent<NativeConversationBody>().BodyActive);
+
+        public void RetryTitleConnection()
+        {
+            if (!TitleScreen.BlocksGameplay) return;
+            titleRestartGeneration = transport != null && transport.IsConnected ? ConversationGeneration : -1;
+            StopConversation();
+            startupLanguageAttempt = null;
+            startupLanguageAcknowledged = false;
+            autoStartPending = true;
+            nextRecoveryAt = 0;
+            if ((transport == null || !transport.IsConnected) && !string.IsNullOrEmpty(lastControlEndpoint))
+                _ = ConnectAsync(lastControlEndpoint);
+        }
+
+        void PrepareTitleLanguage()
+        {
+            if (!TitleScreen.BlocksGameplay || !TitleRestartReady || Settings.language == GameLanguage.Code) return;
+            if (requestedStart || ConversationActive || EnablingVoiceActions)
+            {
+                titleRestartGeneration = ConversationGeneration;
+                StopConversation();
+                startupLanguageAttempt = null;
+                startupLanguageAcknowledged = false;
+                autoStartPending = true;
+            }
+        }
+
         void PrepareSelectedLanguage()
         {
             if (expectedSettingsRequestId != null && Time.realtimeSinceStartupAsDouble - settingsRequestedAt > 10)
@@ -205,7 +241,7 @@ namespace Flylingual.Conversation
                 LastSettingsResult = "timeout";
                 SetError("conversation_settings_timeout");
             }
-            if (!autoStartPending || !Ready || ConversationActive || conversationStopping || !OutputInhibited
+            if (!TitleRestartReady || !autoStartPending || !Ready || ConversationActive || conversationStopping || !OutputInhibited
                 || transport == null || !transport.IsConnected || expectedSettingsRequestId != null
                 || Settings.language == GameLanguage.Code || startupLanguageAttempt == GameLanguage.Code) return;
             // One request per selected language. Wait for its matching acknowledgement before starting.
@@ -217,9 +253,9 @@ namespace Flylingual.Conversation
 
         void MaintainVoiceControl()
         {
-            if (TitleScreen.BlocksGameplay) return;
+
             if (!keepVoiceControl || applicationQuitting || Time.realtimeSinceStartupAsDouble < nextRecoveryAt) return;
-            if (transport == null && !string.IsNullOrEmpty(lastControlEndpoint))
+            if ((transport == null || !transport.IsConnected) && !string.IsNullOrEmpty(lastControlEndpoint))
             {
                 nextRecoveryAt = Time.realtimeSinceStartupAsDouble + 5;
                 _ = ConnectAsync(lastControlEndpoint);
@@ -370,14 +406,14 @@ namespace Flylingual.Conversation
         // The same intent route as voice delegation, useful for accessible input and explicit verification.
         public void SendPlayerText(string text)
         {
-            if (!BodyControlActive || string.IsNullOrWhiteSpace(text) || text.Length > 2000) return;
+            if (TitleScreen.BlocksGameplay || !BodyControlActive || string.IsNullOrWhiteSpace(text) || text.Length > 2000) return;
             Send(new PlayerTextMessage { type = "player_text", text = text, controlEpoch = ControlEpoch,
                 commandId = "unity-intent-" + Guid.NewGuid().ToString("N") });
         }
 
         public void ApplySettings(string language, string voice, string persona, string personaText)
         {
-            if (!Ready || ConversationActive || conversationStopping || !OutputInhibited || expectedSettingsRequestId != null || transport == null || !transport.IsConnected)
+            if (!TitleRestartReady || !Ready || ConversationActive || conversationStopping || !OutputInhibited || expectedSettingsRequestId != null || transport == null || !transport.IsConnected)
             {
                 SetError("conversation_settings_require_stopped");
                 return;
@@ -663,7 +699,7 @@ namespace Flylingual.Conversation
 
         bool CanTransmit()
         {
-            return !MicrophoneMuted && requestedStart && ConversationLive && Ready
+            return !TitleScreen.BlocksGameplay && !MicrophoneMuted && requestedStart && ConversationLive && Ready
                 && ((OutputInhibited && Owner == "observer" && ConversationInteraction == "chat_only")
                     || (ConversationInteraction == "control" && Owner == "gpt"));
         }
@@ -741,6 +777,7 @@ namespace Flylingual.Conversation
         // Stage observations only: does not acquire control or submit an Action.
         public bool TrySendEnvironmentEvent(string runId, int attempt, long sequence, string kind, string sourceId, float ageMs)
         {
+            if (TitleScreen.BlocksGameplay) return false;
             if (!Ready || !EnvironmentFeedbackAvailable || !ConversationActive || ConversationInteraction != "control"
                 || !bridgeConnected || conversationStopping || !HasFreshBrain || transport == null || !transport.IsConnected
                 || transport.QueueDepth >= 4 || ConversationGeneration < 0 || Sequence < 0
@@ -763,6 +800,7 @@ namespace Flylingual.Conversation
 
         internal bool TrySendBlindRunCue(string runId, int attempt, long sequence, string cue, string evidenceJson, float ageMs)
         {
+            if (TitleScreen.BlocksGameplay) return false;
             if (!Ready || !BlindRunScriptAvailable || !ConversationActive || ConversationInteraction != "control"
                 || !bridgeConnected || conversationStopping || (cue != "link_error" && !HasFreshBrain)
                 || transport == null || !transport.IsConnected || ConversationGeneration < 0) return false;
@@ -783,6 +821,7 @@ namespace Flylingual.Conversation
         // Read-only presentation data shares this socket; never acquire control or queue behind audio/actions.
         internal bool TrySendLocalVisualObservation(string factsJson, float ageMs)
         {
+            if (TitleScreen.BlocksGameplay) return false;
             if (!Ready || !LocalVisualAvailable || !ConversationActive || ConversationInteraction != "control"
                 || conversationStopping || ConversationGeneration < 0 || transport == null || !transport.IsConnected
                 || transport.QueueDepth >= 4 || string.IsNullOrEmpty(factsJson)
@@ -803,6 +842,7 @@ namespace Flylingual.Conversation
 
         public void SendLocalSafetyObservation(int sequence, float ageMs, bool groundPresent, string leftEdge, string rightEdge, bool forwardBlocked, bool bodyUnsafe, double travelMeters = -1, float horizontalSpeedMetersPerSecond = -1)
         {
+            if (TitleScreen.BlocksGameplay) return;
             if (!Ready || !requestedStart || !ConversationActive || conversationStopping ||
                 ConversationInteraction != "control" || ConversationGeneration < 0 ||
                 sequence <= 0 || float.IsNaN(ageMs) || ageMs < 0f || ageMs > 750f) return;
@@ -815,6 +855,7 @@ namespace Flylingual.Conversation
 
         public void SendBodyResponseObservation(int sequence, float horizontalSpeed, float forwardSpeed, float yawRate, double travel)
         {
+            if (TitleScreen.BlocksGameplay) return;
             if (!NeuralResponseAvailable || !HasFreshBrain || transport == null || !transport.IsConnected ||
                 transport.QueueDepth >= 4 || Sequence < 0 || string.IsNullOrEmpty(BrainInstanceId) ||
                 float.IsNaN(horizontalSpeed) || float.IsInfinity(horizontalSpeed) || horizontalSpeed < 0 ||

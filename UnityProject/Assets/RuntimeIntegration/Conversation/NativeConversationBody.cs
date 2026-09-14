@@ -14,7 +14,7 @@ namespace Flylingual.Conversation
         const float ConnectTimeoutSeconds = 3f;
         ConversationSessionController conversation;
         WindowsReplayDemo demo;
-        bool armed, bodyActive, faulted;
+        bool armed, bodyActive, faulted, presentationActive;
         int armedEpoch, boundarySequence, tcpSequence;
         float armedAt, connectedAt, lastNewFrameAt;
         BrainFrame boundaryFrame;
@@ -34,11 +34,7 @@ namespace Flylingual.Conversation
 
         void Update()
         {
-            if (Flylingual.PlayScreen.TitleScreen.BlocksGameplay)
-            {
-                if (armed || bodyActive) Deactivate();
-                return;
-            }
+
             if (conversation == null || demo == null || demo.client == null || demo.live == null || demo.controller == null) return;
             if (!conversation.BodyControlActive)
             {
@@ -71,9 +67,22 @@ namespace Flylingual.Conversation
             if (!ValidFrame(frame)) { Fail("body_tcp_invalid_frame"); return; }
             tcpSequence = frame.sequence;
             lastNewFrameAt = Time.unscaledTime;
-            if (!bodyActive)
+            bodyActive = true;
+        }
+
+        void LateUpdate()
+        {
+            if (!bodyActive || demo == null || demo.controller == null) return;
+            bool covered = Flylingual.PlayScreen.TitleScreen.BlocksGameplay;
+            if (covered)
             {
-                bodyActive = true;
+                demo.controller.SetMotorSource(null);
+                presentationActive = false;
+                Time.timeScale = 0f;
+            }
+            else if (!presentationActive && conversation != null && conversation.BodyControlActive)
+            {
+                presentationActive = true;
                 demo.controller.SetMotorSource(demo.live);
                 Time.timeScale = 1f;
             }
@@ -137,6 +146,7 @@ namespace Flylingual.Conversation
         }
         void Deactivate()
         {
+            presentationActive = false;
             bodyActive = false;
             armed = false;
             connectedAt = 0f;

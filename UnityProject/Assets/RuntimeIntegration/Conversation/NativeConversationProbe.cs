@@ -69,8 +69,15 @@ namespace Flylingual.Conversation
             // Exercise the normal title/tutorial buttons before waiting for auto-start.
             yield return null;
             var title = FindAnyObjectByType<Flylingual.PlayScreen.TitleScreen>();
+            if (Array.IndexOf(Environment.GetCommandLineArgs(), "-flyTitleConnectionProbe") >= 0)
+            {
+                yield return RunTitleConnectionProbe(path, title);
+                yield break;
+            }
             if (title != null && Flylingual.PlayScreen.TitleScreen.BlocksGameplay)
             {
+                float titleDeadline = Time.realtimeSinceStartup + 90;
+                while (!title.CanStart && Time.realtimeSinceStartup < titleDeadline) yield return null;
                 title.StartGame(); yield return null;
                 if (Flylingual.PlayScreen.TitleScreen.BlocksGameplay) { title.StartGame(); yield return null; }
             }
@@ -147,6 +154,90 @@ namespace Flylingual.Conversation
             }
             File.WriteAllText(path, JsonUtility.ToJson(report, true));
             Debug.Log("NATIVE_PROBE_RESULT " + report.result);
+            if (Array.IndexOf(Environment.GetCommandLineArgs(), "-flyConversationProbeQuit") >= 0) Application.Quit();
+        }
+
+        [Serializable] sealed class TitleConnectionReport
+        {
+            public string result = "incomplete", error, backend, status;
+            public bool earlyStartBlocked, readyBehindTitle, pausedBehindTitle = true, timersZeroBehindTitle = true;
+            public bool noMicrophoneBeforeStart = true, bodyStationary = true, languageReconnected, started, stopped;
+            public bool rawBrainReady, freshBrain, noEarlyStrike;
+            public long sequenceBefore, sequenceAfter;
+            public float gameplayElapsed, idleElapsed;
+        }
+
+        IEnumerator RunTitleConnectionProbe(string path, Flylingual.PlayScreen.TitleScreen title)
+        {
+            var report = new TitleConnectionReport();
+            var swatter = FindAnyObjectByType<Flylingual.BlindSugarRun.BlindSugarRunIdleSwatter>();
+            var demo = FindAnyObjectByType<FlyVisualDemo.WindowsReplayDemo>();
+            string originalLanguage = Flylingual.PlayScreen.GameLanguage.Code;
+            Vector3 origin = demo == null ? Vector3.zero : demo.body.Position;
+            ConversationSessionController controller = null;
+            if (title != null)
+            {
+                title.StartGame();
+                report.earlyStartBlocked = Flylingual.PlayScreen.TitleScreen.BlocksGameplay && !title.CanStart;
+                float until = Time.realtimeSinceStartup + 100;
+                while (Time.realtimeSinceStartup < until)
+                {
+                    controller = FindAnyObjectByType<ConversationSessionController>();
+                    if (swatter == null) swatter = FindAnyObjectByType<Flylingual.BlindSugarRun.BlindSugarRunIdleSwatter>();
+                    report.pausedBehindTitle &= Time.timeScale == 0f;
+                    report.timersZeroBehindTitle &= swatter == null || (swatter.GameplayElapsed == 0f && swatter.IdleElapsed == 0f && !swatter.Counting);
+                    report.noMicrophoneBeforeStart &= controller == null || (!controller.MicrophoneCapturing && controller.SentAudioChunks == 0);
+                    report.bodyStationary &= demo == null || Vector3.Distance(origin, demo.body.Position) < .001f;
+                    if (title.CanStart) break;
+                    yield return null;
+                }
+                report.readyBehindTitle = title.CanStart && Flylingual.PlayScreen.TitleScreen.BlocksGameplay;
+                report.status = title.ConnectionMessage;
+                if (report.readyBehindTitle && controller != null)
+                {
+                    if (Array.IndexOf(Environment.GetCommandLineArgs(), "-flyTitleLanguageProbe") >= 0)
+                    {
+                        string nextLanguage = originalLanguage == "ja" ? "en" : "ja";
+                        Flylingual.PlayScreen.GameLanguage.SetLanguage(nextLanguage);
+                        title.StartGame();
+                        bool blocked = Flylingual.PlayScreen.TitleScreen.BlocksGameplay && !title.CanStart;
+                        until = Time.realtimeSinceStartup + 90;
+                        while (!title.CanStart && Time.realtimeSinceStartup < until) yield return null;
+                        report.languageReconnected = blocked && title.CanStart && controller.Settings.language == nextLanguage;
+                    }
+                    else report.languageReconnected = true;
+                    report.sequenceBefore = controller.Sequence;
+                    yield return new WaitForSecondsRealtime(3);
+                    report.pausedBehindTitle &= Time.timeScale == 0;
+                    report.timersZeroBehindTitle &= swatter != null && swatter.GameplayElapsed == 0 && swatter.IdleElapsed == 0 && !swatter.Counting;
+                    report.noMicrophoneBeforeStart &= !controller.MicrophoneCapturing && controller.SentAudioChunks == 0;
+                    report.bodyStationary &= demo == null || Vector3.Distance(origin, demo.body.Position) < .001f;
+                    title.StartGame(); yield return null;
+                    if (Flylingual.PlayScreen.TitleScreen.BlocksGameplay) { title.StartGame(); yield return null; }
+                    report.started = !Flylingual.PlayScreen.TitleScreen.BlocksGameplay;
+                    until = Time.realtimeSinceStartup + 4;
+                    while (Time.realtimeSinceStartup < until) yield return null;
+                    report.gameplayElapsed = swatter == null ? -1 : swatter.GameplayElapsed;
+                    report.idleElapsed = swatter == null ? -1 : swatter.IdleElapsed;
+                    report.noEarlyStrike = swatter != null && !swatter.Struck && !swatter.WarningActive;
+                    report.sequenceAfter = controller.Sequence;
+                    report.backend = controller.Backend;
+                    report.rawBrainReady = controller.BrainReady;
+                    report.freshBrain = controller.HasFreshBrain;
+                    report.error = controller.Error;
+                    controller.StopConversation();
+                    yield return new WaitForSecondsRealtime(3);
+                    report.stopped = !controller.IsSessionRequested && !controller.ConversationLive;
+                }
+            }
+            report.result = report.earlyStartBlocked && report.readyBehindTitle && report.pausedBehindTitle
+                && report.timersZeroBehindTitle && report.noMicrophoneBeforeStart && report.bodyStationary
+                && report.languageReconnected && report.started && report.noEarlyStrike && report.freshBrain
+                && report.sequenceAfter > report.sequenceBefore && report.gameplayElapsed > 0 && report.gameplayElapsed < 6
+                && report.stopped && string.IsNullOrEmpty(report.error) ? "title_connection_gate_pass" : "incomplete";
+            Flylingual.PlayScreen.GameLanguage.SetLanguage(originalLanguage);
+            File.WriteAllText(path, JsonUtility.ToJson(report, true));
+            Debug.Log("TITLE_CONNECTION_PROBE " + report.result);
             if (Array.IndexOf(Environment.GetCommandLineArgs(), "-flyConversationProbeQuit") >= 0) Application.Quit();
         }
 

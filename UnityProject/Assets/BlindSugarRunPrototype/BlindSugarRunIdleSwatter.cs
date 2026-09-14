@@ -12,10 +12,13 @@ namespace Flylingual.BlindSugarRun
     {
         [Min(1f), Tooltip("Total eligible idle seconds, including the warning, before impact.")]
         public float idleSeconds = 20f;
+        [Min(0f), Tooltip("Minimum eligible gameplay seconds before the first impact in each attempt.")]
+        public float initialGraceSeconds = 60f;
         [Min(.1f)] public float warningSeconds = 4f;
         [Min(.01f), Tooltip("Horizontal displacement from the idle anchor that resets the timer.")]
         public float movementThreshold = .3f;
         public float IdleElapsed { get; private set; }
+        public float GameplayElapsed { get; private set; }
         public bool WarningActive { get; private set; }
         public bool Counting { get; private set; }
         public bool Struck { get; private set; }
@@ -42,8 +45,12 @@ namespace Flylingual.BlindSugarRun
         void Update()
         {
             if (Struck) return;
+            // Connections can become ready behind the title. Only the player's
+            // Start/first-run confirmation begins either gameplay clock.
+            if (TitleScreen.BlocksGameplay)
+            { gameplayStarted = false; GameplayElapsed = 0f; ResetIdle(); return; }
             if (stage == null || stage.fly == null || stage.State != BlindSugarRunSession.StageState.Playing)
-            { gameplayStarted = false; ResetIdle(); return; }
+            { gameplayStarted = false; GameplayElapsed = 0f; ResetIdle(); return; }
             if (conversation == null) conversation = FindFirstObjectByType<ConversationSessionController>();
             if (conversation != null && nativeBody == null) nativeBody = conversation.GetComponent<NativeConversationBody>();
             if (nativeBody != null && nativeBody.BodyActive && conversation != null && conversation.BodyControlActive)
@@ -73,10 +80,13 @@ namespace Flylingual.BlindSugarRun
                 if (escaped) Debug.Log("BLIND_SUGAR_SWATTER_ESCAPED position=" + position);
             }
             IdleElapsed += Time.deltaTime;
+            GameplayElapsed += Time.deltaTime;
             float total = Mathf.Max(1f, idleSeconds);
             float warning = Mathf.Clamp(warningSeconds, .1f, total);
-            float warningStart = total - warning;
-            if (IdleElapsed < warningStart) return;
+            // Both conditions must elapse. Movement resets only idle time, while
+            // pause/disconnection freezes both clocks and Retry creates a new attempt.
+            float remaining = Mathf.Max(total - IdleElapsed, Mathf.Max(0f, initialGraceSeconds) - GameplayElapsed);
+            if (remaining > warning) return;
             if (!WarningActive)
             {
                 WarningActive = true;
@@ -90,19 +100,18 @@ namespace Flylingual.BlindSugarRun
             {
                 warningLabel.style.display = DisplayStyle.Flex;
                 warningLabel.text = GameLanguage.Text("ハエたたきが来る！ 動いて逃げよう\nあと ", "A fly swatter is coming! Move to escape!\nTime left: ")
-                    + Mathf.CeilToInt(Mathf.Max(0, total - IdleElapsed)) + GameLanguage.Text(" 秒", " seconds");
+                    + Mathf.CeilToInt(Mathf.Max(0, remaining)) + GameLanguage.Text(" 秒", " seconds");
             }
             if (presentation != null && swatter != null)
             {
                 presentation.SetActive(true);
                 // The final fast descent is part of the warning: escape remains possible until impact.
-                float remaining = total - IdleElapsed;
-                float height = remaining > .25f ? Mathf.Lerp(5f, 2.8f, Mathf.Clamp01((IdleElapsed - warningStart) / warning))
+                float height = remaining > .25f ? Mathf.Lerp(5f, 2.8f, Mathf.Clamp01((warning - remaining) / warning))
                     : Mathf.Lerp(.1f, 2.8f, Mathf.Clamp01(remaining / .25f));
                 swatter.position = new Vector3(anchor.x, position.y + height, anchor.z);
                 swatter.rotation = Quaternion.Euler(0, 20, remaining > .25f ? Mathf.Sin(IdleElapsed * 9) * 6 : 0);
             }
-            if (IdleElapsed < total) return;
+            if (remaining > 0f) return;
             Struck = true; Counting = false; WarningActive = false;
             if (warningLabel != null) warningLabel.style.display = DisplayStyle.None;
             if (audioSource != null) audioSource.PlayOneShot(impactClip, .85f);
