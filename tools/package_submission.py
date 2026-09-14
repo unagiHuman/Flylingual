@@ -1,13 +1,16 @@
 """Package an existing Judge/Cloud Player; does not build Unity or run gameplay."""
 import argparse
-from datetime import datetime
+from datetime import datetime, timezone
 import hashlib
 import json
 from pathlib import Path
 import shutil
 import zipfile
 
-from package_judge import ROOT, assemble
+if __package__:
+    from .package_judge import ROOT, assemble
+else:
+    from package_judge import ROOT, assemble
 
 
 def digest(path):
@@ -16,6 +19,25 @@ def digest(path):
         for chunk in iter(lambda: stream.read(1024 * 1024), b''):
             value.update(chunk)
     return value.hexdigest()
+
+
+def check_player_freshness(player, project):
+    # The launcher EXE may retain Unity's original timestamp. boot.config is
+    # written by the Player build, including incremental builds.
+    marker = player / 'FlylingualConversation_Data/boot.config'
+    if not marker.is_file():
+        raise ValueError('Player build marker missing; rebuild Judge / Cloud first.')
+    built = marker.stat().st_mtime_ns
+    newer = [path.relative_to(project).as_posix()
+             for folder in ('Assets', 'Packages', 'ProjectSettings')
+             for path in (project / folder).rglob('*')
+             if path.is_file() and path.stat().st_mtime_ns > built]
+    if newer:
+        raise ValueError('Unity inputs are newer than the Player; rebuild Judge / Cloud first: '
+                         + ', '.join(sorted(newer)[:8]))
+    return {'method': 'input-mtime-vs-boot.config',
+            'buildMarkerUtc': datetime.fromtimestamp(built / 1e9, timezone.utc).isoformat(),
+            'newerUnityInputs': 0}
 
 
 def package(player, python_root, destination, voice_access=None):
@@ -32,6 +54,10 @@ def package(player, python_root, destination, voice_access=None):
     # Fail before creating an output that could be mistaken for a complete package.
     if not (python_root / 'python.exe').is_file():
         raise ValueError('Prepare portable Python with tools/prepare_judge_python.ps1 first.')
+    freshness = check_player_freshness(player, ROOT / 'UnityProject')
+    print('Player source: ' + str(player), flush=True)
+    print('Player build marker: ' + freshness['buildMarkerUtc'], flush=True)
+    print('Edition: ' + ('GPT Live voice' if voice_access else 'Text only'), flush=True)
     destination.mkdir(parents=True, exist_ok=False)
     output = destination / 'Flylingual-Judge'
     output.mkdir()
@@ -68,7 +94,9 @@ def package(player, python_root, destination, voice_access=None):
     pending.rename(archive)
     receipt = {'zip': str(archive), 'bytes': archive.stat().st_size, 'sha256': digest(archive),
                'manifestFiles': len(manifest['files']), 'manifestVerified': True, 'zipVerified': True,
-               'playerSource': str(player), 'unityBuildPerformed': False, 'gameplayTestPerformed': False}
+               'playerSource': str(player), 'edition': 'voice' if voice_access else 'text',
+               'playerFreshnessCheck': freshness,
+               'unityBuildPerformed': False, 'gameplayTestPerformed': False}
     (destination / 'archive-receipt.json').write_text(json.dumps(receipt, indent=2) + '\n', encoding='utf-8')
     print('SUCCESS: ' + str(archive))
     print('SHA256: ' + receipt['sha256'])

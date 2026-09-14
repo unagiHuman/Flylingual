@@ -189,6 +189,16 @@ def assemble(output, python_root, endpoint, voice_access=None):
             'Review voice access expires on the server. Do not publicly redistribute the review access pass.\n',
             encoding='utf-8')
     files = []
+    with (output / 'README.txt').open('a', encoding='utf-8') as instructions:
+        instructions.write(
+            '\n起動後はタイトルに「接続中」と表示されます。必要な接続が完了すると開始できます。\n'
+            '初回は操作説明を確認してください。ハエたたきのカウントはゲーム開始後に進みます。\n'
+            '危険を避けてゴールを目指してください。ゴール判定の拡大と方向補助があります。\n'
+            '方向補助はゲーム側の処理で、神経反応や学習の測定結果ではありません。\n'
+            '\nWait on the title screen while connections are being prepared; Start becomes available when ready.\n'
+            'Read the first-run instructions. The swatter timer runs after gameplay starts.\n'
+            'Avoid danger and reach the goal. An expanded goal area and steering assistance aid completion.\n'
+            'These are game-side assists, not measured neural responses or learning.\n')
     for path in sorted(output.rglob('*')):
         if path.is_file():
             digest = hashlib.sha256()
