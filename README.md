@@ -20,6 +20,8 @@ Flylingual treats AI as part of the game loop rather than as a content-generatio
 
 Current Windows handoff and build notes: [README_WINDOWS.md](README_WINDOWS.md).
 
+The submission scene also enables optional [Unity-side goal assistance](Docs/windows/Demo-Safety-Assist.md): a wider finish boundary and bounded steering corrections during active forward requests. This is gameplay assistance, not a measured neural response, sensory-input model, or evidence of learning.
+
 > **Scientific scope:** MaleCNS is a connectome dataset, not a finished brain emulator. The neural dynamics, stimulation policy, motor decoder, threat-event proxy, Unity body, and dialogue integration in this repository are project-specific experimental work. `ready=false` is intentionally retained where validation is incomplete.
 
 ## Pre-existing and third-party asset disclosure

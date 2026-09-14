@@ -1399,6 +1399,8 @@ GameObject:
   - component: {fileID: 282430442}
   - component: {fileID: 282430441}
   - component: {fileID: 282430443}
+  - component: {fileID: 282430445}
+  - component: {fileID: 282430444}
   m_Layer: 0
   m_Name: Blind Sugar Run Game Session
   m_TagString: Untagged
@@ -1449,8 +1451,44 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Flylingual.BlindSugarRun.BlindSugarRunIdleSwatter
   idleSeconds: 20
+  initialGraceSeconds: 60
   warningSeconds: 4
   movementThreshold: 0.3
+--- !u!114 &282430444
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 282430440}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 879eb3af9759e984da0163e5ffd34e92, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Flylingual.BlindSugarRun.FlyDemoSafetyAssist
+  enableDemoSafetyAssist: 1
+  nearGoalRadius: 3
+  nearGoalMaxAssist: 0.45
+  noProgressStartTime: 8
+  progressThreshold: 0.1
+  stuckMaxAssist: 0.35
+  emergencyStartTime: 45
+  hardEmergencyTime: 75
+  maxTotalAssist: 0.65
+  assistChangeSpeed: 0.2
+--- !u!114 &282430445
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 282430440}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f8aa7d34153f4a8ca1d34d8ba048265c, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Flylingual.BlindSugarRun.BlindSugarRunGoal
+  clearDistance: 0.8
 --- !u!1 &316873047
 GameObject:
   m_ObjectHideFlags: 0

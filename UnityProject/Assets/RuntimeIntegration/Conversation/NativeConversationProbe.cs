@@ -89,6 +89,11 @@ namespace Flylingual.Conversation
                 if (controller != null && controller.Ready) break;
                 yield return new WaitForSecondsRealtime(.1f);
             }
+            if (Array.IndexOf(Environment.GetCommandLineArgs(), "-flyDemoAssistProbe") >= 0)
+            {
+                yield return RunDemoAssistProbe(path, controller);
+                yield break;
+            }
             if (Array.IndexOf(Environment.GetCommandLineArgs(), "-flyVoiceActionsProbe") >= 0)
             {
                 yield return RunActions(path, controller);
@@ -238,6 +243,95 @@ namespace Flylingual.Conversation
             Flylingual.PlayScreen.GameLanguage.SetLanguage(originalLanguage);
             File.WriteAllText(path, JsonUtility.ToJson(report, true));
             Debug.Log("TITLE_CONNECTION_PROBE " + report.result);
+            if (Array.IndexOf(Environment.GetCommandLineArgs(), "-flyConversationProbeQuit") >= 0) Application.Quit();
+        }
+
+        [Serializable] sealed class AssistReport
+        {
+            public string result = "incomplete", error, backend;
+            public bool liveSource, farUnchanged, nearSteering, stopUnchanged, flagOffUnchanged, expandedClear, revealComplete;
+            public bool controlledGoalFixture = true, rawBrainReady, freshBrain;
+            public long firstSequence, lastSequence;
+            public float startDisplacement, peakAssist, peakTurnCorrection;
+        }
+
+        IEnumerator RunDemoAssistProbe(string path, ConversationSessionController controller)
+        {
+            var r = new AssistReport();
+            var demo = FindAnyObjectByType<FlyVisualDemo.WindowsReplayDemo>();
+            var assist = FindAnyObjectByType<Flylingual.BlindSugarRun.FlyDemoSafetyAssist>();
+            var goal = FindAnyObjectByType<Flylingual.BlindSugarRun.BlindSugarRunGoal>();
+            var stage = FindAnyObjectByType<Flylingual.BlindSugarRun.BlindSugarRunSession>();
+            if (controller != null && controller.MicrophoneCaptureDisabled && assist != null && goal != null
+                && goal.GoalVolume != null && demo != null && stage != null && controller.BodyControlActive)
+            {
+                r.firstSequence = controller.Sequence;
+                Vector3 origin = demo.body.Position;
+                Vector3 originalGoal = goal.GoalVolume.transform.position;
+                bool originalGoalEnabled = goal.enabled;
+                // Bounded fixture only: move the trigger, never the fly or its motor source.
+                // This validates contact logic, not traversal of the actual course.
+                goal.enabled = false;
+                int applied = controller.AppliedActions;
+                controller.SendPlayerText("8秒間前に進んで");
+                float until = Time.realtimeSinceStartup + 10;
+                while (controller.AppliedActions == applied && Time.realtimeSinceStartup < until) yield return null;
+                yield return new WaitForSecondsRealtime(2);
+                r.farUnchanged = controller.LastAppliedAction == "FORWARD" && assist.DistanceToGoal > 3
+                    && assist.CurrentAssist == 0 && assist.RawMotor.forward == assist.AssistedMotor.forward
+                    && assist.RawMotor.turn == assist.AssistedMotor.turn;
+                r.startDisplacement = Vector3.ProjectOnPlane(demo.body.Position - origin, Vector3.up).magnitude;
+                goal.GoalVolume.transform.position += demo.body.Position + demo.body.Thorax.transform.forward * 1.5f
+                    + demo.body.Thorax.transform.right - goal.GoalVolume.bounds.center;
+                until = Time.realtimeSinceStartup + 2;
+                while (Time.realtimeSinceStartup < until)
+                {
+                    r.peakAssist = Mathf.Max(r.peakAssist, assist.CurrentAssist);
+                    r.peakTurnCorrection = Mathf.Max(r.peakTurnCorrection, Mathf.Abs(assist.RawMotor.turn - assist.AssistedMotor.turn));
+                    yield return null;
+                }
+                r.nearSteering = r.peakAssist > 0 && r.peakAssist <= .65f && r.peakTurnCorrection > .001f;
+                assist.enableDemoSafetyAssist = false;
+                yield return new WaitForSecondsRealtime(.2f);
+                r.flagOffUnchanged = assist.CurrentAssist == 0 && assist.RawMotor.forward == assist.AssistedMotor.forward
+                    && assist.RawMotor.turn == assist.AssistedMotor.turn;
+                assist.enableDemoSafetyAssist = true;
+                controller.SendPlayerText("止まって");
+                until = Time.realtimeSinceStartup + 8;
+                while ((controller.ActiveExecution != null || controller.LastAppliedAction != "STOP")
+                    && Time.realtimeSinceStartup < until) yield return null;
+                yield return new WaitForSecondsRealtime(.2f);
+                r.stopUnchanged = controller.LastAppliedAction == "STOP" && assist.CurrentAssist == 0
+                    && assist.RawMotor.turn == assist.AssistedMotor.turn;
+                r.liveSource = demo.controller.MotorSource == demo.live;
+                r.lastSequence = controller.Sequence; r.backend = controller.Backend;
+                r.rawBrainReady = controller.BrainReady; r.freshBrain = controller.HasFreshBrain;
+                r.error = controller.Error;
+                // Place the fly 0.4m outside the original horizontal trigger edge.
+                Vector3 center = demo.body.Position + Vector3.right * (goal.GoalVolume.bounds.extents.x + .4f);
+                goal.GoalVolume.transform.position += center - goal.GoalVolume.bounds.center;
+                goal.enabled = true;
+                until = Time.realtimeSinceStartup + 3;
+                while (stage.State == Flylingual.BlindSugarRun.BlindSugarRunSession.StageState.Playing
+                    && Time.realtimeSinceStartup < until) yield return null;
+                r.expandedClear = stage.State == Flylingual.BlindSugarRun.BlindSugarRunSession.StageState.Goal
+                    || stage.State == Flylingual.BlindSugarRun.BlindSugarRunSession.StageState.Reveal;
+                var reveal = stage.GetComponent<Flylingual.BlindSugarRun.BlindSugarRunReveal>();
+                until = Time.realtimeSinceStartup + 10;
+                while (reveal != null && !reveal.Complete && Time.realtimeSinceStartup < until) yield return null;
+                r.revealComplete = reveal != null && reveal.Complete;
+                ScreenCapture.CaptureScreenshot(Path.ChangeExtension(path, ".png"));
+                yield return null;
+                goal.GoalVolume.transform.position = originalGoal;
+                goal.enabled = originalGoalEnabled;
+                controller.StopConversation();
+                r.result = r.liveSource && r.farUnchanged && r.startDisplacement > .001f && r.nearSteering
+                    && r.stopUnchanged && r.flagOffUnchanged && r.expandedClear && r.revealComplete && r.freshBrain
+                    && r.lastSequence > r.firstSequence && string.IsNullOrEmpty(r.error)
+                    ? "demo_assist_limited_pass" : "incomplete";
+            }
+            File.WriteAllText(path, JsonUtility.ToJson(r, true));
+            Debug.Log("DEMO_ASSIST_PROBE " + r.result);
             if (Array.IndexOf(Environment.GetCommandLineArgs(), "-flyConversationProbeQuit") >= 0) Application.Quit();
         }
 

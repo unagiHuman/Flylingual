@@ -31,6 +31,8 @@ namespace FlyLocomotionPoC
         private FlyMotorCommand currentMotor;
         private FlyMotorCommand targetMotor;
         private FlyTerrainTraversal terrainTraversal;
+        private Flylingual.BlindSugarRun.FlyDemoSafetyAssist demoSafetyAssist;
+        public void SetDemoSafetyAssist(Flylingual.BlindSugarRun.FlyDemoSafetyAssist assist) => demoSafetyAssist = assist;
 
         public void SetTerrainTraversal(FlyTerrainTraversal traversal) => terrainTraversal = traversal;
 
@@ -99,6 +101,7 @@ namespace FlyLocomotionPoC
             targetMotor = reflexLayer != null && reflexLayer.enabled
                 ? reflexLayer.Evaluate(rawMotor, phase, Time.fixedDeltaTime)
                 : rawMotor;
+            if (demoSafetyAssist != null) targetMotor = demoSafetyAssist.ApplyAssist(targetMotor, motorSource, Time.fixedDeltaTime);
             float smoothing = Mathf.Max(0.001f, config.motorSmoothingSeconds);
             float blend = Mathf.Clamp01(Time.fixedDeltaTime / smoothing);
             currentMotor = new FlyMotorCommand(

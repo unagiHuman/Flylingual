@@ -81,8 +81,10 @@ namespace Flylingual.BlindSugarRun
             settings.name = "Blind Sugar Run Reveal Panel"; settings.sortingOrder = 1100;
             settings.scaleMode = PanelScaleMode.ScaleWithScreenSize; settings.referenceResolution = new Vector2Int(1600, 900);
             settings.themeStyleSheet = Resources.Load<ThemeStyleSheet>("PlayScreenTheme");
-            // Own a separate document GameObject: the Session also owns the game-over document.
-            var canvas = new GameObject("Reveal UI"); canvas.transform.SetParent(transform, false);
+            // A child UIDocument inherits its parent's panel. Keep this independent
+            // of the Session's game-over document while retaining scene ownership.
+            var canvas = new GameObject("Reveal UI");
+            UnityEngine.SceneManagement.SceneManager.MoveGameObjectToScene(canvas, gameObject.scene);
             document = canvas.AddComponent<UIDocument>(); document.panelSettings = settings;
             VisualElement root = document.rootVisualElement;
             root.style.flexGrow = 1; root.style.backgroundColor = Color.black;

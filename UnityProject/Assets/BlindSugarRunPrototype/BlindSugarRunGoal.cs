@@ -12,6 +12,10 @@ namespace Flylingual.BlindSugarRun
         ConversationSessionController conversation;
         FlyTerrainSensor sensor;
         BoxCollider goal;
+        FlyDemoSafetyAssist assist;
+        bool previousAssisted;
+        [Min(0f)] public float clearDistance = .8f;
+        public BoxCollider GoalVolume => goal;
         readonly BlindSugarRunGoalStability stability = new BlindSugarRunGoalStability();
         public bool InsideGoal { get; private set; }
         public float StableSeconds => (float)stability.StableSeconds;
@@ -41,23 +45,34 @@ namespace Flylingual.BlindSugarRun
             if (conversation == null) conversation = FindAnyObjectByType<ConversationSessionController>();
             if (sensor == null) sensor = stage.fly.GetComponent<FlyTerrainSensor>();
             var o = sensor == null ? null : sensor.Observation;
-            InsideGoal = Contains(goal, stage.fly.Position);
+            if (assist == null) assist = GetComponent<FlyDemoSafetyAssist>();
+            bool assisted = assist != null && assist.AssistanceEnabled;
+            if (assisted != previousAssisted) { ResetTiming(); previousAssisted = assisted; }
+            InsideGoal = Contains(goal, stage.fly.Position, assisted ? clearDistance : 0f);
             var body = conversation == null ? null : conversation.GetComponent<NativeConversationBody>();
             bool valid = InsideGoal && Time.timeScale > 0 && conversation != null && conversation.HasFreshBrain
                 && conversation.BodyControlActive && body != null && body.BodyActive && string.IsNullOrEmpty(body.Fault)
                 && sensor != null && sensor.Fresh && o != null && !o.queryOverflow && o.groundPresent && !o.bodyUnsafe
-                && o.leftEdge == "safe" && o.rightEdge == "safe"
-                && stage.fly.LinearVelocity.magnitude <= .03f && stage.fly.AngularVelocity.magnitude <= .08f;
-            if (stability.Sample(Time.realtimeSinceStartupAsDouble, valid,
+                && (assisted || o.leftEdge == "safe" && o.rightEdge == "safe"
+                    && stage.fly.LinearVelocity.magnitude <= .03f && stage.fly.AngularVelocity.magnitude <= .08f);
+            bool originalStable = stability.Sample(Time.realtimeSinceStartupAsDouble, valid,
                 conversation == null ? -1 : conversation.ControlEpoch,
-                conversation == null ? -1 : conversation.ConversationGeneration)) stage.ConfirmGoal();
+                conversation == null ? -1 : conversation.ConversationGeneration);
+            if (valid && (assisted ? stability.StableSeconds >= .2 : originalStable)) stage.ConfirmGoal();
         }
 
-        static bool Contains(BoxCollider volume, Vector3 position)
+        static bool Contains(BoxCollider volume, Vector3 position, float expansion)
         {
             if (volume == null || !volume.enabled || !volume.gameObject.activeInHierarchy) return false;
             Vector3 p = volume.transform.InverseTransformPoint(position) - volume.center;
             Vector3 half = volume.size * .5f;
+            // Expand only horizontally in world units; retain the serialized vertical gate.
+            if (!float.IsNaN(expansion) && !float.IsInfinity(expansion) && expansion > 0f)
+            {
+                Vector3 scale = volume.transform.lossyScale;
+                if (Mathf.Abs(scale.x) > .0001f) half.x += expansion / Mathf.Abs(scale.x);
+                if (Mathf.Abs(scale.z) > .0001f) half.z += expansion / Mathf.Abs(scale.z);
+            }
             return Mathf.Abs(p.x) <= half.x && Mathf.Abs(p.y) <= half.y && Mathf.Abs(p.z) <= half.z;
         }
         void ResetTiming() { stability.Reset(); }
