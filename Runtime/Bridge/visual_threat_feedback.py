@@ -56,6 +56,13 @@ class VisualThreatFeedbackMixin:
         self.visual_threat_sender = None
         self.visual_threat_context_key = None
         self.visual_threat_last_context_ms = -1e15
+        self.visual_threat_history = None
+        self.visual_threat_history_sent = None
+
+    def clear_visual_threat_history(self):
+        self.visual_threat_history = None
+        if self.visual_threat_sender is not None and not self.visual_threat_sender.done():
+            self.visual_threat_sender.cancel()
 
     def visual_threat_scope(self):
         status = self.adapter.status if self.adapter else {}
@@ -156,6 +163,13 @@ class VisualThreatFeedbackMixin:
         observation = self.visual_threat_snapshot()
         if observation is None:
             return
+        history_key = (source['scope'], source['eventSequence'])
+        if (raw['active'] and raw['inputEventCount'] > 0
+                and any(item['spikeCount'] > 0 for item in raw['readouts'].values())
+                and (self.visual_threat_history is None or self.visual_threat_history['key'] != history_key)):
+            self.visual_threat_history = {'key': history_key, 'observedMs': now, 'observation': deepcopy(observation)}
+            self.log('visual_threat_history', stage='captured', trace=self.visual_threat_trace(observation),
+                     rightHz=raw['readouts']['R']['rateHz'], leftHz=raw['readouts']['L']['rateHz'])
         if self.control_queue is not None and not self.control_queue.full() and self.control_queue.qsize() < 96:
             self.control_queue.put_nowait(observation)
         key = (source['scope'], source['eventSequence'], raw['active'])
@@ -182,4 +196,43 @@ class VisualThreatFeedbackMixin:
             return
         self.visual_threat_context_key = key
         self.visual_threat_last_context_ms = time.monotonic()*1000
-        await self.conversation.append('thinking', describe(observation, self.conversation.settings['language']))
+        await self.conversation.append('thinking', describe(observation, self.conversation.settings['language']),
+                                       trace=self.visual_threat_trace(observation))
+
+    def visual_threat_trace(self, observation):
+        return {key: observation[key] for key in ('brainSequence', 'brainSessionId', 'brainInstanceId',
+                'controlEpoch', 'conversationGeneration', 'sourceId')} | {
+                'observationSequence': observation['environmentSequence'],
+                'requestId': observation['raw']['requestId'], 'active': observation['raw']['active'],
+                'language': self.conversation.settings['language']}
+
+    def visual_threat_cue_context(self, cue, text):
+        """Attach one historical measurement to an already authorized scene line."""
+        history = self.visual_threat_history
+        if history is None or cue != 'swatter_escaped':
+            return None
+        now = time.monotonic()*1000
+        if (history['key'][0] != self.visual_threat_scope() or now-history['observedMs'] > 8000
+                or self.adapter is None or not self.adapter.connected or self.summary()['stale']
+                or self.arbiter.inhibited or self.switching or self.release_unknown
+                or not self.conversation_accepting or self.conversation_interaction != 'control'):
+            self.clear_visual_threat_history()
+            return None
+        if (self.visual_threat_history_sent == history['key'] or not self.neural.enabled
+                or self.neural_scheduler.reduced or not self.neural_scheduler.spontaneous
+                or self.conversation.state != 'live'):
+            return None
+        observation = history['observation']
+        right, left = (observation['raw']['readouts'][side]['rateHz'] for side in ('R', 'L'))
+        if self.conversation.settings['language'] == 'ja':
+            content = (f'短い1文だけ「さっきのDNp01は右{right:g}、左{left:g} Hz、予告は解除された」。'
+                       '左右の実測値を省かない。先ほどの危険代理入力中の観測で、現在値や恐怖の測定ではない。前置きなし、設定中の口調を保つ。')
+        else:
+            content = (f'Say only one brief sentence: "Earlier DNp01: right {right:g}, left {left:g} Hz; warning cleared." '
+                       'Keep both measured rates. These are earlier threat-proxy observations, not current readings or measured fear. No preamble; keep the configured tone.')
+        if self.neural_scheduler.no_sarcasm:
+            content += ' 皮肉なし。' if self.conversation.settings['language'] == 'ja' else ' No sarcasm.'
+        if len(content) > 380:
+            return None
+        self.visual_threat_history_sent = history['key']
+        return content, self.visual_threat_trace(observation)

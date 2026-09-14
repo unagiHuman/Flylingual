@@ -163,7 +163,9 @@ namespace Flylingual.Conversation
                     while (Time.realtimeSinceStartup < warningDeadline && swatter != null && !swatter.WarningActive
                         && stage.State == BlindSugarRunSession.StageState.Playing) yield return null;
                     controller.SendPlayerText(english ? "Move forward" : "前に進んで");
-                    yield return new WaitForSecondsRealtime(3);
+                    // Let the measured clear-cue sentence finish before the next
+                    // deliberate STOP. Motion remains entirely real Brain driven.
+                    yield return new WaitForSecondsRealtime(visualThreatProbe ? 5 : 3);
                     controller.SendPlayerText(english ? "Stop" : "止まって");
                     yield return new WaitForSecondsRealtime(2);
                     result.stopped = controller.LastAppliedAction == "STOP";
@@ -178,7 +180,7 @@ namespace Flylingual.Conversation
                 {
                     string before = controller.Caption;
                     controller.SendPlayerText(question);
-                    yield return new WaitForSecondsRealtime(11);
+                    yield return new WaitForSecondsRealtime(visualThreatProbe ? 9 : 11);
                     string after = controller.Caption;
                     replies.Add(after.StartsWith(before) ? after.Substring(before.Length) : after);
                 }

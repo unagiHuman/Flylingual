@@ -1,5 +1,7 @@
 # 危険イベントの実Brain接続（2026-09-14）
 
+後続の [DNp01実況検証](Visual-Threat-Commentary-Validation.md) で、日英の実測文脈受理と左右値の実況を確認した。以下はその前段の接続検証を保持した記録。
+
 実装済み。通常Windows Brain Serverで危険入力とFORWARDの併用、解除、STOP、切断後の取消を確認した。ユーザーの外部送信許可後、実GPT Live＋Windows実Brainを使うUnity Player試験も `visual_threat_pass`。ゲームの警告から神経入力・DNp01観測・解除・移動と停止まで確認した。危険の場面実況は確認できたが、DNp01実測値の発話と固有のthinking受理は未確認。
 
 ## 実装境界

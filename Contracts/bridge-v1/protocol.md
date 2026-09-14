@@ -434,3 +434,29 @@ changes, subject to speech/intent gates. `environment_observation` remains a
 separate environment fact with `neuralInputApplied:false`; only the measured
 sensory observation describes neural application. `ready=false` and the
 unconfigured affective proxy remain unchanged.
+
+### Measured commentary receipts
+
+The first positive DNp01 window of a warning can be retained as explicitly
+historical evidence for at most 8 seconds. Its age never refreshes from later
+frames. The existing accepted warning-clear scene line may include those
+recorded rates once, in Japanese/English; it does not add a separate speech
+request. Current Brain freshness, identity, epoch, conversation
+generation and run must still match. Inhibition, disconnection, context clear,
+or expiry discards it; normal STOP cancels input but does not erase that recent
+measurement. Existing scene-cue permission and deduplication still apply;
+reduced-commentary preferences and disabled neural feedback suppress this
+addition. Warning and movement commands are not replaced. This
+does not extend the 750 ms current-observation freshness rule.
+
+For traced appends the local log `conversation_context_receipt` records
+`stage:sent|accepted|unmatched`, event ID, channel, context generation, content
+SHA-256 and an allowlisted observation trace, never the content or audio.
+`sent` means transport send completed. `accepted` requires a matching current
+API acknowledgement (matching `client_event_id` and channel, or `event_id`
+only when `client_event_id` is absent); unknown or absent IDs remain
+`unmatched`. Receipt storage is capped at 128 records, correlation expires
+after 30 seconds, and storage is
+cleared at context reset, stop or stream termination. Neither send nor
+acceptance alone proves an audible, scientifically accurate utterance; real
+Player transcripts must be compared separately against the original window.

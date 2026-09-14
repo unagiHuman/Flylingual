@@ -10,9 +10,12 @@ from array import array
 import base64
 from collections import deque
 import json
+import hashlib
+import re
 import math
 import os
 import sys
+import time
 import uuid
 
 import aiohttp
@@ -75,6 +78,7 @@ class ConversationAdapter:
         self.last_offset = -1
         self.max_offset = -1
         self.context_generation = 0
+        self.context_receipts = {}
         self.lifecycle = asyncio.Lock()
         self.audio_queue = asyncio.Queue(maxsize=24)
         self.audio_sender = None
@@ -235,6 +239,7 @@ class ConversationAdapter:
                 elif kind == 'session.closed':
                     break
                 elif kind in ('session.thinking.appended', 'session.commentary.appended'):
+                    await self._context_appended(event)
                     if self.voice_test_observation:
                         await self.on_event({'type': 'voice_test_diagnostic',
                             'event': 'context_append_observed', 'outcome': kind})
@@ -376,6 +381,7 @@ class ConversationAdapter:
                 self._record_error(self._local_error_code(error))
                 await self.on_event({'type': 'error', 'error': 'live_stream_failed'})
         finally:
+            self.context_receipts.clear()
             self.closed.set()
             self.started.set()
             self.state = 'off'
@@ -383,6 +389,7 @@ class ConversationAdapter:
                 await self.on_event({'type': 'conversation_state', 'state': 'disconnected'})
 
     def clear_context(self):
+        self.context_receipts.clear()
         self.context_generation += 1
         self.last_offset = max(self.last_offset, self.max_offset)
         self.fragments.clear()
@@ -475,16 +482,99 @@ class ConversationAdapter:
         self.transcript_revision += 1
         return True
 
-    async def append(self, channel, content, delegation_id=None):
-        if self.mode != 'live' or self.ws is None or self.ws.closed:
+    @staticmethod
+    def _context_trace(trace):
+        if trace is None:
+            return None
+        integer_keys = {'observationSequence', 'brainSequence', 'controlEpoch',
+                        'conversationGeneration', 'requestId'}
+        identity_keys = {'brainSessionId', 'brainInstanceId'}
+        allowed = integer_keys | identity_keys | {'language', 'sourceId', 'active'}
+        if type(trace) is not dict or not set(trace) <= allowed:
+            raise ConversationError('invalid_context_trace')
+        for key, value in trace.items():
+            valid = False
+            if key in integer_keys:
+                valid = type(value) is int and -(2**63) <= value < 2**63
+            elif key in identity_keys:
+                valid = type(value) is str and re.fullmatch(r'[A-Za-z0-9_.:-]{1,128}', value) is not None
+            elif key == 'language':
+                valid = value in ('ja', 'en')
+            elif key == 'sourceId':
+                valid = value == 'idle_swatter'
+            elif key == 'active':
+                valid = type(value) is bool
+            if not valid:
+                raise ConversationError('invalid_context_trace')
+        return dict(trace)
+
+    async def _context_receipt(self, record, stage, current):
+        await self.on_event({'type': 'conversation_context_receipt', 'stage': stage,
+            'eventId': record['eventId'], 'channel': record['channel'],
+            'contextGeneration': record['generation'], 'contentHash': record['contentHash'],
+            'trace': dict(record['trace']), 'current': current,
+            **({'correlationField': record['correlationField']} if stage == 'accepted' else {})})
+
+    async def _context_appended(self, event):
+        channel = {'session.thinking.appended': 'thinking',
+                   'session.commentary.appended': 'commentary'}.get(event.get('type'))
+        correlation_field = 'client_event_id' if 'client_event_id' in event else 'event_id'
+        event_id = event.get(correlation_field)
+        record = self.context_receipts.get(event_id) if type(event_id) is str else None
+        if record is not None and time.monotonic()-record['createdAt'] > 30:
+            self.context_receipts.pop(event_id, None)
+            record = None
+        if (record is None or record['channel'] != channel or self.closing
+                or self.ws is None or self.ws.closed
+                or record['generation'] != self.context_generation or record['ws'] is not self.ws):
+            # Do not echo unknown IDs, values, content or server-provided key names.
+            # These known schema keys are sufficient to diagnose correlation support.
+            keys = sorted(set(event) & {'type', 'event_id', 'client_event_id', 'request_id',
+                                       'request_event_id', 'source_event_id', 'item_id', 'content', 'session'})
+            await self.on_event({'type': 'conversation_context_receipt', 'stage': 'unmatched',
+                                'channel': channel, 'current': False, 'ackKeys': keys})
             return
-        # Callers must budget complete context. Slicing could remove a negation,
-        # uncertainty qualifier, or the closing portion of a quoted question.
+        record['correlationField'] = correlation_field
+        if not record['sent']:
+            record['acknowledged'] = True
+            return
+        self.context_receipts.pop(event_id, None)
+        await self._context_receipt(record, 'accepted', True)
+
+    async def append(self, channel, content, delegation_id=None, *, trace=None):
+        if self.mode != 'live' or self.ws is None or self.ws.closed or self.closing:
+            return None
+        if channel not in ('thinking', 'commentary'):
+            raise ConversationError('invalid_context_channel')
+        # Budget complete sentences before entry; never trim away uncertainty.
         if not isinstance(content, str) or len(content) > 380:
             raise ConversationError('conversation_context_too_long_or_invalid')
-        await self._send_event({'type': 'session.' + channel + '.append',
-                                 'event_id': str(uuid.uuid4()), 'delegation_id': delegation_id,
-                                 'content': content})
+        safe_trace = self._context_trace(trace)
+        event_id = str(uuid.uuid4())
+        record = None
+        if safe_trace is not None:
+            record = {'eventId': event_id, 'channel': channel, 'generation': self.context_generation,
+                      'contentHash': hashlib.sha256(content.encode('utf-8')).hexdigest(),
+                      'trace': safe_trace, 'ws': self.ws, 'sent': False, 'acknowledged': False,
+                      'createdAt': time.monotonic()}
+            self.context_receipts[event_id] = record
+            while len(self.context_receipts) > 128:
+                self.context_receipts.pop(next(iter(self.context_receipts)))
+        try:
+            await self._send_event({'type': 'session.' + channel + '.append',
+                                   'event_id': event_id, 'delegation_id': delegation_id, 'content': content})
+        except BaseException:
+            self.context_receipts.pop(event_id, None)
+            raise
+        if record is not None:
+            record['sent'] = True
+            current = (self.context_receipts.get(event_id) is record and not self.closing
+                       and record['generation'] == self.context_generation and record['ws'] is self.ws)
+            await self._context_receipt(record, 'sent', current)
+            if current and record['acknowledged'] and self.context_receipts.get(event_id) is record:
+                self.context_receipts.pop(event_id, None)
+                await self._context_receipt(record, 'accepted', True)
+        return event_id
 
     async def input_audio(self, encoded, fixture_tag=None):
         if self.state != 'live':
@@ -598,6 +688,7 @@ class ConversationAdapter:
 
     async def _stop(self, graceful=True):
         self.closing = True
+        self.context_receipts.clear()
         if self.transcript_worker is not None:
             self.transcript_worker.cancel()
             await asyncio.gather(self.transcript_worker, return_exceptions=True)

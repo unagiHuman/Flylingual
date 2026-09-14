@@ -138,6 +138,7 @@ class Bridge(VisualThreatFeedbackMixin):
         self.neural_max_chars = 0
 
     def clear_neural(self):
+        self.clear_visual_threat_history()
         self.cancel_visual_threat()
         self.environment.clear_current()
         if self.environment_sender is not None and not self.environment_sender.done():
@@ -793,6 +794,9 @@ class Bridge(VisualThreatFeedbackMixin):
             self.emit(self.state())
 
     async def conversation_event(self, event):
+        if event.get('type') == 'conversation_context_receipt':
+            self.log('conversation_context_receipt', **{k: v for k, v in event.items() if k != 'type'})
+            return
         if event.get('type') == 'audio':
             self.neural_output_at = time.monotonic()*1000
         elif event.get('type') == 'conversation_text' and event.get('role') == 'user':
@@ -1335,6 +1339,13 @@ class Bridge(VisualThreatFeedbackMixin):
         if event.get('cue') != 'link_error':
             self.require_fresh()
         text, speak = self.blind_script.accept(event, self.conversation.settings['language'])
+        # A validated clear cue normally supplies thinking only. A measured
+        # recent response can make that same cue one factual spoken report.
+        measured = self.visual_threat_cue_context(event.get('cue'), text)
+        if measured is not None:
+            speak = True
+            self.blind_script.last_cue = event['cue']
+            self.blind_script.last_spoken_at = time.monotonic()
         if speak:
             self.neural_scheduler.interrupt(time.monotonic()*1000, 4000)
         # Send only the selected line, never the catalog, run ID or cue name.
@@ -1347,7 +1358,10 @@ class Bridge(VisualThreatFeedbackMixin):
             if speak:
                 self.emit({'type': 'conversation_text', 'role': 'assistant', 'text': text, 'append': False})
         else:
-            await self.conversation.append('commentary' if speak else 'thinking', instruction + text)
+            if measured is not None:
+                await self.conversation.append('commentary', measured[0], trace=measured[1])
+            else:
+                await self.conversation.append('commentary' if speak else 'thinking', instruction + text)
         self.emit({'type': 'blind_run_cue_result', 'sequence': event['sequence'],
                    'stage': 'queued', 'speakRequested': speak})
         self.log('blind_run_cue_queued', cue=event['cue'], sequence=event['sequence'], speakRequested=speak)
