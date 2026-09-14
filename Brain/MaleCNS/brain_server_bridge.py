@@ -19,6 +19,7 @@ from typing import Any
 from analog_controller import ROOT
 from brain_server_analog import AnalogServer, parse_args
 from game_controller import Action
+from visual_threat import validate_command
 
 
 _GRAPH_FILES = ("body_ids.npy", "indptr.npy", "targets.npy", "weights.npy")
@@ -28,6 +29,8 @@ _SOURCE_FILES = (
     "brain_server_malecns.py",
     "analog_controller.py",
     "neural_visualization.py",
+    "visual_threat.py",
+    "config/visual_threat_v1.json",
     "analog_motor_decoder.py",
     "game_controller.py",
     "shiu_compatible.py",
@@ -62,6 +65,8 @@ def _is_finite_number(value: Any) -> bool:
 
 class BridgeAnalogServer(AnalogServer):
     """AnalogServer with one controller session and explicit release evidence."""
+
+    supports_visual_threat = True
 
     def __init__(self, args: Any):
         super().__init__(args)
@@ -150,6 +155,7 @@ class BridgeAnalogServer(AnalogServer):
 
         session_id = str(uuid.uuid4())
         released = False
+        last_visual_request_id = None
         self.sessions.add(writer)
         self._session_ids[writer] = session_id
         self._log(
@@ -183,6 +189,19 @@ class BridgeAnalogServer(AnalogServer):
                             },
                         )
                         return
+                    if message_type == 'set_visual_threat':
+                        request_id, active, valid_for_ms = validate_command(payload)
+                        if last_visual_request_id is not None and (
+                                request_id >= last_visual_request_id if last_visual_request_id < 0
+                                else request_id <= last_visual_request_id):
+                            raise ValueError('visual_threat_request_reused')
+                        if not self.worker or getattr(self.worker.controller,'visual_threat',None) is None:
+                            raise RuntimeError('visual_threat_unavailable')
+                        self.worker.submit_visual_threat(request_id,active,valid_for_ms)
+                        last_visual_request_id = request_id
+                        await self.send(writer,{'type':'visual_threat_ack','requestId':request_id,
+                                                'accepted':True,'active':active})
+                        continue
                     request_id, action, client_time = self._validate_set_action(payload)
                     if not self.worker:
                         raise RuntimeError("worker_unavailable")

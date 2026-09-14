@@ -13,7 +13,7 @@ namespace Flylingual.Conversation
     public sealed class NeuralFeedbackProbe : MonoBehaviour
     {
         string output, originalLanguage;
-        bool english, environmentProbe;
+        bool english, environmentProbe, visualThreatProbe;
         int questionIndex;
         ConversationSessionController controller;
         readonly HashSet<long> frames = new HashSet<long>();
@@ -26,6 +26,9 @@ namespace Flylingual.Conversation
             public bool live, brainReady, fresh, stopped, neuralAvailable;
             public int frames, neuralFrames, correlatedBodyFrames;
             public int juiceContacts, threatStarts, threatEnds;
+            public int visualThreatFrames, visualThreatInputFrames, visualThreatOffFrames;
+            public int dnp01RightSpikes, dnp01LeftSpikes;
+            public bool visualThreatProbe;
             public bool environmentProbe, repositionedForContact;
             public long firstSequence, lastSequence;
             public float displacement, unityFrameP95Ms;
@@ -46,6 +49,8 @@ namespace Flylingual.Conversation
             probe.output = Path.GetFullPath(args[i + 1]);
             probe.english = Array.IndexOf(args, "-neuralFeedbackEnglish") >= 0;
             probe.environmentProbe = Array.IndexOf(args, "-environmentFeedbackProbe") >= 0;
+            probe.visualThreatProbe = Array.IndexOf(args, "-visualThreatProbe") >= 0;
+            probe.environmentProbe |= probe.visualThreatProbe;
             int q = Array.IndexOf(args, "-neuralFeedbackQuestion");
             if (q >= 0 && q + 1 < args.Length && int.TryParse(args[q + 1], out int selected))
                 probe.questionIndex = Mathf.Clamp(selected, 0, 3);
@@ -66,6 +71,23 @@ namespace Flylingual.Conversation
         }
         void Capture(string json)
         {
+            if (json.Contains("\"visual_threat_observation\""))
+            {
+                events?.WriteLine(json);
+                var item = JsonUtility.FromJson<VisualThreatEvent>(json);
+                if (item.fresh && item.raw != null && item.raw.readouts != null)
+                {
+                    result.visualThreatFrames++;
+                    if (item.raw.active && item.raw.inputEventCount > 0)
+                    {
+                        result.visualThreatInputFrames++;
+                        result.dnp01RightSpikes += item.raw.readouts.R.spikeCount;
+                        result.dnp01LeftSpikes += item.raw.readouts.L.spikeCount;
+                    }
+                    else if (!item.raw.active && result.visualThreatInputFrames > 0)
+                        result.visualThreatOffFrames++;
+                }
+            }
             if (json.Contains("\"environment_observation\""))
             {
                 events?.WriteLine(json);
@@ -80,6 +102,10 @@ namespace Flylingual.Conversation
                 events?.WriteLine(json);
         }
         [Serializable] sealed class EnvironmentEvent { public string kind; }
+        [Serializable] sealed class VisualThreatEvent { public bool fresh; public VisualThreatRaw raw; }
+        [Serializable] sealed class VisualThreatRaw { public bool active; public int inputEventCount; public ThreatReadouts readouts; }
+        [Serializable] sealed class ThreatReadouts { public ThreatReadout R, L; }
+        [Serializable] sealed class ThreatReadout { public int spikeCount; }
         IEnumerator Start()
         {
             Directory.CreateDirectory(Path.GetDirectoryName(output));
@@ -112,6 +138,7 @@ namespace Flylingual.Conversation
                 controller.SendPlayerText(english ? "Stop" : "止まって");
                 yield return new WaitForSecondsRealtime(2);
                 result.environmentProbe = environmentProbe;
+                result.visualThreatProbe = visualThreatProbe;
                 if (environmentProbe && controller.LastAppliedAction == "STOP" && stage.fly.Thorax != null)
                 {
                     // Explicit diagnostic initial placement, not a contact/event injection.
@@ -165,6 +192,9 @@ namespace Flylingual.Conversation
                 result.result = result.live && result.fresh && result.stopped && result.frames >= 30 && result.displacement > .05f ? "control_pass" : "control_failed";
                 if (environmentProbe) result.result = result.result == "control_pass" && result.repositionedForContact
                     && result.juiceContacts == 1 && result.threatStarts >= 1 && result.threatEnds >= 1 ? "environment_pass" : "environment_failed";
+                if (visualThreatProbe) result.result = result.result == "environment_pass"
+                    && result.visualThreatInputFrames > 0 && result.visualThreatOffFrames > 0
+                    && result.dnp01RightSpikes > 0 && result.dnp01LeftSpikes > 0 ? "visual_threat_pass" : "visual_threat_failed";
                 controller.ControlEventReceived -= Capture;
             }
             else if (controller != null) result.error = controller.Error;

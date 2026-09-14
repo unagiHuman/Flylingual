@@ -8,6 +8,7 @@ from shiu_compatible import MaleCNSShiuCompatibleLIF
 from analog_motor_decoder import AnalogMotorDecoder
 from temporal_motor_decoder import TemporalMotorDecoder
 from neural_visualization import load_visualization_atlas
+from visual_threat import VisualThreat, merge_events
 
 ROOT=Path(__file__).resolve().parents[2]
 ACTIONS={'STOP':(), 'FORWARD':('F',), 'TURN_R':('R',), 'TURN_L':('L',),
@@ -57,7 +58,8 @@ def build_readout_provenance(inputs, readouts, action):
 
 
 class MaleCNSAnalogController:
-    def __init__(self,graph,config,seed=20261101,window_ms=100,visualization_atlas=None):
+    def __init__(self,graph,config,seed=20261101,window_ms=100,visualization_atlas=None,visual_threat_config=None):
+        self.visual_threat_config=visual_threat_config; self.visual_threat=None
         self.graph=Path(graph); self.config=json.loads(Path(config).read_text()) if isinstance(config,(str,Path)) else config
         self.seed=seed; self.window_ms=float(window_ms); self.sequence=0; self.action='STOP'
         self.network_rebuild_count=0; self.state_reset_count=0; self.frame=None
@@ -95,6 +97,8 @@ class MaleCNSAnalogController:
         self.sim=MaleCNSShiuCompatibleLIF(len(self.ids),ptr,post,w,stim)
         if self.visualization_atlas is not None:
             self.visualization=load_visualization_atlas(self.visualization_atlas,self.graph,self.ids)
+        if self.visual_threat_config is not None:
+            self.visual_threat=VisualThreat(self.visual_threat_config,self.ids,stim,self.seed)
         self.rng=np.random.default_rng(self.seed)
         # Explicit initial no-input baseline; no subsequent resets.
         self.sim.step(1000)
@@ -123,7 +127,19 @@ class MaleCNSAnalogController:
                 batches.append(selected)
                 offsets[local_tick+1]=offsets[local_tick]+len(selected)
         event_indices=np.concatenate(batches).astype(np.int64,copy=False) if offsets[-1] else np.empty(0,dtype=np.int64)
-        counts,sums=self.sim.step_window(ticks,offsets,event_indices,self.observed)
+        sensory_ticks=0; sensory_events=np.empty(0,dtype=np.int64)
+        if self.visual_threat is not None:
+            sensory_ticks,sensory_offsets,sensory_events=self.visual_threat.events(ticks)
+            offsets,event_indices=merge_events(offsets,event_indices,sensory_offsets,sensory_events)
+        # rfc eligibility is local to this active window, never a model default.
+        if sensory_ticks:
+            old_rfc=self.sim.rfc[self.visual_threat.indices].copy()
+            self.sim.rfc[self.visual_threat.indices]=0
+        try:
+            counts,sums=self.sim.step_window(ticks,offsets,event_indices,self.observed)
+        finally:
+            if sensory_ticks:
+                self.sim.rfc[self.visual_threat.indices]=old_rfc
         mean=sums/ticks; delta=mean[0]-self.baseline
         response={axis:{s:float(np.mean([delta[ix].mean() for ix in g.values()])) for s,g in p.items()} for axis,p in self.groups.items()}
         raw=[(response['forward']['R']+response['forward']['L'])/2,response['turn']['R']-response['turn']['L']]
@@ -144,6 +160,8 @@ class MaleCNSAnalogController:
                         'selectedVncAggregation':{'version':'v1','method':'cell_type_equal_weight_mean_delta_v','unit':'mV'},
                         'model':'MaleCNS + Shiu-compatible LIF','motor_readout':'VNC_ANALOG_POPULATION',
                         'mode':'LIVE','ready':False,'calibrationApplied':self.decoder is not None}}
+        if self.visual_threat is not None:
+            self.frame['raw']['visualThreat']=self.visual_threat.metadata(sensory_ticks,len(sensory_events),counts,self.window_ms)
         if self.visualization is not None:
             # Counts are whole-window totals, not spike event timings.  Reading
             # the existing count buffer does not alter LIF state or RNG use.

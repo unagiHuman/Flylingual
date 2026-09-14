@@ -55,4 +55,6 @@ graph集約SHA-256=`dd49c763a2eb2e03a0d1f450a7743bf9f3a13922e2dab02b0f348f44aaf4
 
 ## 次のgate
 
+通常通信への実装とWindows実Brainの移動併用・取消検証は、後続の [ゲーム統合記録](Visual-Threat-Game-Integration.md) を参照。Unity/API最終試験は未実施。
+
 危険の下流応答を測定できたため、次は環境の接近観測から刺激への変換、Brainへの期限付き適用・取消、DNp01 raw readoutの通常通信への追加を検討できる。ただし今回は通常Brain Serverの6 Action処理・Unity・motor・神経状態との共存を検証していない。既存移動中の応答や停止、世代変更、失効を確認してからゲーム側を有効にする。甘味入力・affectiveProxy・感情・学習は今回の実測から有効化しない。

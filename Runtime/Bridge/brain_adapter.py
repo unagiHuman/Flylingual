@@ -76,6 +76,8 @@ class BrainAdapter:
         self._next_internal_request_id = -1
         self._release_request_id: int | None = None
         self._failure_code: str | None = None
+        self._sensory_generation = 0
+        self.visual_threat_requests = {}
 
     @staticmethod
     def _safe_expected_target(target: dict[str, Any]) -> tuple[str, int]:
@@ -119,9 +121,47 @@ class BrainAdapter:
             raise BrainAdapterError("invalid_request_id")
         if not self.connected:
             raise BrainAdapterError("not_connected")
+        if action == "STOP":
+            self.invalidate_visual_threat()
         await self._send({"type": "set_action", "action": action, "requestId": request_id})
 
+    def invalidate_visual_threat(self):
+        """Invalidate sensory writes already waiting behind the transport lock."""
+        self._sensory_generation += 1
+
+    async def send_visual_threat(self, active, valid_for_ms, *, source, valid=None):
+        if (type(active) is not bool or type(valid_for_ms) is not int
+                or (active and not 1 <= valid_for_ms <= 750) or (not active and valid_for_ms != 0)):
+            raise BrainAdapterError("invalid_visual_threat")
+        if (not self.connected or not isinstance(self.status.get('capabilities'), list)
+                or 'visual_threat_v1' not in self.status['capabilities']):
+            return None
+        if valid is not None and not valid():
+            return None
+        if not active:
+            self.invalidate_visual_threat()
+        generation = self._sensory_generation
+        started = time.monotonic()
+        request_id = self._next_internal_request_id
+        self._next_internal_request_id -= 1
+        payload = dict(type='set_visual_threat', requestId=request_id, active=active, validForMs=valid_for_ms)
+        def prepare():
+            if generation != self._sensory_generation or not self.connected or (valid and not valid()):
+                return False
+            if active:
+                remaining = valid_for_ms - int(math.ceil(max(0, time.monotonic()-started)*1000))
+                if remaining <= 0:
+                    return False
+                payload['validForMs'] = remaining
+            self.visual_threat_requests[request_id] = dict(source=source, active=active, validForMs=payload['validForMs'])
+            while len(self.visual_threat_requests) > 128:
+                del self.visual_threat_requests[next(iter(self.visual_threat_requests))]
+            return True
+        sent = await self._send(payload, prepare=prepare)
+        return request_id if sent else None
+
     async def release(self) -> dict[str, Any]:
+        self.invalidate_visual_threat()
         if not self.connected:
             raise ReleaseUnknownError("release_unknown")
         if self._release_future is not None:
@@ -152,6 +192,7 @@ class BrainAdapter:
 
     async def close(self) -> None:
         """Close transport permanently; this adapter instance cannot reconnect."""
+        self.invalidate_visual_threat()
         self._closed = True
         self.connected = False
         self._reject_pending("adapter_closed")
@@ -168,7 +209,7 @@ class BrainAdapter:
             except (ConnectionError, asyncio.TimeoutError):
                 pass
 
-    async def _send(self, payload: dict[str, Any]) -> None:
+    async def _send(self, payload: dict[str, Any], *, prepare=None):
         writer = self._writer
         if writer is None or writer.is_closing():
             raise BrainAdapterError("not_connected")
@@ -177,11 +218,14 @@ class BrainAdapter:
             # The timeout wraps both lock acquisition and drain.  A stale
             # queued action must never hold a safety STOP or target release.
             async with self._write_lock:
+                if prepare is not None and not prepare():
+                    return False
                 writer.write(json.dumps(payload, separators=(",", ":"), allow_nan=False).encode("utf-8") + b"\n")
                 await writer.drain()
+                return True
 
         try:
-            await asyncio.wait_for(write_and_drain(), timeout=self.timeout)
+            return await asyncio.wait_for(write_and_drain(), timeout=self.timeout)
         except asyncio.TimeoutError as exc:
             await self._fail("send_timeout")
             raise BrainAdapterError("send_timeout") from exc
@@ -238,12 +282,21 @@ class BrainAdapter:
             self._accept_frame(message)
             await self._notify(message)
             return
+        if message_type == 'visual_threat_ack':
+            rid = message.get('requestId')
+            pending = self.visual_threat_requests.get(rid) if _is_int(rid) else None
+            if (pending and message.get('accepted') is True and type(message.get('active')) is bool
+                    and message['active'] == pending['active']):
+                await self._notify({**message, 'source': pending['source']})
+            return  # Sensory acks never enter Action application tracking.
         if message_type == "ack":
             if not _is_int(message.get("requestId")) or message.get("action") not in _ACTIONS or not isinstance(message.get("accepted"), bool):
                 raise BrainAdapterError("malformed_ack")
             await self._notify(message)
             return
         if message_type == "error":
+            if _is_int(message.get("requestId")) and message["requestId"] in self.visual_threat_requests:
+                return  # Optional sensory rejection is not an Action failure.
             if not isinstance(message.get("error"), str) or not message["error"]:
                 raise BrainAdapterError("malformed_error")
             await self._notify(message)

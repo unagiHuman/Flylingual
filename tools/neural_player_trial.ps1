@@ -4,7 +4,8 @@ param(
     [ValidateRange(0,3)][int]$Question = 0,
     [switch]$ObservationOff,
     [switch]$RenderScreenshot,
-    [switch]$EnvironmentFeedback
+    [switch]$EnvironmentFeedback,
+    [switch]$VisualThreat
 )
 $ErrorActionPreference = 'Stop'
 $trialRoot = Split-Path $PSScriptRoot -Parent
@@ -19,6 +20,8 @@ try {
     $settings = [Text.Encoding]::UTF8.GetString($originalBytes) | ConvertFrom-Json
     $settings.conversation.language = $Language
     $settings.conversation.persona = $(if ($Language -eq 'en') {'deadpan_skeptic'} else {'hiroyuki_like'})
+    # The diagnostic uses only the checked-in preset, never terminal-local free text.
+    $settings.conversation | Add-Member -Force -NotePropertyName personaText -NotePropertyValue ''
     $settings | Add-Member -Force -NotePropertyName neuralFeedback -NotePropertyValue @{enabled = (-not $ObservationOff.IsPresent)}
     $settings | Add-Member -Force -NotePropertyName logPath -NotePropertyValue (Join-Path $trialOutput ($Name + '-bridge.jsonl'))
     [IO.File]::WriteAllText($trialConfig, ($settings | ConvertTo-Json -Depth 20), [Text.UTF8Encoding]::new($false))
@@ -29,6 +32,7 @@ try {
     if ($RenderScreenshot) { $launchArguments = @($launchArguments | Where-Object { $_ -ne '-batchmode' }) }
     if ($Language -eq 'en') { $launchArguments += '-neuralFeedbackEnglish' }
     if ($EnvironmentFeedback) { $launchArguments += '-environmentFeedbackProbe' }
+    if ($VisualThreat) { $launchArguments += '-visualThreatProbe' }
     $trialProcess = Start-Process -FilePath $trialExe -WorkingDirectory (Split-Path $trialExe) -WindowStyle Hidden -ArgumentList $launchArguments -PassThru
     $trialProcess | Select-Object Id,StartTime,Path | ConvertTo-Json | Set-Content (Join-Path $trialOutput ($Name + '-process.json'))
     $deadline = [DateTime]::UtcNow.AddSeconds(180)

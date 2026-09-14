@@ -382,3 +382,55 @@ Delayed audio and conversation text are dropped once any conversation is no
 longer accepting. These additions do not change `ready=false`, the 750 ms
 freshness boundary, action TTL, voice-session epoch barrier, or the raw
 BrainFrame/motor decoder path.
+
+## Experimental visual threat extension (2026-09-14)
+
+Only Brain status capability `visual_threat_v1` enables this optional path.
+The normal six Action commands and `appliedRequestId` retain their meaning.
+The Bridge maps one accepted, fresh `threat_started` from the existing swatter
+environment source to one fixed LC4/LPLC2 pulse. This is `event_proxy_v1`, not
+a retinal angular-size/velocity model or evidence of fear/aversion.
+
+```json
+{"type":"set_visual_threat","requestId":-1,"active":true,"validForMs":749}
+{"type":"visual_threat_ack","requestId":-1,"accepted":true,"active":true}
+```
+
+The request has exactly those four fields. ON uses an integer TTL of 1–750
+wall-clock milliseconds; OFF uses `active:false, validForMs:0`. Receipt sets
+the server deadline before worker scheduling. Bridge subtracts environment
+age and socket-lock waiting time before writing. A pulse is also capped at
+500 ms of brain time and cannot renew from the same warning. Request IDs use
+one direction per TCP session: negative IDs strictly decrease (Bridge internal
+IDs), nonnegative IDs strictly increase. Duplicates or reversed IDs are rejected.
+Sensory acknowledgement means acceptance, not proof of neural application.
+
+STOP atomically cancels the pending sensory slot even when a later movement
+command supersedes that STOP. Release/disconnect invokes the same cancellation.
+The current 50 ms brain window finishes before cancellation takes effect; wall
+expiry is checked at window boundaries. Thus cancellation/expiry can include
+one already executing window of latency. OFF does not imply zero residual firing.
+Epoch, conversation generation, run/attempt, stale state and input inhibition
+invalidate pending Bridge writes and old observations. Warning end/cancel,
+fall and swatting request OFF. Capability absence sends no sensory request.
+
+`brain_frame.raw.visualThreat` contains exactly `schemaVersion:1`,
+`stimulusModel:"event_proxy_v1"`, `active`, `inputEventCount`, `requestId`,
+`reason`, and `readouts`. `readouts.R` is bodyId 10001 and `.L` is 10010;
+each has integer `spikeCount` and `rateHz = spikeCount * 1000 / windowMs`.
+`active` refers to the measured window, and positive `inputEventCount` proves
+external events were applied. Counts are measured outputs, not Action-derived
+motor values. Input selection is fixed at the audited 126 LC4 and 185 LPLC2
+cells; clients cannot select IDs, rate or strength.
+
+The control WebSocket emits `visual_threat_observation` with the unchanged `raw`,
+`evidenceSource:"brain_frame"`, `stimulusModel`, `windowMs`, `inputValidForMs`,
+`brainSequence`, `brainSessionId`, `brainInstanceId`, `controlEpoch`,
+`conversationGeneration`, `sourceId`, `environmentSequence`, `runId`, `attempt`,
+`ageMs`, `staleAfterMs` and `fresh:true`. Scope and freshness are checked again
+when dequeued; malformed sensory observations are discarded independently of
+movement. GPT receives bounded Japanese/English factual context on input-state
+changes, subject to speech/intent gates. `environment_observation` remains a
+separate environment fact with `neuralInputApplied:false`; only the measured
+sensory observation describes neural application. `ready=false` and the
+unconfigured affective proxy remain unchanged.

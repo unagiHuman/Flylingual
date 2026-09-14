@@ -30,6 +30,8 @@ _SOURCE_FILES = (
     "brain_server_malecns.py",
     "analog_controller.py",
     "neural_visualization.py",
+    "visual_threat.py",
+    "config/visual_threat_v1.json",
     "analog_motor_decoder.py",
     "game_controller.py",
     "shiu_compatible.py",

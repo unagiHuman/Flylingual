@@ -28,6 +28,7 @@ from .translation import message_text, summarize
 from .neural_response import NeuralResponseAnalyzer, number
 from .neural_feedback import NeuralFeedbackScheduler, compact_summary, SPONTANEOUS
 from .environment_feedback import EnvironmentFeedback
+from .visual_threat_feedback import VisualThreatFeedbackMixin
 
 
 VOICE_TEST_EVENTS = frozenset({
@@ -70,7 +71,7 @@ def command_error_message(exc, event, current_epoch):
     return result
 
 
-class Bridge:
+class Bridge(VisualThreatFeedbackMixin):
     def __init__(self, config):
         self.config = config
         self.arbiter = ControlArbiter(config['control'])
@@ -83,6 +84,7 @@ class Bridge:
         self.environment = EnvironmentFeedback(config['control']['staleMs'])
         self.environment_generation = None
         self.environment_sender = None
+        self.init_visual_threat()
         self.local_observation = LocalSafetyObservation()
         self.local_visual = LocalVisualObservation()
         self.local_visual_commentary_count = 0
@@ -136,6 +138,7 @@ class Bridge:
         self.neural_max_chars = 0
 
     def clear_neural(self):
+        self.cancel_visual_threat()
         self.environment.clear_current()
         if self.environment_sender is not None and not self.environment_sender.done():
             self.environment_sender.cancel()
@@ -617,6 +620,7 @@ class Bridge:
         while len(self.requests) > 4096:
             self.requests.popitem(last=False)
         if action == 'STOP':
+            self.cancel_visual_threat(send_off=False)
             self.neural_scheduler.interrupt(time.monotonic()*1000)
             if preserve_execution is None:
                 self.clear_execution('stop')
@@ -701,6 +705,7 @@ class Bridge:
                 outgoing['appliedRequestId'] = (item['unityId'] if item and item['source'] == 'manual_tcp'
                     and item['epoch'] == self.arbiter.epoch and item['unityGeneration'] == self.unity_generation else 0)
                 self.motor_emit(outgoing)
+            self.observe_visual_threat(event)
             # Read-only analysis happens after motor forwarding, with no API await.
             try:
                 self.observe_neural(event)
@@ -1373,6 +1378,13 @@ class Bridge:
             self.environment.reset()
             self.environment_generation = scope
         observation = self.environment.accept(event, time.monotonic()*1000)
+        if event['kind'] == 'run_started':
+            self.cancel_visual_threat()
+        elif observation is not None:
+            if event['kind'] == 'threat_started':
+                self.start_visual_threat(observation)
+            elif event['kind'] in ('threat_ended', 'threat_cancelled', 'fall', 'swatted'):
+                self.cancel_visual_threat(observe_off=True)
         if observation is None:
             return
         # Nonessential observations never fill the command queue or touch motor.
@@ -1783,6 +1795,8 @@ class Bridge:
             self.emit(self.state())
             self.publish_execution_context()
             self.publish_neural()
+            if self.visual_threat_source is not None and not self.visual_threat_scope_valid(self.visual_threat_source):
+                self.cancel_visual_threat()
             if time.monotonic()-self.last_summary > 2:
                 self.last_summary = time.monotonic()
                 summary = self.summary()
@@ -1879,6 +1893,10 @@ class Bridge:
                         if current is None:
                             continue
                         event = {'type': 'neural_response', **current}
+                    elif event.get('type') == 'visual_threat_observation':
+                        event = self.visual_threat_snapshot()
+                        if event is None:
+                            continue
                     elif event.get('type') == 'environment_observation':
                         current = self.environment.snapshot(time.monotonic()*1000)
                         if (current is None or current['controlEpoch'] != self.arbiter.epoch
