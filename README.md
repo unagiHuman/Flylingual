@@ -16,7 +16,7 @@ Flylingual treats AI as part of the game loop rather than as a content-generatio
 - **Measured neural feedback is grounded before it reaches GPT-Live.** The Bridge sends bounded observations such as selected neural readouts and experimentally observed threat-response activity; GPT-Live is instructed to preserve uncertainty and not invent emotions, causality, or biological conclusions that were not measured.
 - **Player language does not directly set Unity motor values.** Movement requests are constrained to the existing action vocabulary and pass through the Brain simulation, neural readout, motor decoder, and Unity body-control path.
 - **OpenAI Codex and ChatGPT** were used throughout development for implementation, debugging, code review, scientific-boundary checks, test design, documentation, and submission preparation.
-- The shareable **Judge build does not embed an OpenAI API key**. The repository keeps the GPT-Live Dev/Demo path, while the packaged Judge build uses a credential-free text-control path so it can be distributed without exposing developer secrets.
+- The shareable **Judge build does not embed an OpenAI API key**. The default package supports GPT-Live voice through a Vercel-authenticated WebRTC session; the OpenAI key stays on the server. A limited review access pass is bundled, with new session access available through September 18, 2026 (Japan time). A text-only edition requires the explicit `--text-only` packaging option. See [packaging instructions](Docs/windows/Package-Submission.md).
 
 Current Windows handoff and build notes: [README_WINDOWS.md](README_WINDOWS.md).
 
@@ -79,6 +79,8 @@ The portable Judge package is prepared from **CPython 3.11.9** and installs the 
 | llvmlite | 0.44.0 | **BSD-2-Clause** |
 | psutil | 7.2.2 | **BSD-3-Clause** |
 | aiohttp | 3.14.3 | **Apache-2.0** |
+
+The voice edition additionally bundles **aiortc 1.14.0** and its media/cryptography dependencies, including **PyAV 16.1.0**. Their distribution metadata and license notices are included in the portable Python environment.
 
 The exact portable-runtime versions are pinned by `tools/prepare_judge_python.ps1`, which also records an installation manifest for the produced distribution.
 

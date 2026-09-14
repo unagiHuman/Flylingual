@@ -114,7 +114,7 @@ def _doctor(config: dict[str, Any]) -> tuple[dict[str, Any], list[str]]:
     }
     if not report["aiohttpAvailable"]:
         errors.append("aiohttp is not installed")
-    if config["conversation"]["mode"] == "live" and not report["openAiKeyPresent"]:
+    if config["conversation"]["mode"] == "live" and not config['conversation'].get('voiceSessionUrl') and not report["openAiKeyPresent"]:
         errors.append("conversation.mode=live requires OPENAI_API_KEY in this process environment")
 
     source = Path(report["selectedSource"])
@@ -227,7 +227,7 @@ def _terminate_owned(process: subprocess.Popen[str]) -> None:
 
 
 async def _up(config: dict[str, Any], launch_brain: bool) -> None:
-    if config["conversation"]["mode"] == "live" and not os.environ.get("OPENAI_API_KEY"):
+    if config["conversation"]["mode"] == "live" and not config['conversation'].get('voiceSessionUrl') and not os.environ.get("OPENAI_API_KEY"):
         raise ConfigError("conversation.mode=live requires OPENAI_API_KEY; its value is never accepted in config or logs")
     process: subprocess.Popen[str] | None = None
     output_task = None

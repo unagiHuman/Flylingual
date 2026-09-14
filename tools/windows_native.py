@@ -98,13 +98,13 @@ def apply_build_selection(stack: dict[str, Any], selection_path: Path, status: P
         _check_known(source, 'build source')
         conversation = source.setdefault('conversation', {})
         if selection['provider'] == 'Cloud':
-            conversation.update(mode='text', intentProvider='vercel',
+            conversation.update(mode='live' if conversation.get('voiceSessionUrl') else 'text', intentProvider='vercel',
                                 cloudIntentUrl=cloud_endpoint(selection['backendUrl']),
                                 intentTimeoutMs=5000, localIntentResponsesFallback=False)
         else:
             conversation['intentProvider'] = 'llama_cpp'
         result = dict(stack)
-        if conversation.get('mode') == 'text':
+        if conversation.get('mode') == 'text' or conversation.get('voiceSessionUrl'):
             result.pop('keyFile', None)
         destination = status.parent / 'runtime-bridge.json'
         destination.parent.mkdir(parents=True, exist_ok=True)
@@ -249,7 +249,7 @@ def launch(stack: dict[str, Any], status: Path, stop: Path, heartbeat: Path, own
     if stack.get("keyFile") is not None and not stack["keyFile"].is_file():
         raise NativeError("keyFile was not found")
     config = bridge_settings(stack)
-    if config["conversation"]["mode"] == "live" and stack.get("keyFile") is None:
+    if config["conversation"]["mode"] == "live" and not config['conversation'].get('voiceSessionUrl') and stack.get("keyFile") is None:
         raise NativeError("conversation.mode=live requires an existing keyFile")
     ports = [config["brain"]["port"], config["bridge"]["tcpPort"], config["bridge"]["controlPort"]]
     assert_ports_free(ports)

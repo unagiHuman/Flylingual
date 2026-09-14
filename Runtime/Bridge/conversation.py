@@ -178,16 +178,18 @@ class ConversationAdapter:
             await self.on_event({'type': 'conversation_state', 'state': self.state})
             return
         key = os.environ.get('OPENAI_API_KEY')
-        if not key:
+        voice_url = self.config.get('voiceSessionUrl')
+        if not key and not voice_url:
             raise ConversationError('api_key_missing')
         self.state = 'connecting'
         try:
             self.http = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=30))
-            self.ws = await self.http.ws_connect(
-                'wss://api.openai.com/v1/live/sessions',
-                headers={'Authorization': 'Bearer ' + key},
-                max_msg_size=2 * 1024 * 1024, heartbeat=20,
-            )
+            if not voice_url:
+                self.ws = await self.http.ws_connect(
+                    'wss://api.openai.com/v1/live/sessions',
+                    headers={'Authorization': 'Bearer ' + key},
+                    max_msg_size=2 * 1024 * 1024, heartbeat=20,
+                )
             # Transcript timestamps belong to this session's timeline.  A new
             # connection cannot reuse the previous session's cursor or IDs.
             # Same-session epoch invalidation still uses clear_context().
@@ -207,12 +209,21 @@ class ConversationAdapter:
                     '"stop talking" mean speech silence without a body action. '
                     'Do not treat negated stop requests as STOP. '
                     'Acknowledge body stopping only after the backend reports it.')
-            await self.ws.send_json({'type': 'session.start', 'session': {
+            session = {
                 'model': self.config['model'], 'instructions': instructions,
                 'audio': {'format': {'type': 'audio/pcm', 'rate': 24000},
                           'output': {'voice': self.settings['voice']}},
                 'delegation': {'type': 'client'},
-            }})
+            }
+            if voice_url:
+                from .config import ROOT
+                from .live_webrtc import LiveWebRTCTransport
+                access = (ROOT / self.config['voiceAccessFile']).read_text(encoding='utf-8').strip()
+                if not access or len(access) > 512 or any(c.isspace() for c in access):
+                    raise ConversationError('voice_access_invalid')
+                self.ws = await LiveWebRTCTransport.connect(self.http, voice_url, session, access)
+            else:
+                await self.ws.send_json({'type': 'session.start', 'session': session})
             self.reader = asyncio.create_task(self._read(), name='gpt-live-reader')
             await asyncio.wait_for(self.started.wait(), timeout=15)
             if self.closed.is_set():

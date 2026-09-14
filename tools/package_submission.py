@@ -18,7 +18,7 @@ def digest(path):
     return value.hexdigest()
 
 
-def package(player, python_root, destination):
+def package(player, python_root, destination, voice_access=None):
     player, python_root, destination = map(lambda p: Path(p).resolve(), (player, python_root, destination))
     selection = json.loads((player / 'build-channel.json').read_text(encoding='utf-8-sig'))
     if selection.get('channel') != 'Judge' or selection.get('provider') != 'Cloud':
@@ -42,7 +42,7 @@ def package(player, python_root, destination):
         elif source.is_file():
             shutil.copy2(source, output / name)
     print('Bundling Python and Brain...', flush=True)
-    assemble(output, python_root, selection['backendUrl'])
+    assemble(output, python_root, selection['backendUrl'], voice_access)
     manifest = json.loads((output / 'judge-manifest.json').read_text(encoding='utf-8'))
     archive = destination / ('Flylingual-Judge-Windows-' + destination.name + '.zip')
     pending = archive.with_suffix('.zip.partial')
@@ -79,5 +79,9 @@ if __name__ == '__main__':
     parser.add_argument('--player', type=Path, default=ROOT / 'artifacts/hayeringual-builds/Judge-Cloud')
     parser.add_argument('--python-root', type=Path, default=ROOT / 'artifacts/judge-python/portable')
     parser.add_argument('--output', type=Path, default=ROOT / 'artifacts' / ('submission-' + datetime.now().strftime('%Y%m%d-%H%M%S')))
+    parser.add_argument('--text-only', action='store_true', help='Explicitly build the text-only edition')
+    parser.add_argument('--voice-access', type=Path, default=ROOT / 'artifacts/voice-access/review-pass.txt')
     args = parser.parse_args()
-    package(args.player, args.python_root, args.output)
+    if not args.text_only and not args.voice_access.is_file():
+        parser.error('Voice access pass is missing. Configure review voice access before packaging; use --text-only only for an intentional text edition.')
+    package(args.player, args.python_root, args.output, None if args.text_only else args.voice_access)

@@ -803,7 +803,8 @@ namespace Flylingual.Conversation
 
         public void SendLocalSafetyObservation(int sequence, float ageMs, bool groundPresent, string leftEdge, string rightEdge, bool forwardBlocked, bool bodyUnsafe, double travelMeters = -1, float horizontalSpeedMetersPerSecond = -1)
         {
-            if (!Ready || ConversationInteraction != "control" || ConversationGeneration < 0 ||
+            if (!Ready || !requestedStart || !ConversationActive || conversationStopping ||
+                ConversationInteraction != "control" || ConversationGeneration < 0 ||
                 sequence <= 0 || float.IsNaN(ageMs) || ageMs < 0f || ageMs > 750f) return;
             Send(new LocalSafetyMessage { sequence = sequence, ageMs = ageMs, controlEpoch = ControlEpoch,
                 conversationGeneration = ConversationGeneration, groundPresent = groundPresent,

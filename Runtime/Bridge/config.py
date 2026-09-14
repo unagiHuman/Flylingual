@@ -48,7 +48,7 @@ _CHILD_KEYS = {
         "expectedGraphHash", "expectedSourceHash", "graph", "config", "python",
         "visualizationAtlas",
     },
-    "conversation": {"mode", "model", "intentModel", "intentProvider", "cloudIntentUrl", "localIntentUrl", "localIntentModel", "localIntentFormat", "localIntentCachePrompt", "localIntentResponsesFallback", "intentTimeoutMs", *DEFAULT_SETTINGS},
+    "conversation": {"mode", "model", "intentModel", "intentProvider", "cloudIntentUrl", "voiceSessionUrl", "voiceAccessFile", "localIntentUrl", "localIntentModel", "localIntentFormat", "localIntentCachePrompt", "localIntentResponsesFallback", "intentTimeoutMs", *DEFAULT_SETTINGS},
     "control": {"owner", "maxActionMs", "defaultActionMs", "maxIntentAgeMs", "staleMs", "stopTimeoutMs"},
 }
 
@@ -71,7 +71,7 @@ _DEFAULT: dict[str, Any] = {
         "visualizationAtlas": None,
     },
     "conversation": {
-        "mode": "off", "model": "gpt-live-1", "intentModel": "gpt-5.6-luna",
+        "mode": "off", "model": "gpt-live-1", "intentModel": "gpt-5.6-luna", "voiceSessionUrl": "", "voiceAccessFile": "",
         "intentProvider": "responses", "cloudIntentUrl": "", "localIntentUrl": "http://127.0.0.1:11435",
         "localIntentModel": "qwen3.5:4b", "localIntentFormat": "compact", "localIntentCachePrompt": True, "localIntentResponsesFallback": False, "intentTimeoutMs": 8000,
         **DEFAULT_SETTINGS,
@@ -242,6 +242,20 @@ def _validate(config: dict[str, Any]) -> None:
         raise ConfigError("control.owner must be manual, gpt, or observer")
     if config["conversation"]["mode"] not in {"off", "mock", "live", "text"}:
         raise ConfigError("conversation.mode must be off, mock, live, or text")
+    voice_url = config['conversation']['voiceSessionUrl']
+    if voice_url:
+        try:
+            parsed = urlsplit(voice_url)
+            valid = (parsed.scheme == 'https' and parsed.hostname and not parsed.username
+                     and not parsed.password and not parsed.query and not parsed.fragment
+                     and parsed.path == '/api/fly/voice/session' and not any(c.isspace() for c in voice_url))
+        except (ValueError, TypeError):
+            valid = False
+        if not valid:
+            raise ConfigError('conversation.voiceSessionUrl is invalid')
+        access = config['conversation']['voiceAccessFile']
+        if not isinstance(access, str) or not access or Path(access).is_absolute() or '..' in Path(access).parts:
+            raise ConfigError('conversation.voiceAccessFile must be a package-relative path')
     if config['conversation']['intentProvider'] not in ('responses', 'ollama', 'llama_cpp', 'vercel'):
         raise ConfigError('conversation.intentProvider must be responses, ollama, llama_cpp or vercel')
     if config['conversation']['intentProvider'] == 'vercel':

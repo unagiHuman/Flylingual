@@ -9,6 +9,7 @@ import logging
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 import platform
+import re
 import signal
 import time
 import uuid
@@ -742,6 +743,8 @@ class Bridge(VisualThreatFeedbackMixin):
                 if item['source'] == 'manual_tcp' and item['unityGeneration'] == self.unity_generation:
                     self.motor_emit({**event, 'requestId': item['unityId']})
         elif kind in ('error', 'adapter_error'):
+            code = event.get('error')
+            self.log('brain_transport_failed', code=code if isinstance(code, str) and re.fullmatch(r'[a-z_]{1,64}', code) else 'unknown')
             await self.inhibit('brain_transport_error', send_stop=False)
             self.emit({'type': 'error', 'error': 'brain_transport_error'})
 

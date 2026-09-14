@@ -17,7 +17,7 @@ $pathFile = Join-Path $portableRoot "python311._pth"
 Add-Content -LiteralPath $pathFile -Value "`nLib/site-packages`nimport site"
 $pythonExecutable = Join-Path $portableRoot "python.exe"
 $sitePackages = Join-Path $portableRoot "Lib/site-packages"
-$requirements = @("numpy==1.24.3", "numba==0.61.2", "llvmlite==0.44.0", "psutil==7.2.2", "aiohttp==3.14.3")
+$requirements = @("numpy==1.24.3", "numba==0.61.2", "llvmlite==0.44.0", "psutil==7.2.2", "aiohttp==3.14.3", "aiortc==1.14.0")
 & $uvCommand.Source pip install --python $pythonExecutable --target $sitePackages @requirements
 if ($LASTEXITCODE -ne 0) { throw "Portable Python dependency installation failed; preserve output for diagnosis." }
 $dependencyJson = & $pythonExecutable -I -c 'import importlib.metadata as m,json; import numpy,numba,llvmlite,psutil,aiohttp; print(json.dumps({d.metadata["Name"]:d.version for d in m.distributions()},sort_keys=True))'

@@ -41,7 +41,7 @@ def validate_public(value):
             raise ValueError('Potential provider credential found')
 
 
-def configurations(endpoint):
+def configurations(endpoint, voice=False):
     parsed = urlsplit(endpoint)
     if (parsed.scheme != 'https' or not parsed.hostname or parsed.hostname == 'ai-gateway.vercel.sh'
             or parsed.path != '/api/fly/translate' or any(c.isspace() for c in endpoint)
@@ -59,6 +59,10 @@ def configurations(endpoint):
     native = {'bridgePython': 'runtime/python/python.exe',
               'bridgeLocalConfig': 'Runtime/Config/judge.json', 'runRoot': 'artifacts/judge-runs',
               'startupSeconds': 45, 'heartbeatSeconds': 10}
+    if voice:
+        bridge['conversation'].update(mode='live', model='gpt-live-1',
+            voiceSessionUrl=endpoint.removesuffix('/translate') + '/voice/session',
+            voiceAccessFile='Runtime/Config/voice-access.txt')
     validate_public(bridge)
     validate_public(native)
     return bridge, native
@@ -90,9 +94,14 @@ def runtime_sources(bridge):
     return sources
 
 
-def assemble(output, python_root, endpoint):
+def assemble(output, python_root, endpoint, voice_access=None):
     output, python_root = Path(output).resolve(), Path(python_root).resolve()
-    bridge, native = configurations(endpoint)
+    bridge, native = configurations(endpoint, voice=voice_access is not None)
+    access = None
+    if voice_access is not None:
+        access = Path(voice_access).read_text(encoding='utf-8').strip()
+        if not re.fullmatch(r'flyvoice_[A-Za-z0-9_-]{40,128}', access):
+            raise ValueError('A scoped Flylingual voice access pass is required, never a provider API key')
     if not (output / 'FlylingualConversation.exe').is_file():
         raise ValueError('Build the Judge Unity Player into output first')
     selection_path = output / 'build-channel.json'
@@ -106,6 +115,9 @@ def assemble(output, python_root, endpoint):
         raise ValueError('Portable Python DLL missing')
     subprocess.run([str(python_root / 'python.exe'), '-I', '-c',
                     'import numpy,numba,llvmlite,psutil,aiohttp; print("PORTABLE_DEPENDENCIES_OK")'], check=True)
+    if access:
+        subprocess.run([str(python_root / 'python.exe'), '-I', '-c',
+                        'import aiortc,av; print("PORTABLE_VOICE_OK")'], check=True)
     sources = runtime_sources(bridge)
     for relative in sources:
         source = ROOT / relative
@@ -158,6 +170,24 @@ def assemble(output, python_root, endpoint):
         'The neural model is experimental, not evidence of emotions, learning, or successful avoidance. Juice-contact neural reward input is not implemented.\n'
         'The public Cloud endpoint is in build-channel.json. No API key is bundled.\n',
         encoding='utf-8')
+    if access:
+        (output / 'Runtime/Config/voice-access.txt').write_text(access + '\n', encoding='utf-8')
+        (output / 'README.txt').write_text(
+            'Flylingual Judge — Voice / Windows 64-bit\n\n'
+            'フォルダ全体を展開し、FlylingualConversation.exeを起動してください。\n'
+            'マイクとスピーカーまたはヘッドセット、インターネット接続が必要です。\n'
+            'GPT Live音声会話に対応。OpenAI APIキーの入力・インストールは不要です。\n'
+            'タイトルから開始し、危険を避けてゴールへ。設定で日本語・英語を切り替えられます。\n'
+            'Python・実Brain・音声通信ライブラリ同梱。初回はBrain準備に時間がかかります。\n'
+            '提出用音声アクセスはサーバーで期限管理されます。期限後は発行者へ連絡してください。\n'
+            '同梱のvoice-access.txtは提出用の限定アクセス資格です。公開再配布しないでください。\n'
+            '神経モデルは実験的で、主観的感情を測定しているわけではありません。\n\n'
+            'Extract all files and launch FlylingualConversation.exe. A microphone, headphones/speakers,\n'
+            'and internet access are required. GPT Live voice conversation is enabled.\n'
+            'No OpenAI API key entry is required. Python, Brain and voice dependencies are bundled.\n'
+            'Start from the title; avoid danger and reach the goal. Settings switches Japanese/English.\n'
+            'Review voice access expires on the server. Do not publicly redistribute the review access pass.\n',
+            encoding='utf-8')
     files = []
     for path in sorted(output.rglob('*')):
         if path.is_file():
@@ -178,5 +208,6 @@ if __name__ == '__main__':
     parser.add_argument('--output', required=True)
     parser.add_argument('--python-root', required=True)
     parser.add_argument('--endpoint', required=True)
+    parser.add_argument('--voice-access', type=Path)
     args = parser.parse_args()
-    assemble(args.output, args.python_root, args.endpoint)
+    assemble(args.output, args.python_root, args.endpoint, args.voice_access)

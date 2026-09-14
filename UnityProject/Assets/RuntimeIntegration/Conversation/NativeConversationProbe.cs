@@ -66,6 +66,14 @@ namespace Flylingual.Conversation
             if (string.IsNullOrEmpty(path)) { Debug.LogError("NATIVE_PROBE_OUTPUT_REQUIRED"); yield break; }
             Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path)));
             var report = new Report { result = "startup_timeout", microphoneTested = false, bridge = "127.0.0.1" };
+            // Exercise the normal title/tutorial buttons before waiting for auto-start.
+            yield return null;
+            var title = FindAnyObjectByType<Flylingual.PlayScreen.TitleScreen>();
+            if (title != null && Flylingual.PlayScreen.TitleScreen.BlocksGameplay)
+            {
+                title.StartGame(); yield return null;
+                if (Flylingual.PlayScreen.TitleScreen.BlocksGameplay) { title.StartGame(); yield return null; }
+            }
             ConversationSessionController controller = null;
             float deadline = Time.realtimeSinceStartup + 65;
             while (Time.realtimeSinceStartup < deadline)
