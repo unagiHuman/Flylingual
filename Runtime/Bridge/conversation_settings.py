@@ -5,6 +5,8 @@ from __future__ import annotations
 import unicodedata
 from typing import Any, Mapping
 
+from .persona_presets import PRESET_PERSONAS
+
 
 MAX_PERSONA_TEXT_LENGTH = 800
 DEFAULT_SETTINGS = {
@@ -18,7 +20,7 @@ VOICES = (
     "marin", "quartz", "ripple", "vesper", "willow", "stone", "gleam",
     "meridian", "bossa", "tempo", "beacon", "delta", "cinder",
 )
-PERSONAS = ("friendly", "curious", "calm", "custom")
+PERSONAS = ("friendly", "curious", "calm", "custom", *PRESET_PERSONAS)
 
 
 class SettingsError(ValueError):

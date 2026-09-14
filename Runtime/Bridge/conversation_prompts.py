@@ -1,6 +1,8 @@
 """Presentation-only customization; never an input to the intent authority."""
 import json
 
+from .persona_presets import PRESET_PERSONAS, build_preset_style
+
 
 _POLICY = {
     'ja': """あなたはFlylingualのハエの通訳です。返答は日本語で短く話します。
@@ -87,8 +89,10 @@ def build_voice_instructions(settings, interaction='control'):
     if interaction not in ('control', 'chat_only'):
         raise ValueError('invalid_conversation_interaction')
     language = settings['language']
-    style = _PERSONAS[language][settings['persona']]
-    if settings['persona'] == 'custom':
+    persona = settings['persona']
+    style = (build_preset_style(persona, language, interaction)
+             if persona in PRESET_PERSONAS else _PERSONAS[language][persona])
+    if persona == 'custom' or (persona in PRESET_PERSONAS and settings['personaText']):
         # JSON quoting gives the preference text a data boundary. The enforceable
         # command authority is separately implemented in the Bridge/intent model.
         style += '\n' + json.dumps({'style_preference': settings['personaText']}, ensure_ascii=False)
