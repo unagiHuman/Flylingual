@@ -219,6 +219,10 @@ namespace Flylingual.Conversation
                     controller.SendPlayerText(english ? "Stop" : "止まって");
                     yield return new WaitForSecondsRealtime(2);
                     result.stopped = controller.LastAppliedAction == "STOP";
+                    // The sensory conductance tail can reach subnormal values
+                    // after the command finishes. Keep fault monitoring active.
+                    yield return new WaitForSecondsRealtime(8);
+                    result.stopped &= controller.LastAppliedAction == "STOP";
                 }
                 result.frames = frames.Count; result.neuralFrames = observations.Count;
                 result.lastSequence = controller.Sequence; result.fresh = controller.HasFreshBrain;

@@ -40,6 +40,27 @@ def _fixed_point_updates_enabled(a, b, c):
             and (np.float64(negative * c).view(np.uint64) & magnitude_mask) == 0)
 
 
+@njit(cache=True, fastmath=False, inline="always")
+def _decay_subnormal_bits(magnitude, coefficient_significand):
+    """Exact round-to-nearest-even of a 52-by-53-bit product / 2**53.
+
+    A subnormal is magnitude * 2**-1074. For 0.5 <= b < 1, its
+    significand is b * 2**53. Four 32-bit limb products retain every bit;
+    unlike scaling through a float, there is no intermediate rounding.
+    """
+    mask = np.uint64(0xffffffff)
+    low_product = (magnitude & mask) * (coefficient_significand & mask)
+    cross = (magnitude >> np.uint64(32)) * (coefficient_significand & mask) + (low_product >> np.uint64(32))
+    middle = (cross & mask) + (magnitude & mask) * (coefficient_significand >> np.uint64(32))
+    high = ((magnitude >> np.uint64(32)) * (coefficient_significand >> np.uint64(32))
+            + (cross >> np.uint64(32)) + (middle >> np.uint64(32)))
+    low = (middle << np.uint64(32)) | (low_product & mask)
+    quotient = (high << np.uint64(11)) | (low >> np.uint64(53))
+    remainder = low & np.uint64(0x1fffffffffffff)
+    half = np.uint64(0x10000000000000)
+    return quotient + np.uint64(remainder > half or (remainder == half and (quotient & np.uint64(1)) != 0))
+
+
 @njit(cache=True, fastmath=False, nogil=True)
 def update_state_and_extract_fired(v, g, last, rfc, tick, a, b, c,
                                    active, fired):
@@ -52,6 +73,8 @@ def update_state_and_extract_fired(v, g, last, rfc, tick, a, b, c,
     fixed_points = _fixed_point_updates_enabled(a, b, c)
     g_bits = g.view(np.uint64)
     c_bits = np.float64(c).view(np.uint64)
+    transient = fixed_points and .5 <= b < 1. and abs(c) <= 1.
+    b_significand = (np.float64(b).view(np.uint64) & np.uint64(0xfffffffffffff)) | np.uint64(0x10000000000000)
     fired_count = 0
     for neuron in range(v.size):
         is_active = (tick - last[neuron]) >= rfc[neuron]
@@ -69,11 +92,19 @@ def update_state_and_extract_fired(v, g, last, rfc, tick, a, b, c,
                 # IEEE multiplication's signed zero, without a subnormal
                 # operand. Keep the ordinary voltage decay for non-rest v.
                 y = np.uint64((g_bits[neuron] ^ c_bits) & np.uint64(0x8000000000000000)).view(np.float64)
+            elif transient and (g_bits[neuron] & np.uint64(0x7fffffffffffffff)) <= np.uint64(0x0100000000000000) and abs(x) >= 1.:
+                # |g*c| <= 2**-1007, far below half an ulp of |x| >= 1.
+                # Avoid the underflowing product without changing the sum.
+                y = 0.
             else:
                 y = g[neuron] * c
             v[neuron] = x + y
             if not fixed_g:
-                g[neuron] = g[neuron] * b
+                magnitude = g_bits[neuron] & np.uint64(0x7fffffffffffffff)
+                if transient and magnitude < np.uint64(0x10000000000000):
+                    g_bits[neuron] = (g_bits[neuron] & np.uint64(0x8000000000000000)) | _decay_subnormal_bits(magnitude, b_significand)
+                else:
+                    g[neuron] = g[neuron] * b
             if v[neuron] > -45:
                 fired[fired_count] = neuron
                 fired_count += 1
@@ -93,6 +124,8 @@ def run_window(v, g, last, rfc, indptr, post, weights, tick, ticks, a, b, c,
     fixed_points = _fixed_point_updates_enabled(a, b, c)
     g_bits = g.view(np.uint64)
     c_bits = np.float64(c).view(np.uint64)
+    transient = fixed_points and .5 <= b < 1. and abs(c) <= 1.
+    b_significand = (np.float64(b).view(np.uint64) & np.uint64(0xfffffffffffff)) | np.uint64(0x10000000000000)
     for row in range(sums.shape[0]):
         for column in range(sums.shape[1]):
             sums[row, column] = 0.0
@@ -111,11 +144,19 @@ def run_window(v, g, last, rfc, indptr, post, weights, tick, ticks, a, b, c,
                 x = -52 + x
                 if fixed_g:
                     y = np.uint64((g_bits[neuron] ^ c_bits) & np.uint64(0x8000000000000000)).view(np.float64)
+                elif transient and (g_bits[neuron] & np.uint64(0x7fffffffffffffff)) <= np.uint64(0x0100000000000000) and abs(x) >= 1.:
+                    # |g*c| <= 2**-1007, far below half an ulp of |x| >= 1.
+                    # Avoid the underflowing product without changing the sum.
+                    y = 0.
                 else:
                     y = g[neuron] * c
                 v[neuron] = x + y
                 if not fixed_g:
-                    g[neuron] = g[neuron] * b
+                    magnitude = g_bits[neuron] & np.uint64(0x7fffffffffffffff)
+                    if transient and magnitude < np.uint64(0x10000000000000):
+                        g_bits[neuron] = (g_bits[neuron] & np.uint64(0x8000000000000000)) | _decay_subnormal_bits(magnitude, b_significand)
+                    else:
+                        g[neuron] = g[neuron] * b
                 if v[neuron] > -45:
                     fired[fired_count] = neuron
                     fired_count += 1

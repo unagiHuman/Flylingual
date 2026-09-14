@@ -66,3 +66,7 @@ source hashの保存先は `artifacts/neural-feedback/question-connection-source
 ```
 
 保存Bridge frameの先頭から末尾までの観測時間は日本語47.610秒、英語45.750秒。これはPlayer起動全体の所要時間とは異なる。
+
+## 後続修正
+
+極小値の減衰に対する数値不変の最適化と、STOP後の監視を延長した再検証は [過渡subnormalの遅延対策](Transient-Subnormal-Latency.md) を参照。上記の旧failed記録は保持する。
