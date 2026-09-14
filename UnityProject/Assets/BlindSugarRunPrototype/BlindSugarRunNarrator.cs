@@ -49,7 +49,7 @@ namespace Flylingual.BlindSugarRun
             if (conversation == null) conversation = FindAnyObjectByType<ConversationSessionController>();
             if (conversation == null) return;
             if (!subscribed) { conversation.ControlEventReceived += OnControlEvent; subscribed = true; }
-            if (!conversation.ConversationLive || generation != conversation.ConversationGeneration)
+            if (!conversation.ConversationActive || generation != conversation.ConversationGeneration)
             {
                 ResetContext();
                 generation = conversation.ConversationGeneration;
@@ -204,7 +204,7 @@ namespace Flylingual.BlindSugarRun
         {
             var result = JsonUtility.FromJson<CueResult>(json);
             if (result == null || result.type != "blind_run_cue_result" || result.stage != "queued"
-                || !conversation.ConversationLive || generation != conversation.ConversationGeneration
+                || !conversation.ConversationActive || generation != conversation.ConversationGeneration
                 || epoch != conversation.ControlEpoch) return;
             if (firstIntroSequence > 0 && result.sequence >= firstIntroSequence && result.sequence <= introSequence) once.Add("intro");
             if (firstGoalSequence > 0 && result.sequence >= firstGoalSequence && result.sequence <= lastGoalSequence) GoalAcknowledged = true;

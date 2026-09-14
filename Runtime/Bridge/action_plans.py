@@ -206,7 +206,7 @@ class BoundedPlanRunner:
         if epoch != b.arbiter.epoch or generation != b.conversation_generation:
             return 'plan_old_generation'
         if (b.closed or b.control_ws is None or b.switching or b.release_unknown
-                or not b.conversation_accepting or b.conversation.state != 'live'
+                or not b.conversation_accepting or b.conversation.state not in ('live', 'text')
                 or b.conversation_interaction != 'control'):
             return 'plan_connection_unavailable'
         if b.arbiter.inhibited or b.arbiter.owner != 'gpt':

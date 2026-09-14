@@ -151,7 +151,7 @@ class ConversationAdapter:
             await self._start()
 
     async def _start(self):
-        if self.state in ('connecting', 'live', 'mock'):
+        if self.state in ('connecting', 'live', 'mock', 'text'):
             return
         if self.http is not None:
             await self._stop(graceful=False)
@@ -163,6 +163,12 @@ class ConversationAdapter:
         self.closed.clear()
         self.clear_context()
         self.resolved_voice = None
+        if self.mode == 'text':
+            self.http = aiohttp.ClientSession(trust_env=False)
+            self.state = 'text'
+            self.started.set()
+            await self.on_event({'type': 'conversation_state', 'state': self.state})
+            return
         if self.mode == 'mock':
             self.state = 'mock'
             await self.on_event({'type': 'conversation_state', 'state': self.state})
@@ -568,7 +574,7 @@ class ConversationAdapter:
             return {**mock_intent(text, default_ms, self.settings['language']), 'plan': None,
                     'operation': 'new', 'executionMode': 'timed', 'targetExecutionId': None,
                     'distanceMeters': None}
-        if self.state != 'live' or self.http is None:
+        if self.state not in ('live', 'text') or self.http is None:
             raise ConversationError('conversation_not_started')
         self.last_interpret_route = 'model'
         if not context.get('transcriptCandidate') or context.get('utteranceFinalized'):

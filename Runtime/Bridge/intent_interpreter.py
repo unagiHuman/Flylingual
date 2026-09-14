@@ -72,6 +72,23 @@ def _unique_object(pairs):
 
 async def interpret_intent(http, config, text, context, language, default_ms, max_ms, diagnostics=None):
     """Optional bounded reinterpretation; never retry a failed transport or stale input."""
+    if config.get('intentProvider') == 'vercel':
+        from .cloud_intent import request_cloud
+        started = time.perf_counter()
+        if diagnostics is not None:
+            diagnostics.update(provider='vercel', route='cloud')
+        try:
+            quick = (fast_intent(text, context, default_ms, max_ms)
+                     if not context.get('transcriptCandidate') or context.get('utteranceFinalized') else None)
+            if quick is not None:
+                if diagnostics is not None:
+                    diagnostics['route'] = 'deterministic'
+                return _strict_result(quick, max_ms)
+            return _strict_result(await request_cloud(config, text, context, language,
+                                                      default_ms, max_ms, diagnostics), max_ms)
+        finally:
+            if diagnostics is not None:
+                diagnostics['latencyMs'] = round((time.perf_counter() - started) * 1000, 3)
     enabled = config.get('localIntentResponsesFallback', False)
     if type(enabled) is not bool:
         raise IntentInterpreterError('invalid_intent_config')

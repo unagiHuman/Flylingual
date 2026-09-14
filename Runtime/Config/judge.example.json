@@ -1,0 +1,23 @@
+{
+  "brain": {
+    "host": "127.0.0.1",
+    "port": 18766,
+    "python": "runtime/python/python.exe",
+    "graph": "artifacts/neuron_checkpoint",
+    "config": "Brain/MaleCNS/config/analog_temporal_v1.json",
+    "visualizationAtlas": "UnityProject/Assets/BrainVisualization/Resources/BrainVisualization/malecns-atlas.json"
+  },
+  "conversation": {
+    "mode": "text",
+    "intentProvider": "vercel",
+    "cloudIntentUrl": "https://example.vercel.app/api/fly/translate",
+    "intentTimeoutMs": 5000,
+    "localIntentResponsesFallback": false,
+    "language": "ja",
+    "voice": "stone"
+  },
+  "control": {
+    "owner": "gpt"
+  },
+  "logPath": "artifacts/bridge/events.jsonl"
+}

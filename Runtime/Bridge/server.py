@@ -563,7 +563,7 @@ class Bridge:
                 and self.arbiter.inhibited and bool(self.adapter and self.adapter.connected)
                 and not self.switching and not self.release_unknown
                 and self.arbiter.owner != 'observer'
-                and (self.arbiter.owner != 'gpt' or self.conversation.state in ('live', 'mock'))
+                and (self.arbiter.owner != 'gpt' or self.conversation.state in ('live', 'mock', 'text'))
                 and self.stopped_fresh())
 
     async def switch_target(self, profile):
@@ -622,14 +622,14 @@ class Bridge:
         if event['type'] == 'conversation_state':
             self.last_spoken_state = None
             self.conversation_announced = False
-            if event['state'] == 'live':
+            if event['state'] in ('live', 'text'):
                 # A fresh voice session has no old-epoch audio awaiting ASR.
                 self.voice_control_epoch = self.arbiter.epoch
                 if self.conversation_interaction == 'chat_only' and self.conversation_accepting:
                     self.task(self.conversation.append('commentary',
                         'Greet the player briefly once in the configured language and invite them to talk. '
                         'This is conversation-only mode; no current Brain observations are available.'))
-            if event['state'] not in ('live', 'mock') and self.arbiter.owner == 'gpt':
+            if event['state'] not in ('live', 'mock', 'text') and self.arbiter.owner == 'gpt':
                 await self.inhibit('conversation_disconnected')
             self.emit(self.state())
             self.log('conversation_state', state=event['state'],
@@ -920,7 +920,11 @@ class Bridge:
                 reply = self.non_action_reply_context(text, proposal['kind'])
             else:
                 reply = self.non_action_reply_context(text, proposal['kind'])
-            if self.conversation.mode == 'mock':
+            if self.conversation.mode == 'text':
+                if proposal['kind'] in ('question', 'clarify'):
+                    reply = proposal['reply']
+                self.emit({'type': 'conversation_text', 'role': 'assistant', 'text': reply, 'append': False})
+            elif self.conversation.mode == 'mock':
                 self.emit({'type': 'conversation_text', 'role': 'assistant', 'text': '[MOCK] ' + reply, 'append': False})
             else:
                 # Voice Actions receive their result only when Brain application
@@ -1037,7 +1041,7 @@ class Bridge:
 
     async def accept_local_visual_observation(self, event):
         if (self.control_ws is None or self.conversation_interaction != 'control'
-                or not self.conversation_accepting or self.conversation.state != 'live'):
+                or not self.conversation_accepting or self.conversation.state not in ('live', 'text')):
             raise ControlError('local_visual_observation_control_required')
         if type(event.get('controlEpoch')) is not int or event['controlEpoch'] != self.arbiter.epoch:
             raise ControlError('old_epoch')
@@ -1103,7 +1107,7 @@ class Bridge:
         # The existing sole control client is the trusted Unity game producer.
         # No second Brain connection, no Action submission, no camera controls.
         if (self.control_ws is None or not self.conversation_accepting
-                or self.conversation.state != 'live' or self.conversation_interaction != 'control'):
+                or self.conversation.state not in ('live', 'text') or self.conversation_interaction != 'control'):
             raise ControlError('blind_live_control_required')
         if type(event.get('controlEpoch')) is not int or event['controlEpoch'] != self.arbiter.epoch:
             raise ControlError('old_epoch')
@@ -1121,7 +1125,11 @@ class Bridge:
                        if self.conversation.settings['language'] == 'ja' else
                        'Blind Sugar Run. Use only this verified scene line. Keep it tiny; '
                        'paraphrase without adding facts, routes or causes. ')
-        await self.conversation.append('commentary' if speak else 'thinking', instruction + text)
+        if self.conversation.mode == 'text':
+            if speak:
+                self.emit({'type': 'conversation_text', 'role': 'assistant', 'text': text, 'append': False})
+        else:
+            await self.conversation.append('commentary' if speak else 'thinking', instruction + text)
         self.emit({'type': 'blind_run_cue_result', 'sequence': event['sequence'],
                    'stage': 'queued', 'speakRequested': speak})
         self.log('blind_run_cue_queued', cue=event['cue'], sequence=event['sequence'], speakRequested=speak)
@@ -1160,7 +1168,7 @@ class Bridge:
             if 'controlEpoch' in event and (type(event['controlEpoch']) is not int
                                              or event['controlEpoch'] != self.arbiter.epoch):
                 raise ControlError('old_epoch')
-            if self.arbiter.owner == 'gpt' and self.conversation.state not in ('live', 'mock'):
+            if self.arbiter.owner == 'gpt' and self.conversation.state not in ('live', 'mock', 'text'):
                 raise ControlError('conversation_not_started')
             if not self.resume_ready():
                 raise ControlError('fresh_stopped_brain_required')
@@ -1180,7 +1188,7 @@ class Bridge:
             await self.submit(event['action'], 'manual_ui', event['commandId'])
         elif kind == 'player_text':
             self.emit({'type': 'conversation_text', 'role': 'user', 'text': str(event.get('text', ''))[:2000], 'append': False})
-            if self.is_local_visual_question(event.get('text')):
+            if self.conversation.mode != 'text' and self.is_local_visual_question(event.get('text')):
                 if self.conversation_interaction == 'chat_only':
                     self.start_intent(event.get('text'), event.get('commandId'), event.get('controlEpoch'))
                 if (not self.conversation_accepting or self.control_ws is None
@@ -1292,7 +1300,7 @@ class Bridge:
     def can_keep_voice_listening(self):
         return (self.native_voice_control and self.conversation_interaction == 'control'
                 and self.conversation_accepting and self.arbiter.owner == 'gpt'
-                and self.conversation.state == 'live'
+                and self.conversation.state in ('live', 'text')
                 and self.voice_control_epoch == self.arbiter.epoch
                 and not self.arbiter.inhibited
                 and bool(self.adapter and self.adapter.connected)
@@ -1441,7 +1449,7 @@ class Bridge:
             if (execution['epoch'] != self.arbiter.epoch
                     or execution['generation'] != self.conversation_generation
                     or self.arbiter.owner != 'gpt' or not self.conversation_accepting
-                    or self.conversation.state not in ('live', 'mock') or self.closed
+                    or self.conversation.state not in ('live', 'mock', 'text') or self.closed
                     or self.switching or self.release_unknown):
                 await self.inhibit('execution_context_lost')
                 return
@@ -1519,7 +1527,7 @@ class Bridge:
                     # speech is generated just because an action was requested.
                     channel = ('commentary' if brain_changed and self.conversation_announced and self.blind_script.run_id is None
                                else 'thinking')
-                    self.conversation_announced = self.conversation.state in ('live', 'mock')
+                    self.conversation_announced = self.conversation.state in ('live', 'mock', 'text')
                     self.task(self.conversation.append(channel, context))
 
     def check_origin(self, request):

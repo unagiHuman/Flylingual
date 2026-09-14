@@ -230,10 +230,10 @@ namespace Flylingual.PlayScreen
             stopButton.SetEnabled(controller.IsSessionRequested || controller.EnablingVoiceActions);
             settingsButton?.SetEnabled(true);
             settingsDrawer?.SetEnabled(true);
-            voiceButton.text = controller.EnablingVoiceActions ? GameLanguage.Text("音声操作：接続中", "Voice controls: connecting") : controller.BodyControlActive ? GameLanguage.Text("音声指示を待受中", "Listening for voice commands") : controller.ContinuousVoiceControl ? GameLanguage.Text("音声操作：復旧中", "Voice controls: reconnecting") : GameLanguage.Text("声で操作を有効にする", "Enable voice controls");
+            voiceButton.text = controller.TextConversation ? GameLanguage.Text("テキスト指示を待受中", "Ready for text commands") : controller.EnablingVoiceActions ? GameLanguage.Text("音声操作：接続中", "Voice controls: connecting") : controller.BodyControlActive ? GameLanguage.Text("音声指示を待受中", "Listening for voice commands") : controller.ContinuousVoiceControl ? GameLanguage.Text("音声操作：復旧中", "Voice controls: reconnecting") : GameLanguage.Text("声で操作を有効にする", "Enable voice controls");
             voiceButton.SetEnabled(controller.Ready && controller.VoiceActionsAvailable && !controller.EnablingVoiceActions && !controller.BodyControlActive);
-            string controlMode = controller.BodyControlActive ? GameLanguage.Text("声で操作中", "Voice controls active") : controller.EnablingVoiceActions ? GameLanguage.Text("停止中（声で操作の準備中）", "Stopped (preparing voice controls)")
-                : controller.ConversationLive && controller.ConversationInteraction == "chat_only" ? GameLanguage.Text("会話のみ", "Chat only") : GameLanguage.Text("停止中", "Stopped");
+            string controlMode = controller.TextConversation && controller.BodyControlActive ? GameLanguage.Text("テキストで操作中", "Text controls active") : controller.BodyControlActive ? GameLanguage.Text("声で操作中", "Voice controls active") : controller.EnablingVoiceActions ? GameLanguage.Text("停止中（声で操作の準備中）", "Stopped (preparing voice controls)")
+                : controller.ConversationActive && controller.ConversationInteraction == "chat_only" ? GameLanguage.Text("会話のみ", "Chat only") : GameLanguage.Text("停止中", "Stopped");
             controlModeLabel.text = GameLanguage.Text("操作状況: ", "Controls: ") + controlMode;
             var execution = controller.ActiveExecution;
             if (controller.BodyControlActive && execution != null && execution.executionMode == "distance")
@@ -243,15 +243,17 @@ namespace Flylingual.PlayScreen
             }
             actionFeedbackLabel.text = string.IsNullOrEmpty(controller.ActionFeedback) ? string.Empty : GameLanguage.Text("直近の操作案内: ", "Latest control feedback: ") + controller.ActionFeedback;
             muteButton.text = controller.MicrophoneMuted ? GameLanguage.Text("マイクをオン", "Unmute microphone") : GameLanguage.Text("マイクをミュート", "Mute microphone");
-            muteButton.SetEnabled(!controller.MicrophoneCaptureDisabled);
+            muteButton.SetEnabled(!controller.TextConversation && !controller.MicrophoneCaptureDisabled);
+            deviceField?.SetEnabled(!controller.TextConversation);
+            voiceField?.SetEnabled(!controller.TextConversation);
             volume?.SetValueWithoutNotify(controller.Volume);
             UpdateChoices(deviceField, controller.Devices, deviceField == null ? null : deviceField.value);
             UpdateChoices(languageField, controller.Options.languages, language);
             UpdateChoices(voiceField, controller.Options.voices, voice);
             UpdateChoices(personaField, controller.Options.personas, persona);
-            applyButton?.SetEnabled(!controller.ConversationLive && controller.OutputInhibited);
+            applyButton?.SetEnabled(!controller.ConversationActive && controller.OutputInhibited);
             sendButton?.SetEnabled(controller.BodyControlActive);
-            string factual = controller.MicrophoneMuted ? GameLanguage.Text("マイクはミュート中", "Microphone muted") : controller.ReplyPlaying ? GameLanguage.Text("音声を再生中", "Playing speech") : controller.MicrophoneTransmitting ? GameLanguage.Text("音声を送信中", "Sending audio") : controller.ConversationLive ? GameLanguage.Text("会話セッションは接続中", "Conversation connected") : GameLanguage.Text("会話の接続待ち", "Waiting for conversation");
+            string factual = controller.TextConversation ? GameLanguage.Text("テキスト指示を入力して送信", "Type and send a command") : controller.MicrophoneMuted ? GameLanguage.Text("マイクはミュート中", "Microphone muted") : controller.ReplyPlaying ? GameLanguage.Text("音声を再生中", "Playing speech") : controller.MicrophoneTransmitting ? GameLanguage.Text("音声を送信中", "Sending audio") : controller.ConversationActive ? GameLanguage.Text("会話セッションは接続中", "Conversation connected") : GameLanguage.Text("会話の接続待ち", "Waiting for conversation");
             string expression = controller.ReplyPlaying ? GameLanguage.Text("発話中", "Speaking") : controller.MicrophoneTransmitting ? GameLanguage.Text("聞いています", "Listening") : controller.MicrophoneMuted ? GameLanguage.Text("ミュート", "Muted") : GameLanguage.Text("待機", "Waiting");
             portraitSource.text = GameLanguage.Text("表現の根拠: 会話状態（擬人化した表示）", "Expression source: conversation state (personified display)");
             portraitObservation.text = GameLanguage.Text("気持ちはまだわかりません。事実: ", "Feelings are not yet known. Observed: ") + factual;

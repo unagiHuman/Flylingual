@@ -1,0 +1,7 @@
+{
+  "bridgePython": "runtime/python/python.exe",
+  "bridgeLocalConfig": "Runtime/Config/judge.json",
+  "runRoot": "artifacts/judge-runs",
+  "startupSeconds": 45,
+  "heartbeatSeconds": 10
+}

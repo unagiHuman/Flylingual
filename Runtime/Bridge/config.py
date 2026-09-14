@@ -43,7 +43,7 @@ _CHILD_KEYS = {
         "expectedGraphHash", "expectedSourceHash", "graph", "config", "python",
         "visualizationAtlas",
     },
-    "conversation": {"mode", "model", "intentModel", "intentProvider", "localIntentUrl", "localIntentModel", "localIntentFormat", "localIntentCachePrompt", "localIntentResponsesFallback", "intentTimeoutMs", *DEFAULT_SETTINGS},
+    "conversation": {"mode", "model", "intentModel", "intentProvider", "cloudIntentUrl", "localIntentUrl", "localIntentModel", "localIntentFormat", "localIntentCachePrompt", "localIntentResponsesFallback", "intentTimeoutMs", *DEFAULT_SETTINGS},
     "control": {"owner", "maxActionMs", "defaultActionMs", "maxIntentAgeMs", "staleMs", "stopTimeoutMs"},
 }
 
@@ -61,7 +61,7 @@ _DEFAULT: dict[str, Any] = {
     },
     "conversation": {
         "mode": "off", "model": "gpt-live-1", "intentModel": "gpt-5.6-luna",
-        "intentProvider": "responses", "localIntentUrl": "http://127.0.0.1:11435",
+        "intentProvider": "responses", "cloudIntentUrl": "", "localIntentUrl": "http://127.0.0.1:11435",
         "localIntentModel": "qwen3.5:4b", "localIntentFormat": "compact", "localIntentCachePrompt": True, "localIntentResponsesFallback": False, "intentTimeoutMs": 8000,
         **DEFAULT_SETTINGS,
     },
@@ -206,10 +206,16 @@ def _validate(config: dict[str, Any]) -> None:
         raise ConfigError('control.stopTimeoutMs must not exceed 60000')
     if config["control"]["owner"] not in {"manual", "gpt", "observer"}:
         raise ConfigError("control.owner must be manual, gpt, or observer")
-    if config["conversation"]["mode"] not in {"off", "mock", "live"}:
-        raise ConfigError("conversation.mode must be off, mock, or live")
-    if config['conversation']['intentProvider'] not in ('responses', 'ollama', 'llama_cpp'):
-        raise ConfigError('conversation.intentProvider must be responses, ollama or llama_cpp')
+    if config["conversation"]["mode"] not in {"off", "mock", "live", "text"}:
+        raise ConfigError("conversation.mode must be off, mock, live, or text")
+    if config['conversation']['intentProvider'] not in ('responses', 'ollama', 'llama_cpp', 'vercel'):
+        raise ConfigError('conversation.intentProvider must be responses, ollama, llama_cpp or vercel')
+    if config['conversation']['intentProvider'] == 'vercel':
+        from .cloud_intent import cloud_endpoint
+        try:
+            cloud_endpoint(config['conversation']['cloudIntentUrl'])
+        except ValueError as exc:
+            raise ConfigError('conversation.cloudIntentUrl is invalid') from exc
     if config['conversation']['localIntentFormat'] not in ('compact', 'full', 'label'):
         raise ConfigError('conversation.localIntentFormat must be compact, full or label')
     if type(config['conversation']['localIntentCachePrompt']) is not bool:

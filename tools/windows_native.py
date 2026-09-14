@@ -79,6 +79,42 @@ def scrubbed_environment() -> dict[str, str]:
     return {name: value for name, value in os.environ.items() if not sensitive(name)}
 
 
+def apply_build_selection(stack: dict[str, Any], selection_path: Path, status: Path) -> dict[str, Any]:
+    """Create a private config; build provider does not depend on debug flags."""
+    if str(ROOT) not in sys.path:
+        sys.path.insert(0, str(ROOT))
+    from Runtime.Bridge.cloud_intent import cloud_endpoint
+    from Runtime.Bridge.config import _check_known
+    try:
+        selection = json.loads(selection_path.read_text(encoding='utf-8'))
+        if (type(selection) is not dict or set(selection) != {'channel', 'provider', 'backendUrl'}
+                or selection['channel'] not in ('Dev', 'Demo', 'Judge')
+                or selection['provider'] not in ('Local', 'Cloud')):
+            raise ValueError('invalid build selection')
+        source = json.loads(Path(stack['bridgeLocalConfig']).read_text(encoding='utf-8'))
+        if type(source) is not dict:
+            raise ValueError('invalid bridge configuration')
+        # Reject unknown fields (including any credential field) before writing.
+        _check_known(source, 'build source')
+        conversation = source.setdefault('conversation', {})
+        if selection['provider'] == 'Cloud':
+            conversation.update(mode='text', intentProvider='vercel',
+                                cloudIntentUrl=cloud_endpoint(selection['backendUrl']),
+                                intentTimeoutMs=5000, localIntentResponsesFallback=False)
+        else:
+            conversation['intentProvider'] = 'llama_cpp'
+        result = dict(stack)
+        if conversation.get('mode') == 'text':
+            result.pop('keyFile', None)
+        destination = status.parent / 'runtime-bridge.json'
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_text(json.dumps(source, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+        result['bridgeLocalConfig'] = destination
+        return result
+    except (OSError, ValueError, TypeError) as exc:
+        raise NativeError('Build selection or source configuration is invalid') from exc
+
+
 def bridge_settings(stack: dict[str, Any]) -> dict[str, Any]:
     if str(ROOT) not in sys.path:
         sys.path.insert(0, str(ROOT))
@@ -285,6 +321,7 @@ def main() -> int:
     parser.add_argument("--heartbeat", required=True)
     parser.add_argument("--owner-pid", required=True, type=int)
     parser.add_argument("--owner-created", required=True, type=float)
+    parser.add_argument("--build-selection", help="Non-secret Player build-channel configuration")
     args = parser.parse_args()
     status = repo_path(args.status)
     if psutil is None:
@@ -296,7 +333,10 @@ def main() -> int:
         print(f"windows-native error: {message}", file=sys.stderr)
         return 2
     try:
-        return launch(read_stack(args.config), status, repo_path(args.stop), repo_path(args.heartbeat),
+        stack = read_stack(args.config)
+        if args.build_selection:
+            stack = apply_build_selection(stack, repo_path(args.build_selection), status)
+        return launch(stack, status, repo_path(args.stop), repo_path(args.heartbeat),
                       args.owner_pid, args.owner_created)
     except (NativeError, JobError, OSError, ValueError) as exc:
         write_status(status, "failed", message=str(exc))

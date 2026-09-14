@@ -70,6 +70,8 @@ namespace Flylingual.Conversation
         }
         public bool OutputInhibited { get; private set; } = true;
         public bool ConversationLive { get; private set; }
+        public bool TextConversation { get; private set; }
+        public bool ConversationActive => ConversationLive || TextConversation;
         public bool IsSessionRequested => requestedStart;
         public string Caption { get; private set; } = string.Empty;
         public string LastSettingsResult { get; private set; } = string.Empty;
@@ -133,7 +135,7 @@ namespace Flylingual.Conversation
         public bool HasFreshBrain => bridgeConnected && !string.IsNullOrEmpty(BrainSessionId)
             && Time.realtimeSinceStartupAsDouble - frameReceivedAt <= .75
             && FrameAgeMs + (Time.realtimeSinceStartupAsDouble - stateReceivedAt) * 1000 <= 750;
-        public bool BodyControlActive => bodyArmed && armedEpoch == ControlEpoch && Ready && ConversationLive
+        public bool BodyControlActive => bodyArmed && armedEpoch == ControlEpoch && Ready && ConversationActive
             && ConversationInteraction == "control" && Owner == "gpt" && !OutputInhibited && voiceControlAvailable && HasFreshBrain;
 
         void Awake()
@@ -198,7 +200,7 @@ namespace Flylingual.Conversation
                 LastSettingsResult = "timeout";
                 SetError("conversation_settings_timeout");
             }
-            if (!autoStartPending || !Ready || ConversationLive || conversationStopping || !OutputInhibited
+            if (!autoStartPending || !Ready || ConversationActive || conversationStopping || !OutputInhibited
                 || transport == null || !transport.IsConnected || expectedSettingsRequestId != null
                 || Settings.language == GameLanguage.Code || startupLanguageAttempt == GameLanguage.Code) return;
             // One request per selected language. Wait for its matching acknowledgement before starting.
@@ -282,7 +284,7 @@ namespace Flylingual.Conversation
             EnablingVoiceActions = resumePending = bodyArmed = false;
             autoStartPending = false;
             requestedStart = false;
-            ConversationLive = false;
+            ConversationLive = false; TextConversation = false;
             StopCapture();
             DiscardReply();
             if (transport != null && transport.IsConnected) Send(new ConversationStop { type = "conversation_stop" });
@@ -320,8 +322,8 @@ namespace Flylingual.Conversation
             ActionFeedback = GameLanguage.Text("声で操作の準備中：実Brainの停止確認を待っています", "Preparing voice controls: waiting for Brain to confirm STOP");
             deadline = Time.realtimeSinceStartupAsDouble + 30;
             while (Ready && Time.realtimeSinceStartupAsDouble < deadline
-                && !(ConversationLive && resumeReady && voiceControlAvailable && HasFreshBrain && Owner == "gpt")) yield return null;
-            if (!Ready || !ConversationLive || !resumeReady || !voiceControlAvailable || !HasFreshBrain || Owner != "gpt")
+                && !(ConversationActive && resumeReady && voiceControlAvailable && HasFreshBrain && Owner == "gpt")) yield return null;
+            if (!Ready || !ConversationActive || !resumeReady || !voiceControlAvailable || !HasFreshBrain || Owner != "gpt")
             { FailActionStart("fresh_stop_or_voice_required"); yield break; }
             armedEpoch = ControlEpoch;
             resumePending = true;
@@ -369,7 +371,7 @@ namespace Flylingual.Conversation
 
         public void ApplySettings(string language, string voice, string persona, string personaText)
         {
-            if (!Ready || ConversationLive || conversationStopping || !OutputInhibited || expectedSettingsRequestId != null || transport == null || !transport.IsConnected)
+            if (!Ready || ConversationActive || conversationStopping || !OutputInhibited || expectedSettingsRequestId != null || transport == null || !transport.IsConnected)
             {
                 SetError("conversation_settings_require_stopped");
                 return;
@@ -495,6 +497,7 @@ namespace Flylingual.Conversation
         {
             if (state == null || !AcceptGeneration(state.conversationGeneration)) return;
             ConversationLive = requestedStart && state.state == "live";
+            TextConversation = requestedStart && state.state == "text";
             if (!ConversationLive) StopCapture();
         }
 
@@ -575,7 +578,7 @@ namespace Flylingual.Conversation
             ConversationGeneration = next;
             Caption = string.Empty;
             captionRole = null;
-            ConversationLive = false;
+            ConversationLive = false; TextConversation = false;
             bodyArmed = false;
             StopCapture();
             DiscardReply();
@@ -692,7 +695,7 @@ namespace Flylingual.Conversation
         // Stage observations only: does not acquire control or submit an Action.
         internal bool TrySendBlindRunCue(string runId, int attempt, long sequence, string cue, string evidenceJson, float ageMs)
         {
-            if (!Ready || !BlindRunScriptAvailable || !ConversationLive || ConversationInteraction != "control"
+            if (!Ready || !BlindRunScriptAvailable || !ConversationActive || ConversationInteraction != "control"
                 || !bridgeConnected || conversationStopping || (cue != "link_error" && !HasFreshBrain)
                 || transport == null || !transport.IsConnected || ConversationGeneration < 0) return false;
             var envelope = new BlindRunEnvelope { controlEpoch = ControlEpoch, conversationGeneration = ConversationGeneration,
@@ -712,7 +715,7 @@ namespace Flylingual.Conversation
         // Read-only presentation data shares this socket; never acquire control or queue behind audio/actions.
         internal bool TrySendLocalVisualObservation(string factsJson, float ageMs)
         {
-            if (!Ready || !LocalVisualAvailable || !ConversationLive || ConversationInteraction != "control"
+            if (!Ready || !LocalVisualAvailable || !ConversationActive || ConversationInteraction != "control"
                 || conversationStopping || ConversationGeneration < 0 || transport == null || !transport.IsConnected
                 || transport.QueueDepth >= 4 || string.IsNullOrEmpty(factsJson)
                 || float.IsNaN(ageMs) || float.IsInfinity(ageMs) || ageMs < 0 || ageMs > 750) return false;
@@ -758,7 +761,7 @@ namespace Flylingual.Conversation
         }
         void Disconnected(string code)
         {
-            Status = "disconnected"; Ready = false; requestedStart = false; ConversationLive = false;
+            Status = "disconnected"; Ready = false; requestedStart = false; ConversationLive = false; TextConversation = false;
             ActiveExecution = null;
             autoStartPending = false;
             nextRecoveryAt = Time.realtimeSinceStartupAsDouble + 2;

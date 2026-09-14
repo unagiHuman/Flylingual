@@ -77,6 +77,8 @@ namespace Flylingual.Conversation
                 string configPath = macStack
                     ? Path.Combine(root, "Runtime", "Config", "mac-native.local.json")
                     : Path.Combine(root, "Runtime", "Config", "windows-native.local.json");
+                string packagedConfig = Path.Combine(root, "Runtime", "Config", "judge-native.json");
+                if (!macStack && File.Exists(packagedConfig)) configPath = packagedConfig;
                 if (!macStack && !File.Exists(configPath)) configPath = Path.Combine(root, "Runtime", "Config", "windows-stack.local.json");
                 if (!File.Exists(configPath)) throw new InvalidOperationException(macStack
                     ? "A local mac-native configuration was not found."
@@ -153,6 +155,11 @@ namespace Flylingual.Conversation
                 CreateNoWindow = true,
                 WindowStyle = ProcessWindowStyle.Hidden,
             };
+            // Mono's AppDomain base can point inside *_Data/Managed in a Player.
+            // Application.dataPath identifies *_Data; selection belongs beside the exe.
+            string buildSelection = Path.Combine(Path.GetDirectoryName(Application.dataPath), "build-channel.json");
+            if (Application.platform == RuntimePlatform.WindowsPlayer && File.Exists(buildSelection))
+                info.Arguments += " --build-selection " + Quote(buildSelection);
             ScrubChildEnvironment(info);
             helperProcess = Process.Start(info);
             if (helperProcess == null) throw new InvalidOperationException("native helper could not be started.");
