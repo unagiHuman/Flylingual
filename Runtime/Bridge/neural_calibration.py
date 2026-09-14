@@ -33,6 +33,7 @@ def axis_thresholds(config):
 class Calibration:
     def __init__(self, config, thresholds):
         self.data = {}
+        self.thresholds = deepcopy(thresholds)
         self.status = 'not_configured'
         calibration = config.get('calibration')
         if not calibration:
@@ -88,7 +89,26 @@ class Calibration:
     def matches(self, identity):
         return bool(self.data) and all(identity.get(key) == self.data[key] for key in HASH_KEYS)
 
+    def threshold(self, key, axis, identity):
+        """The shared authority for classification and its readiness metadata."""
+        if not self.matches(identity):
+            return None
+        return self.thresholds.get(key, {}).get(axis)
+
     def summary(self, identity):
-        valid = self.matches(identity)
-        return {'valid': valid, 'status': self.status if not self.data or valid else 'brain_identity_mismatch',
+        artifact_verified = bool(self.data)
+        identity_matched = self.matches(identity)
+        valid = artifact_verified and identity_matched
+        ready = {name: self.threshold(key, axis, identity) is not None
+                 for name, key, axis in (
+                     ('responseForward', 'rawThresholdMv', 'forward'),
+                     ('responseTurn', 'rawThresholdMv', 'turn'),
+                     ('changeForward', 'changeThresholdMv', 'forward'),
+                     ('changeTurn', 'changeThresholdMv', 'turn'))}
+        ready['stopResidual'] = all(self.threshold(key, axis, identity) is not None
+                                    for key in ('rawThresholdMv', 'filteredThresholdMv', 'motorThreshold')
+                                    for axis in AXES)
+        return {'valid': valid, 'artifactVerified': artifact_verified, 'identityMatched': identity_matched,
+                'classificationReady': ready,
+                'status': self.status if not self.data or valid else 'brain_identity_mismatch',
                 'version': self.data.get('version'), 'artifactSha256': self.data.get('artifactSha256')}

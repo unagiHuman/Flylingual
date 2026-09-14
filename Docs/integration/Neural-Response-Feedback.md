@@ -2,7 +2,29 @@
 
 更新: 2026-09-14。仕様書 `Flylingual_Brain_Feedback_Codex_Astra_Spec.md` の実装・検証記録。Windows実Brain→Playerの移動・STOP、観測配送、同一LIF列の非干渉を確認した。Phase Bは12主試行＋再現性対照を実行し、増分の履歴効果を支持せず、未校正のためINCONCLUSIVEで探索終了。**LiveDialogueGroundingはPARTIAL、実マイクとHUD目視は未確認**。`ready=false`／productReady=falseを維持し、身体因果もunknown。
 
-## 今回のレビュー修正と検証（2026-09-14）
+## 最終レビュー修正の検証（2026-09-14）
+
+対象はconfig由来provenance、artifact検証とclassification readinessの分離、Bridge→Unityのduration契約。BrainFrameへのmetadata追加以外の神経数値・刺激・RNG・Action・decoder・身体経路は変更していない。既定threshold／calibrationは未設定、ready=false／productReady=falseを維持する。
+
+Pythonは `.venv-bridge/Scripts/python.exe -m unittest tools.test_neural_response tools.test_neural_classification_ready tools.test_neural_provenance tools.test_neural_calibration_config tools.test_neural_feedback tools.test_native_conversation tools.test_text_conversation tools.test_local_intent_config tools.test_intent_age_config` で **146件PASS（3.927秒）**。configのinput/readout body ID変更、6 Actionの候補、派生metric、unknown producer、null／部分／全threshold、hash／identity不一致、allowedClaimsとの整合、400ms期限を確認。WebSocketの送信待ち後に最新snapshotを取り直す回帰試験はメモリ内transportを使い、実Brain接続試験とは区別する。
+
+Unity 6000.5.9f1は再コンパイルcompleted／failed=false／errors=[]。`Flylingual.Conversation.EditorTests.NeuralReadoutTests` は **16件PASS**。artifact検証のみでは判定可能表示を出さないこと、該当軸のみの判定表示、sourceAge300＋Unity経過50/100/150msに対する400ms境界、欠落のみ750ms互換、fresh=false、不正値、古い身体観測の延命防止を含む。証拠: `artifacts/neural-feedback/final-review-unity-tests.json`。
+
+非干渉は `artifacts/windows-malecns/.venv/Scripts/python.exe tools/neural_noninterference.py --graph artifacts/neuron_checkpoint --config Brain/MaleCNS/config/analog_temporal_v1.json --output artifacts/neural-feedback/final-review-noninterference.json` で **PASS**。実LIF、seed1701、観測OFF/ON各30frame、Python3.10.12／NumPy1.24.3、解析p95=0.6529ms。raw／motor／brain／sequenceと各frameのRNG hashが一致し、前回review-fix記録のrawMotorHashとRNG列にも一致した。rawMotorHashは `3e61747c9aa39bee5c1a8161c1e579665c43292b2da0ec2693e75b7d88cb8075`。OFF/ON wallは3.144/3.036秒、sampled peak RSSは約90.0/91.2MB。source・graph・config hashと測定列は同JSONに保持し、Player経路のidentityとは区別する。
+
+Dev-Local Playerは既存 `HayeringualBuildWindow.Build` 入口で **Succeeded**（08:22:54–08:23:19 UTC）。初めのdelayCall予約は実行されず、古いBuildReportを成功に流用せず直接実行した。直接evalはCLI応答が5秒timeoutとなったがビルドは継続完了し、BuildReportの唯一のerrorもこのCLI応答timeoutだった。C#コンパイル失敗ではない。既存EditorBuildSettingsの1シーン生成差分は今回のコミット対象外。
+
+`tools/neural_player_trial.ps1 -Name final-review-ja -Language ja -Question 0` の日本語1試行は **control_pass**。Player→Bridge→Windows実Brain `127.0.0.1:18766`、MALECNS_EXPERIMENTAL／LIVE、ready=false。約2.9500m前進後にSTOP適用、終了時fresh=true、Playerのresult.errorは空。Playerは147 BrainFrame／145神経観測／144身体相関、記録区間sequence30→154。配送ログは終了直前の追加分と同一sequence配送を含む181神経イベント（sequence30→155、STOP150／FORWARD31）で、最大source age484ms、全件staleAfterMs=750。実configの6readout body IDとgroup、現在Actionの刺激候補、derived／aggregate、artifact未設定と全classificationReady=false、強弱／変化claim抑止が全件一致した。400ms設定は単体で確認し、実Player試行は通常750ms設定である。
+
+Bridge全区間は161一意frame、step p95=181.705ms、analysis p95=0.4367ms、submitted→appliedは6件でp95=316.25ms。Player frame p95=17.0946ms、sampled peak RSS≈570.3MB。単独試行の記述値であり性能受入れや統計的優位を主張しない。運転中のstale／protocol errorは記録されなかった。Player終了時のcontrol close1006と同時に `background_failed: ClientConnectionResetError` が1件残るため、ログ全体errorゼロとはしない。probe内蔵ScreenCaptureも失敗し、目視確認には使用できない。実GPT-Liveへの質問回答は11秒窓で途中のため、会話品質全体はPARTIALのまま。
+
+証拠は `artifacts/neural-feedback/final-review-ja.json`、同`.json.events.jsonl`、`final-review-ja-contract-audit.json`、`final-review-ja-summary.json`、player／bridge／metricsログ。contract auditは実frame identityのsource／graph／config hashと変更ソースのSHAを含む。試行後local.jsonを元のbytesへ復元し、所有Playerは終了した。
+
+Phase Bは再実行していない。既存12主試行＋1再現性対照のINCONCLUSIVE／D_increment≈0を維持し、このmetadata修正を履歴効果の実証に読み替えない。実マイクとHUD目視は今回のgateに含めていない。
+
+## 前回レビュー修正の検証記録（2026-09-14）
+
+以下は最終レビュー修正前の検証記録であり、今回追加するprovenance・classification readiness・freshness contractの再検証を意味しない。
 
 今回の修正はread-only analyzer・表示・会話還流に限定する。`forward`／`turn`別比較・閾値、集計方法と刺激入力readoutの由来、校正artifact検証、人格を維持する短文要約を実装した。**実装済みであることはproduction校正済み・実機受入れ済みを意味しない。** 既定の閾値とcalibrationは未設定で、ready=false／productReady=falseは維持する。
 
@@ -40,9 +62,24 @@ turn_raw = M[T,R] - M[T,L]
 
 単位はmV。cell type数を均等に重み付けする **cell-type equal-weight aggregate** であり、集計そのもの、baseline、刺激、decoderの数値計算は今回変更しない。これはepisode内の200脳内msに対する時間加重平均とは別の集計段階である。
 
-既知の `backendId=MALECNS_EXPERIMENTAL` かつ `datasetId=male-cns:v1.0` に限り、Bridgeがイベント最上位へ `selectedVncAggregation={version: "v1", method: "cell_type_equal_weight_mean_delta_v", unit: "mV"}` を付加する。HUD名は「選択VNCの細胞型均等ΔV / Selected VNC class-balanced ΔV」。別backend/datasetの集計法を推定せず、metadataはnull／表示はunknownとする。
+集計を実行する `Brain/MaleCNS/analog_controller.py` 自身が、BrainFrameの `metadata.selectedVncAggregation={version: "v1", method: "cell_type_equal_weight_mean_delta_v", unit: "mV"}` を明示する。Bridgeは受信metadataを検証してイベントへ渡す。backendId／datasetId名だけから集計法を推定する従来方式は廃止し、明示metadataが欠ける旧producerや不正なmetadataはunknownとする。HUD名は「選択VNCの細胞型均等ΔV / Selected VNC class-balanced ΔV」。この追加は既存の集計数値を変更しない。
 
-同じ既知identityでは `readoutProvenance` が `DNg100_L_Hz`／`DNg100_R_Hz` を `stimulated_input_neuron`、DNa02／DNp09の左右Hzを `non_stimulated_selected_readout` と区別する。DNg100は直接刺激している入力ニューロン自身の活動を含み、独立した下流反応の根拠ではない。GPT-Liveのcompact summaryにはDNg100/readoutHzを根拠として入れず、HUD詳細にもこの入力由来を明示する。別identityではprovenanceを空にし、未知を既知にしない。
+`metadata.readoutProvenance` の正本は実Brain configの `inputs` と `readouts`。controllerの初期化でgraphに解決済みのindicesを実body IDへ戻し、6 Actionそれぞれのmetadataをsnapshot化する。初期化後にconfig辞書が書き換わっても、既に初期化された刺激・readoutの対応を誤って付け替えない。frameは現在Action用snapshotを使い、LIF状態やRNGを観測metadataのために変更しない。
+
+対象は左右DNa02／DNg100／DNp09の6個、派生DN metricの2個、VNC rawの2個の計10キー。neuron項目は `kind=neuron_readout`、`bodyId`、`configuredStimulusGroups`、`eligibleForDirectStimulation` を持つ。groupは名前ではなくbody IDの一致で導出し、出力は最大16 group・各名64文字に制限する。現在のconfigではDNg100の10045／10056がF groupに含まれるが、同じbackend／dataset名でもinputsまたはreadoutsが変われば結果も変わる。欠損や不正な対応を名前から推定しない。
+
+| Action | 刺激候補group |
+|---|---|
+| STOP | なし |
+| FORWARD | F |
+| TURN_R / TURN_L | R / L |
+| FORWARD_R / FORWARD_L | F＋R / F＋L |
+
+この対応はcontrollerの実 `ACTIONS` 定義を使用する。`configuredStimulusGroups` は設定された刺激候補集合への所属、`eligibleForDirectStimulation` はその集合と現在Actionのgroupが交わるかを意味する。現在configのDNg100はFORWARDでtrue、TURN_RやSTOPではfalse。**trueでも、その計算窓内にBernoulli刺激イベントが実際に発生したという記録ではない。** falseも、そのニューロンが発火していない、またはネットワーク経由の入力がないという意味ではない。
+
+`DNp09_Hz` と `DNa02Difference_Hz` は `kind=derived_metric` とし、`derivedFrom` にそれぞれ `DNp09_L_Hz/DNp09_R_Hz` と `DNa02_R_Hz/DNa02_L_Hz` を列挙する。直接のニューロンreadoutとして扱わない。`forward_raw/turn_raw` は `kind=selected_vnc_aggregate` とし、対応する `populationDeltaMv.<axis>.R/.L` を `derivedFrom` に持つ。数値の結合方法は上記数式のとおりである。
+
+DNg100が刺激候補に含まれる場合、その値は入力ニューロン自身の活動を含み、独立した下流反応の根拠ではない。GPT-Liveのcompact summaryはDNg100や派生DN metricを判定根拠として使用せず、意思・感情を導かない。Bridge/HUDは由来不明をunknownとして残す。
 
 ## 設定
 
@@ -69,7 +106,21 @@ turn_raw = M[T,R] - M[T,L]
 
 `calibration`は起動時にartifactを検証し、frameごとのファイルI/Oは行わない。相対artifactパスの基準はFlylingual repoルートで、JSONは最大64KiB。artifact実在、artifactSha256（SHA-256）の一致、`calibration.version == thresholdVersion == artifact.version`、artifactと設定のsourceHash／graphHash／configHash一致、artifactの`thresholds`と設定の4つの軸別閾値dictの一致を必要とする。各identity hashとartifactSha256は64桁16進。さらに現在受信したBrain identityのsourceHash／graphHash／configHashが校正情報と一致する場合だけ閾値を使う。
 
-artifact JSONは `version`、`sourceHash`、`graphHash`、`configHash` と、4キーそれぞれにforward／turnを持つ `thresholds` を含む。設定だけ閾値を書き換えてもartifactとの一致が崩れるため有効化しない。イベント最上位の `calibration` は `valid/status/version/artifactSha256` を返す。artifact不在・不一致・未設定はfail-closedとし、同梱できない配布環境もuncalibratedを優先する。今回production calibration artifactは追加しない。既存の身体判定用body*設定は別の校正経路であり、今回の軸別artifact gateによって身体校正済みへ昇格させない。
+artifact JSONは `version`、`sourceHash`、`graphHash`、`configHash` と、4キーそれぞれにforward／turnを持つ `thresholds` を含む。設定だけ閾値を書き換えてもartifactとの一致が崩れるため有効化しない。イベント最上位の `calibration` は `artifactVerified/identityMatched/valid/classificationReady/status/version/artifactSha256` を返す。artifact不在・不一致・未設定はfail-closedとし、同梱できない配布環境もuncalibratedを優先する。今回production calibration artifactは追加しない。既存の身体判定用body*設定は別の校正経路であり、今回の軸別artifact gateによって身体校正済みへ昇格させない。
+
+`artifactVerified` はartifact自体の検証成功、`identityMatched` は現在Brain identityとの一致を示し、互換用 `valid = artifactVerified && identityMatched` とする。**valid=trueは全判定の校正完了を意味しない。** null閾値を含むartifactも検証には成功し得るため、次の `classificationReady` を判定別に使う。
+
+| classificationReady | artifact検証・identity一致に加えて必要な閾値 |
+|---|---|
+| responseForward | rawThresholdMv.forward |
+| responseTurn | rawThresholdMv.turn |
+| changeForward | changeThresholdMv.forward |
+| changeTurn | changeThresholdMv.turn |
+| stopResidual | rawThresholdMv・filteredThresholdMv・motorThresholdのforward／turn計6値 |
+
+readinessと実際の判定は共有関数 `Calibration.threshold(key, axis, identity)` を使う。検証不成立またはnull閾値はNoneとして扱い、当該軸のclaimを成立させない。例えばartifactが検証済みでもchangeThresholdMv.turn=nullならchangeTurn=falseで、turnを理由とするRESPONSE_CHANGEDは出さない。ready=trueでも方向符号、比較適格性、継続時間等の条件を満たさなければclaimは成立しない。
+
+HUDは判定が全て使えない場合「未校正・数値のみ」、一部だけ使える場合「一部校正済み」として扱い、比較のF/Tごとにnumeric onlyか校正閾値超過かを分ける。artifact検証成功だけで未校正表示を消さない。旧 `calibrationEvidence` の自由文字列は判定を有効化するauthorityではない。
 
 解析バッファは脳内10秒かつ512frame以下。適用境界の最初のframeは比較窓から除外し、以後200msを時間加重で集計する。`comparison.timeOrigin=end_of_excluded_application_frame` は、その除外frameの**終端**が比較相対時刻0であることを示す。刺激送信時刻や実時間0ではない。同一Actionの維持更新は新刺激立ち上がりとしない。epoch・会話世代・Brain identity変更で参照を失効させる。
 
@@ -85,7 +136,7 @@ Phase Bだけが刺激cell/tick系列を固定して履歴依存性を分離す�
 
 ## Control WebSocket追加契約 v1
 
-既存BrainFrame/motor契約は変更しない。`bridge_state.capabilities` のstring配列に `neural_response_v1` がある場合だけ、Unityは以下を送る。旧Bridgeや機能無効時は追加送受信を行わない。
+既存BrainFrame/motorの数値・必須fieldを維持し、BrainFrame metadataへ上記の由来定義を追加する。`bridge_state.capabilities` のstring配列に `neural_response_v1` がある場合だけ、Unityは以下を送る。旧Bridgeや機能無効時は追加送受信を行わない。
 
 ```json
 {"type":"neural_observation_subscribe","controlEpoch":1,"conversationGeneration":1,"enabled":true}
@@ -97,7 +148,7 @@ Phase Bだけが刺激cell/tick系列を固定して履歴依存性を分離す�
 |---|---|
 | controlEpoch / conversationGeneration / sequence | 現行世代とBrain sequence。過去世代を現在値にしない |
 | identity | instanceId/sessionId/backendId/datasetId/sourceHash/graphHash/configHash。欠けたhashはunknown |
-| mode / fresh / ageMs | LIVE等の受信mode、鮮度、観測ageの実時間ms |
+| mode / fresh / ageMs / staleAfterMs | LIVE等の受信mode、鮮度、観測ageとBridgeの鮮度上限の実時間ms |
 | current.requestedAction / requestedRequestId | 要求。受付と適用待ちを適用成功から区別 |
 | current.observedAction / appliedRequestId / stimulusApplied | frame由来の刺激適用相関。身体成功を意味しない |
 | current.raw.forward/turn | selected VNC readout、mV。turnは符号付き |
@@ -106,10 +157,14 @@ Phase Bだけが刺激cell/tick系列を固定して履歴依存性を分離す�
 | current.brainStartMs/brainEndMs/windowMs | 脳内時間。wall timeとは別の軸 |
 | current.readoutHz / stepWallTimeMs | 選択DNのHz／1計算窓の実時間ms |
 | comparison / currentCurve / previousCurve | 比較適格性・理由、axesとchangedAxes、最大32点の適用相対曲線 |
-| selectedVncAggregation / readoutProvenance | 既知backend/datasetの集計法と刺激入力／非刺激readoutの区別 |
-| calibration / cause | artifact校正の検証状態／刺激変動を除外していない旨 |
+| selectedVncAggregation / readoutProvenance | BrainFrameが明示する集計法と実config由来のneuron／派生metric／aggregateの区別 |
+| calibration / cause | artifact検証・identity一致・判定別readiness／刺激変動を除外していない旨 |
 | body | 相関済み実測速度。brainSequence/currentSequence/brainTimeOffsetMsで遅れを明示 |
 | allowedClaims / causalStatus / residualLayer | 許される限定主張。通常比較の原因は未確定 |
+
+鮮度はduration contractで共有する。Bridgeは `control.staleMs` をイベントの `staleAfterMs` として送る。Unityは受信時の `ageMs` にUnity自身の受信後経過時間を加え、`currentAge <= staleAfterMs` と `fresh=true` の両方を必要とする。例えばstaleAfterMs=400、sourceAgeMs=300ならUnity側経過50msではfresh、150msではunknownになる。Bridgeの絶対monotonic timestampをUnity時計と比較しない。
+
+`staleAfterMs` が**欠落する旧producerだけ**750ms fallbackを許可する。fieldが存在するが不正な値の場合にfallbackして寿命を延ばさない。Bridgeの `fresh=false` は年齢にかかわらずunknownで、Unityが再fresh化してはならない。event全体の期限が切れたら身体値も現在値として表示しない。body自身もfresh／correlatedとageの条件を維持し、イベントの受信だけで古いbody観測を新しくしない。
 
 Unity→Bridgeの身体観測は `type=body_response_observation`。必須はcontrolEpoch、conversationGeneration、独自sequence、ageMs、brainSequence、brainSessionId、brainInstanceId。任意測定値は以下。
 

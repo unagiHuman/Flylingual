@@ -124,14 +124,52 @@ class NeuralAnalyzerTests(unittest.TestCase):
 
     def test_readout_metadata_scoped_to_known_backend(self):
         result = observe(NeuralResponseAnalyzer(), frame(0))
-        self.assertEqual(result['selectedVncAggregation']['method'], 'cell_type_equal_weight_mean_delta_v')
-        self.assertEqual(result['readoutProvenance']['DNg100_L_Hz'], 'stimulated_input_neuron')
-        self.assertEqual(result['readoutProvenance']['DNa02_R_Hz'], 'non_stimulated_selected_readout')
+        self.assertIsNone(result['selectedVncAggregation'])
+        self.assertEqual(result['readoutProvenance'], {})
         value = frame(0)
         value['metadata']['backendId'] = 'OTHER'
         result = observe(NeuralResponseAnalyzer(), value, identity={**IDENTITY, 'backendId': 'OTHER'})
         self.assertIsNone(result['selectedVncAggregation'])
         self.assertEqual(result['readoutProvenance'], {})
+
+    def test_explicit_producer_metadata_is_bounded_detached_and_not_carried_forward(self):
+        analyzer = NeuralResponseAnalyzer()
+        value = frame(0)
+        provenance = {'DNg100_L_Hz': {'kind': 'neuron_readout', 'bodyId': 10045,
+            'configuredStimulusGroups': ['F'], 'eligibleForDirectStimulation': False},
+            'DNp09_Hz': {'kind': 'derived_metric', 'derivedFrom': ['DNp09_L_Hz', 'DNp09_R_Hz']},
+            'forward_raw': {'kind': 'selected_vnc_aggregate', 'derivedFrom': ['populationDeltaMv.forward.R', 'populationDeltaMv.forward.L']}}
+        value['metadata'].update(readoutProvenance=copy.deepcopy(provenance), selectedVncAggregation={
+            'version': 'v1', 'method': 'cell_type_equal_weight_mean_delta_v', 'unit': 'mV'})
+        result = observe(analyzer, value)
+        self.assertEqual(result['readoutProvenance'], provenance)
+        self.assertEqual(result['selectedVncAggregation']['method'], 'cell_type_equal_weight_mean_delta_v')
+        value['metadata']['readoutProvenance']['DNg100_L_Hz']['configuredStimulusGroups'].append('R')
+        result['readoutProvenance']['DNg100_L_Hz']['bodyId'] = 99
+        self.assertEqual(analyzer.snapshot(1, 1, 1, 1)['readoutProvenance'], provenance)
+        missing = observe(analyzer, frame(1))
+        self.assertEqual(missing['readoutProvenance'], {})
+        self.assertIsNone(missing['selectedVncAggregation'])
+        value['sequence'] = 2
+        value['brainTimeMs'] = 150
+        value['metadata']['readoutProvenance']['DNg100_L_Hz']['configuredStimulusGroups'] = ['F'] * 17
+        malformed = observe(analyzer, value)
+        self.assertNotIn('DNg100_L_Hz', malformed['readoutProvenance'])
+        invalid = observe(analyzer, value)
+        self.assertEqual(invalid['readoutProvenance'], {})
+        self.assertIsNone(invalid['selectedVncAggregation'])
+
+    def test_freshness_duration_contract(self):
+        analyzer = NeuralResponseAnalyzer({'staleMs': 400})
+        result = observe(analyzer, frame(0), age_ms=300)
+        self.assertEqual(result['staleAfterMs'], 400)
+        self.assertTrue(analyzer.snapshot(50, 350, 1, 1)['fresh'])
+        stale = analyzer.snapshot(150, 450, 1, 1)
+        self.assertFalse(stale['fresh'])
+        self.assertEqual(stale['staleAfterMs'], 400)
+        invalid = observe(analyzer, frame(1), age_ms=401)
+        self.assertFalse(invalid['fresh'])
+        self.assertEqual(invalid['staleAfterMs'], 400)
 
     def test_missing_null_threshold_and_stop_stay_fail_closed(self):
         config = self.calibrated({'rawThresholdMv': {'forward': None, 'turn': .1},

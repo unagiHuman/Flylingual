@@ -3,7 +3,7 @@ import asyncio
 import base64
 import copy
 import unittest
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, Mock, patch
 
 from Runtime.Bridge.config import _DEFAULT
 from Runtime.Bridge.control import ControlError
@@ -29,6 +29,67 @@ class NativeConversationTests(unittest.IsolatedAsyncioTestCase):
         await self.bridge.command({'type': 'conversation_start', 'interaction': 'chat_only',
                                    'controlEpoch': self.bridge.arbiter.epoch})
         await self.bridge.conversation_operation
+
+    async def test_queued_neural_metadata_is_refreshed_at_send_and_reset_is_skipped(self):
+        # Run the real websocket send loop against an in-memory transport. Hold
+        # its first write so a previously fresh event waits behind backpressure.
+        for replacement in (
+                {'fresh': True, 'ageMs': 350, 'staleAfterMs': 400, 'controlEpoch': 1},
+                {'fresh': False, 'ageMs': 450, 'staleAfterMs': 400, 'controlEpoch': 1},
+                {'fresh': False, 'ageMs': 20, 'staleAfterMs': 400, 'controlEpoch': 2},
+                None):
+            with self.subTest(replacement=replacement):
+                entered, release, finished = asyncio.Event(), asyncio.Event(), asyncio.Event()
+                sent = []
+
+                class Socket:
+                    compress = False
+                    close_code = 1000
+                    async def prepare(self, request):
+                        return None
+                    def __aiter__(self):
+                        return self
+                    async def __anext__(self):
+                        await finished.wait()
+                        # Let the final send's wait_for finish before closing,
+                        # as a real remote close arrives after its write.
+                        await asyncio.sleep(.01)
+                        raise StopAsyncIteration
+                    async def send_json(self, event):
+                        if not entered.is_set():
+                            entered.set()
+                            await release.wait()
+                        sent.append(copy.deepcopy(event))
+                        if event.get('type') == 'queue_drained':
+                            finished.set()
+
+                bridge = self.bridge
+                bridge.control_ws = None
+                bridge.closed = True  # Closing this fixture never starts control cleanup.
+                bridge.check_origin = Mock()
+                bridge.log = Mock()
+                bridge.neural_snapshot = Mock(return_value=replacement)
+                with patch('Runtime.Bridge.server.web.WebSocketResponse', return_value=Socket()):
+                    pending = asyncio.create_task(bridge.websocket(object()))
+                    try:
+                        await asyncio.wait_for(entered.wait(), 1)
+                        old = {'type': 'neural_response', 'fresh': True, 'ageMs': 0,
+                               'staleAfterMs': 400, 'controlEpoch': 1}
+                        bridge.control_queue.put_nowait(old)
+                        ordinary = {'type': 'queue_drained', 'payload': 'unchanged'}
+                        bridge.control_queue.put_nowait(ordinary)
+                        bridge.neural_snapshot.assert_not_called()
+                        release.set()
+                        await asyncio.wait_for(pending, 1)
+                    finally:
+                        pending.cancel()
+                        await asyncio.gather(pending, return_exceptions=True)
+                bridge.neural_snapshot.assert_called_once_with()
+                observations = [event for event in sent if event.get('type') == 'neural_response']
+                expected = [] if replacement is None else [{'type': 'neural_response', **replacement}]
+                self.assertEqual(observations, expected)
+                self.assertEqual(sent[-1], ordinary)
+                self.assertEqual(old['ageMs'], 0)
 
     async def test_chat_inhibits_without_brain_and_accepts_audio_by_generation(self):
         await self.start_chat()

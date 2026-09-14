@@ -37,13 +37,13 @@ namespace Flylingual.Conversation
                 (Time.realtimeSinceStartupAsDouble - controller.NeuralResponseReceivedAt) * 1000;
             double sourceAge = Value(shown?.ageMs);
             double age = sourceAge + receivedAge;
-            currentFresh = shown != null && shown.fresh && !double.IsNaN(age) && age <= 750;
+            currentFresh = IsFresh(shown, receivedAge);
             var now = currentFresh ? shown.current : null;
             string unknown = "unknown";
             string applied = now != null && now.stimulusApplied ? now.appliedRequestId ?? unknown : unknown;
             if (now != null && !now.stimulusApplied && !string.IsNullOrEmpty(now.requestedRequestId)
                 && now.requestedRequestId != unknown) applied = GameLanguage.Text("受付済・適用待ち", "Accepted / pending application");
-            var body = currentFresh && shown.body != null && shown.body.fresh && shown.body.correlated ? shown.body : null;
+            var body = IsBodyFresh(shown, receivedAge) ? shown.body : null;
             readings.text = GameLanguage.Text("要求 ", "Requested ") + (now?.requestedAction ?? unknown) + GameLanguage.Text(" → 適用 ", " → Applied ") + applied +
                 "\nVNC F " + Format(now?.raw?.forward) + "mV / T " + Format(now?.raw?.turn) + "mV" +
                 "  motor " + Format(now?.motor?.forward) + " / " + Format(now?.motor?.turn) +
@@ -69,10 +69,9 @@ namespace Flylingual.Conversation
                     "\nCause unresolved. Stimulus sequence not controlled. Body motion and feelings are unverified.") +
                 GameLanguage.Text("\n除外した適用確認窓の終端から200脳内ms。yawとmotorの符号対応は未校正。",
                     "\n200 brain ms after the excluded application window. Yaw-to-motor sign uncalibrated.");
-            if (shown?.readoutProvenance?.DNg100_L_Hz == "stimulated_input_neuron" &&
-                shown?.readoutProvenance?.DNg100_R_Hz == "stimulated_input_neuron")
-                detailReadings.text += GameLanguage.Text("\nDNg100: 直接刺激する入力ニューロンの観測。独立した下流応答ではありません。",
-                    "\nDNg100: directly stimulated input neurons; not independent downstream response.");
+            detailReadings.text += "\n" + CalibrationText(currentFresh ? shown?.calibration : null);
+            detailReadings.text += "\n" + ProvenanceText("DNg100 L", currentFresh ? shown?.readoutProvenance?.DNg100_L_Hz : null);
+            detailReadings.text += "\n" + ProvenanceText("DNg100 R", currentFresh ? shown?.readoutProvenance?.DNg100_R_Hz : null);
             plot.MarkDirtyRepaint(); motorPlot.MarkDirtyRepaint();
         }
 
@@ -86,13 +85,61 @@ namespace Flylingual.Conversation
                 var value = axis == "forward" ? comparison.axes?.forward : comparison.axes?.turn;
                 if (value == null || !value.eligible) continue;
                 result += "\n" + (axis == "forward" ? "F" : "T") + " Δ " + Format(value.deltaMeanMv) + "mV";
-                if (calibration != null && calibration.valid && value.changed)
+                bool ready = calibration != null && calibration.artifactVerified && calibration.identityMatched &&
+                    (axis == "forward" ? calibration.classificationReady?.changeForward == true : calibration.classificationReady?.changeTurn == true);
+                if (ready && value.changed)
                     result += GameLanguage.Text("（校正閾値超）", " (above calibrated threshold)");
+                else if (!ready) result += GameLanguage.Text("（数値のみ）", " (numeric only)");
             }
-            if (calibration == null || !calibration.valid)
+            if (calibration == null || !calibration.artifactVerified || !calibration.identityMatched ||
+                (calibration.classificationReady?.changeForward != true && calibration.classificationReady?.changeTurn != true))
                 result += GameLanguage.Text("\n未校正: 数値のみ。強弱・有意な変化は判定しません。",
                     "\nUncalibrated: numbers only; no strength or significant-change classification.");
             return result;
+        }
+        public static bool IsFresh(Observation observation, double elapsedSinceReceiptMs)
+        {
+            if (observation == null || !observation.fresh) return false;
+            double sourceAge = Value(observation.ageMs);
+            double limit = !observation.staleAfterMsPresent && observation.staleAfterMs == null ? 750 : Value(observation.staleAfterMs);
+            return !double.IsNaN(sourceAge) && sourceAge >= 0 && !double.IsNaN(limit) && limit > 0 && limit <= 750
+                && !double.IsNaN(elapsedSinceReceiptMs) && !double.IsInfinity(elapsedSinceReceiptMs) && elapsedSinceReceiptMs >= 0
+                && sourceAge + elapsedSinceReceiptMs <= limit;
+        }
+        public static bool IsBodyFresh(Observation observation, double elapsedSinceReceiptMs)
+        {
+            if (!IsFresh(observation, elapsedSinceReceiptMs) || observation.body == null ||
+                !observation.body.fresh || !observation.body.correlated) return false;
+            double age = Value(observation.body.ageMs);
+            double limit = !observation.staleAfterMsPresent && observation.staleAfterMs == null ? 750 : Value(observation.staleAfterMs);
+            return !double.IsNaN(age) && age >= 0 && age + elapsedSinceReceiptMs <= limit;
+        }
+        public static string CalibrationText(Calibration calibration)
+        {
+            string result = GameLanguage.Text("Artifact検証: ", "Artifact verified: ") + (calibration?.artifactVerified == true) +
+                GameLanguage.Text(" / Brain identity一致: ", " / Brain identity matched: ") + (calibration?.identityMatched == true);
+            bool verified = calibration?.artifactVerified == true && calibration.identityMatched;
+            var ready = calibration?.classificationReady;
+            bool[] flags = { verified && ready?.responseForward == true, verified && ready?.responseTurn == true,
+                verified && ready?.changeForward == true, verified && ready?.changeTurn == true, verified && ready?.stopResidual == true };
+            string[] names = { "Response F", "Response T", "Change F", "Change T", "STOP residual" };
+            int count = 0;
+            for (int i = 0; i < flags.Length; i++)
+            {
+                if (flags[i]) count++;
+                result += "\n" + names[i] + ": " + (flags[i] ? GameLanguage.Text("判定可能", "ready") : GameLanguage.Text("未校正・数値のみ", "uncalibrated; numeric only"));
+            }
+            if (count > 0 && count < flags.Length) result += GameLanguage.Text("\n一部校正済み。", "\nPartially calibrated.");
+            return result;
+        }
+        public static string ProvenanceText(string label, ReadoutOrigin origin)
+        {
+            if (origin == null || origin.kind != "neuron_readout" || origin.configuredStimulusGroups == null)
+                return label + ": unknown";
+            string groups = origin.configuredStimulusGroups.Length == 0 ? GameLanguage.Text("なし", "none") : string.Join(",", origin.configuredStimulusGroups);
+            return label + " (body ID " + origin.bodyId + ")" + GameLanguage.Text(" 設定上の刺激group: ", " configured stimulus groups: ") + groups +
+                GameLanguage.Text(" / 現在Actionの刺激候補: ", " / current Action stimulus candidate: ") + origin.eligibleForDirectStimulation +
+                GameLanguage.Text("。この窓での刺激イベント発生は未確認。", ". Stimulation events in this window are unverified.");
         }
         void Draw(MeshGenerationContext context)
         {
@@ -143,13 +190,19 @@ namespace Flylingual.Conversation
 
         // JsonUtility otherwise converts JSON null numeric fields into 0. Preserve
         // only the known measurement fields as strings before parsing the DTO.
-        static readonly Regex Numeric = new Regex("(?<!\\\\)\"(L|R|ageMs|sequence|brainSequence|currentSequence|brainTimeOffsetMs|timeMs|forward|turn|horizontalSpeed|forwardSpeed|yawRateDegPerSec|rawForward|rawTurn|motorForward|motorTurn|requestedRequestId|appliedRequestId|currentMeanMv|previousMeanMv|deltaMeanMv|directionalDeltaMv)\"\\s*:\\s*(null|-?[0-9]+(?:\\.[0-9]+)?(?:[eE][+-]?[0-9]+)?)(?=\\s*[,}])", RegexOptions.CultureInvariant);
-        public static Observation Parse(string json) => JsonUtility.FromJson<Observation>(Numeric.Replace(json, m =>
-            "\"" + m.Groups[1].Value + "\":\"" + (m.Groups[2].Value == "null" ? "unknown" : m.Groups[2].Value) + "\""));
+        static readonly Regex Numeric = new Regex("(?<!\\\\)\"(L|R|ageMs|staleAfterMs|sequence|brainSequence|currentSequence|brainTimeOffsetMs|timeMs|forward|turn|horizontalSpeed|forwardSpeed|yawRateDegPerSec|rawForward|rawTurn|motorForward|motorTurn|requestedRequestId|appliedRequestId|currentMeanMv|previousMeanMv|deltaMeanMv|directionalDeltaMv)\"\\s*:\\s*(null|-?[0-9]+(?:\\.[0-9]+)?(?:[eE][+-]?[0-9]+)?)(?=\\s*[,}])", RegexOptions.CultureInvariant);
+        public static Observation Parse(string json)
+        {
+            var observation = JsonUtility.FromJson<Observation>(Numeric.Replace(json, m =>
+                "\"" + m.Groups[1].Value + "\":\"" + (m.Groups[2].Value == "null" ? "unknown" : m.Groups[2].Value) + "\""));
+            if (observation != null) observation.staleAfterMsPresent = Regex.IsMatch(json, "\"staleAfterMs\"\\s*:");
+            return observation;
+        }
         [Serializable] public sealed class Observation
         {
             public int schemaVersion, controlEpoch, conversationGeneration;
-            public bool fresh; public string ageMs, sequence, eventType, mode;
+            public bool fresh; public string ageMs, staleAfterMs, sequence, eventType, mode;
+            [NonSerialized] public bool staleAfterMsPresent;
             public Identity identity; public Current current; public Body body; public Comparison comparison;
             public Aggregation selectedVncAggregation; public ReadoutProvenance readoutProvenance; public Calibration calibration;
             public Point[] currentCurve, previousCurve;
@@ -161,14 +214,16 @@ namespace Flylingual.Conversation
         [Serializable] public sealed class Current
         { public string requestedAction, observedAction, requestedRequestId, appliedRequestId; public bool stimulusApplied; public Values raw, filteredRaw, motor; public Populations populationDeltaMv; }
         [Serializable] public sealed class Body
-        { public bool fresh, correlated; public string horizontalSpeed, forwardSpeed, yawRateDegPerSec, brainSequence, currentSequence, brainTimeOffsetMs; }
+        { public bool fresh, correlated; public string ageMs, horizontalSpeed, forwardSpeed, yawRateDegPerSec, brainSequence, currentSequence, brainTimeOffsetMs; }
         [Serializable] public sealed class Comparison { public bool eligible, changed; public string reason; public string[] changedAxes; public ComparisonAxes axes; }
         [Serializable] public sealed class ComparisonAxes { public AxisComparison forward, turn; }
         [Serializable] public sealed class AxisComparison { public bool eligible, changed; public string currentMeanMv, previousMeanMv, deltaMeanMv, directionalDeltaMv; }
         [Serializable] public sealed class Aggregation { public string version, method, unit; }
-        [Serializable] public sealed class Calibration { public bool valid; public string status, version, artifactSha256; }
+        [Serializable] public sealed class Calibration { public bool valid, artifactVerified, identityMatched; public string status, version, artifactSha256; public ClassificationReady classificationReady; }
+        [Serializable] public sealed class ClassificationReady { public bool responseForward, responseTurn, changeForward, changeTurn, stopResidual; }
         [Serializable] public sealed class ReadoutProvenance
-        { public string DNg100_L_Hz, DNg100_R_Hz, DNa02_L_Hz, DNa02_R_Hz, DNp09_L_Hz, DNp09_R_Hz; }
+        { public ReadoutOrigin DNg100_L_Hz, DNg100_R_Hz, DNa02_L_Hz, DNa02_R_Hz, DNp09_L_Hz, DNp09_R_Hz, DNp09_Hz, DNa02Difference_Hz, forward_raw, turn_raw; }
+        [Serializable] public sealed class ReadoutOrigin { public string kind; public long bodyId; public string[] configuredStimulusGroups, derivedFrom; public bool eligibleForDirectStimulation; }
         [Serializable] public sealed class Point { public string timeMs, rawForward, rawTurn, motorForward, motorTurn; }
     }
 }

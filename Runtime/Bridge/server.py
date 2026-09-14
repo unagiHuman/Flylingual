@@ -1809,7 +1809,14 @@ class Bridge:
             self.log('control_client_connected', compression=ws.compress)
             async def send():
                 while True:
-                    await asyncio.wait_for(ws.send_json(await queue.get()), timeout=2)
+                    event = await queue.get()
+                    if event.get('type') == 'neural_response':
+                        # Age durations belong to send time, not queue admission.
+                        current = self.neural_snapshot()
+                        if current is None:
+                            continue
+                        event = {'type': 'neural_response', **current}
+                    await asyncio.wait_for(ws.send_json(event), timeout=2)
             sender = self.task(send())
             self.emit(self.state())
             self.emit(options_message())

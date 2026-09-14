@@ -14,6 +14,48 @@ ACTIONS={'STOP':(), 'FORWARD':('F',), 'TURN_R':('R',), 'TURN_L':('L',),
          'FORWARD_R':('F','R'), 'FORWARD_L':('F','L')}
 
 
+def build_readout_provenance(inputs, readouts, action):
+    """Describe configured body IDs, never realized Bernoulli stimulus events.
+
+    Called only at initialization with the IDs resolved by the running controller.
+    Fixed output keys and bounded group labels keep per-frame metadata small.
+    """
+    neuron_keys=('DNa02_R_Hz','DNa02_L_Hz','DNg100_L_Hz','DNg100_R_Hz','DNp09_L_Hz','DNp09_R_Hz')
+    if action not in ACTIONS or not isinstance(inputs,dict) or not isinstance(readouts,dict):
+        return {}
+    if len(inputs)>16 or any(type(group) is not str or not 0<len(group)<=64 for group in inputs):
+        return {}
+    def body_id(value):
+        if type(value) is str and value.isascii() and value.isdecimal():
+            value=int(value)
+        return value if type(value) is int and 0<value<2**63 else None
+    groups={}
+    for group,values in inputs.items():
+        if not isinstance(values,(list,tuple)):
+            return {}
+        ids=[body_id(value) for value in values]
+        if any(value is None for value in ids):
+            return {}
+        groups[group]=set(ids)
+    result={}
+    for key in neuron_keys:
+        value=body_id(readouts.get(key))
+        if value is None:
+            continue
+        configured=sorted(group for group,ids in groups.items() if value in ids)
+        result[key]={'kind':'neuron_readout','bodyId':value,
+                     'configuredStimulusGroups':configured,
+                     'eligibleForDirectStimulation':any(group in ACTIONS[action] for group in configured)}
+    for key,dependencies in (('DNp09_Hz',('DNp09_L_Hz','DNp09_R_Hz')),
+                             ('DNa02Difference_Hz',('DNa02_R_Hz','DNa02_L_Hz'))):
+        if all(name in result for name in dependencies):
+            result[key]={'kind':'derived_metric','derivedFrom':list(dependencies)}
+    for axis in ('forward','turn'):
+        result[axis+'_raw']={'kind':'selected_vnc_aggregate',
+                            'derivedFrom':['populationDeltaMv.'+axis+'.R','populationDeltaMv.'+axis+'.L']}
+    return result
+
+
 class MaleCNSAnalogController:
     def __init__(self,graph,config,seed=20261101,window_ms=100,visualization_atlas=None):
         self.graph=Path(graph); self.config=json.loads(Path(config).read_text()) if isinstance(config,(str,Path)) else config
@@ -38,6 +80,12 @@ class MaleCNSAnalogController:
             return ix
         self.inputs={g:indices(v) for g,v in self.config['inputs'].items()}
         self.dns={k:indices([v])[0] for k,v in self.config['readouts'].items()}
+        # Snapshot actual resolved IDs, so later config mutation cannot relabel the
+        # initialized stimulation/readout mappings. No neural state is inspected.
+        provenance_inputs={group:self.ids[ix].tolist() for group,ix in self.inputs.items()}
+        provenance_readouts={key:int(self.ids[ix]) for key,ix in self.dns.items()}
+        self.readout_provenance={action:build_readout_provenance(provenance_inputs,provenance_readouts,action)
+                                 for action in ACTIONS}
         full={axis:{s:{typ:indices(values) for typ,values in g.items()} for s,g in p.items()} for axis,p in self.config['populations'].items()}
         self.observed=np.unique(np.concatenate([ix for p in full.values() for g in p.values() for ix in g.values()]))
         pos={int(i):j for j,i in enumerate(self.observed)}
@@ -92,6 +140,8 @@ class MaleCNSAnalogController:
             'performance':{'windowMs':self.window_ms,'stepWallTimeMs':(time.perf_counter()-t)*1000},
             'diagnostics':{'networkRebuildCount':self.network_rebuild_count,'stateResetCount':self.state_reset_count},
             'metadata':{'backendId':'MALECNS_EXPERIMENTAL','datasetId':'male-cns:v1.0',
+                        'readoutProvenance':copy.deepcopy(self.readout_provenance[self.action]),
+                        'selectedVncAggregation':{'version':'v1','method':'cell_type_equal_weight_mean_delta_v','unit':'mV'},
                         'model':'MaleCNS + Shiu-compatible LIF','motor_readout':'VNC_ANALOG_POPULATION',
                         'mode':'LIVE','ready':False,'calibrationApplied':self.decoder is not None}}
         if self.visualization is not None:

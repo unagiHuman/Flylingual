@@ -75,12 +75,15 @@ class NeuralResponseAnalyzer:
         self._last_action = None
         self._mode = None
         self._body_stability = None
+        self._provenance = {}
+        self._aggregation = None
 
     @property
     def buffered_frames(self):
         return len(self._ring)
 
     def _unavailable(self, reason, epoch, generation, sequence=None):
+        self._provenance, self._aggregation = {}, None
         self._serial += 1
         self._event = {'schemaVersion': 1, 'eventId': 'neural-%d' % self._serial,
                        'eventType': 'OBSERVATION_UNAVAILABLE', 'controlEpoch': epoch,
@@ -203,6 +206,7 @@ class NeuralResponseAnalyzer:
         while self._ring and end - self._ring[0]['brainStartMs'] > 10000:
             self._ring.popleft()
         self._last_action = action
+        self._accept_readout_metadata(metadata)
         valid_raw = all(value is not None for value in sample['raw'].values())
         if self._episode:
             self._episode['presentMs'] = (self._episode['presentMs'] + window
@@ -279,7 +283,7 @@ class NeuralResponseAnalyzer:
                 ('turn',) if action in ('TURN_R', 'TURN_L') else ())
 
     def _threshold(self, key, axis):
-        return self.thresholds[key][axis] if self.calibration.matches(self._identity or {}) else None
+        return self.calibration.threshold(key, axis, self._identity or {})
 
     def _present(self, values, key, action):
         axes = self._axes(action)
@@ -299,11 +303,36 @@ class NeuralResponseAnalyzer:
         return 'both' if raw and decoder else 'selected_neural_readout' if raw else 'decoder' if decoder else 'unresolved'
 
     def _readout_metadata(self):
-        known = (self._identity or {}).get('backendId') == 'MALECNS_EXPERIMENTAL' and (self._identity or {}).get('datasetId') == 'male-cns:v1.0'
-        return {'selectedVncAggregation': {'version': 'v1', 'method': 'cell_type_equal_weight_mean_delta_v', 'unit': 'mV'} if known else None,
-                'readoutProvenance': {key: 'stimulated_input_neuron' if key.startswith('DNg100_') else 'non_stimulated_selected_readout'
-                                      for key in RATE_KEYS} if known else {},
+        return {'selectedVncAggregation': deepcopy(self._aggregation),
+                'readoutProvenance': deepcopy(self._provenance), 'staleAfterMs': self.stale_ms,
                 'calibration': self.calibration.summary(self._identity or {})}
+
+    def _accept_readout_metadata(self, metadata):
+        """Copy only bounded, explicit producer metadata; names confer no authority."""
+        self._provenance, self._aggregation = {}, None
+        aggregation = mapping(metadata.get('selectedVncAggregation'))
+        if all(text(aggregation.get(key)) for key in ('version', 'method', 'unit')):
+            self._aggregation = {key: aggregation[key] for key in ('version', 'method', 'unit')}
+        source = mapping(metadata.get('readoutProvenance'))
+        for key in (*RATE_KEYS, 'forward_raw', 'turn_raw'):
+            entry = mapping(source.get(key))
+            kind = entry.get('kind')
+            if kind == 'neuron_readout' and key in RATE_KEYS[:6]:
+                groups = entry.get('configuredStimulusGroups')
+                body_id = entry.get('bodyId')
+                eligible = entry.get('eligibleForDirectStimulation')
+                if (not integer(body_id) or body_id == 0 or type(eligible) is not bool
+                        or type(groups) is not list or len(groups) > 16
+                        or any(type(group) is not str or not 0 < len(group) <= 64 for group in groups)):
+                    continue
+                self._provenance[key] = {'kind': kind, 'bodyId': body_id,
+                    'configuredStimulusGroups': list(groups), 'eligibleForDirectStimulation': eligible}
+            elif ((kind == 'derived_metric' and key in RATE_KEYS[6:]) or
+                  (kind == 'selected_vnc_aggregate' and key in ('forward_raw', 'turn_raw'))):
+                dependencies = entry.get('derivedFrom')
+                if (type(dependencies) is list and 0 < len(dependencies) <= 8
+                        and all(text(value) for value in dependencies)):
+                    self._provenance[key] = {'kind': kind, 'derivedFrom': list(dependencies)}
 
     def _comparison(self):
         episode = self._episode

@@ -26,17 +26,96 @@ namespace Flylingual.Conversation.EditorTests
         {
             var value = NeuralResponsePanel.Parse(@"{
                 ""selectedVncAggregation"":{""version"":""v1"",""method"":""cell_type_equal_weight_mean_delta_v"",""unit"":""mV""},
-                ""readoutProvenance"":{""DNg100_L_Hz"":""stimulated_input_neuron"",""DNg100_R_Hz"":""stimulated_input_neuron"",
-                    ""DNa02_L_Hz"":""non_stimulated_selected_readout"",""DNp09_R_Hz"":""non_stimulated_selected_readout""},
-                ""calibration"":{""valid"":false,""status"":""artifact_missing""}}");
+                ""readoutProvenance"":{
+                    ""DNg100_L_Hz"":{""kind"":""neuron_readout"",""bodyId"":10045,""configuredStimulusGroups"":[""F""],""eligibleForDirectStimulation"":true},
+                    ""DNg100_R_Hz"":{""kind"":""neuron_readout"",""bodyId"":10056,""configuredStimulusGroups"":[],""eligibleForDirectStimulation"":false},
+                    ""DNp09_Hz"":{""kind"":""derived_metric"",""derivedFrom"":[""DNp09_L_Hz"",""DNp09_R_Hz""]},
+                    ""DNa02Difference_Hz"":{""kind"":""derived_metric"",""derivedFrom"":[""DNa02_R_Hz"",""DNa02_L_Hz""]},
+                    ""forward_raw"":{""kind"":""selected_vnc_aggregate"",""derivedFrom"":[""populationDeltaMv.forward""]}},
+                ""calibration"":{""valid"":true,""artifactVerified"":true,""identityMatched"":true,""classificationReady"":{""changeTurn"":true}}}");
             Assert.That(value.selectedVncAggregation.method, Is.EqualTo("cell_type_equal_weight_mean_delta_v"));
-            Assert.That(value.readoutProvenance.DNg100_L_Hz, Is.EqualTo("stimulated_input_neuron"));
-            Assert.That(value.readoutProvenance.DNg100_R_Hz, Is.EqualTo("stimulated_input_neuron"));
-            Assert.That(value.readoutProvenance.DNa02_L_Hz, Is.EqualTo("non_stimulated_selected_readout"));
-            Assert.That(value.readoutProvenance.DNp09_R_Hz, Is.EqualTo("non_stimulated_selected_readout"));
-            Assert.That(value.calibration.valid, Is.False);
+            Assert.That(value.readoutProvenance.DNg100_L_Hz.bodyId, Is.EqualTo(10045));
+            Assert.That(value.readoutProvenance.DNg100_L_Hz.configuredStimulusGroups, Is.EqualTo(new[] { "F" }));
+            Assert.That(value.readoutProvenance.DNg100_R_Hz.eligibleForDirectStimulation, Is.False);
+            Assert.That(value.readoutProvenance.DNp09_Hz.kind, Is.EqualTo("derived_metric"));
+            Assert.That(value.readoutProvenance.DNa02Difference_Hz.derivedFrom.Length, Is.EqualTo(2));
+            Assert.That(value.readoutProvenance.forward_raw.kind, Is.EqualTo("selected_vnc_aggregate"));
+            Assert.That(value.calibration.classificationReady.changeTurn, Is.True);
+            Assert.That(value.calibration.classificationReady.changeForward, Is.False);
+            Assert.That(NeuralResponsePanel.ProvenanceText("DNg100 R", null), Is.EqualTo("DNg100 R: unknown"));
         }
 
+        [TestCase(50, true)]
+        [TestCase(100, true)]
+        [TestCase(150, false)]
+        public void FreshnessUsesBridge400MillisecondContract(double elapsed, bool expected)
+        {
+            var value = NeuralResponsePanel.Parse(@"{""fresh"":true,""ageMs"":300,""staleAfterMs"":400}");
+            Assert.That(NeuralResponsePanel.IsFresh(value, elapsed), Is.EqualTo(expected));
+            value.fresh = false;
+            Assert.That(NeuralResponsePanel.IsFresh(value, 0), Is.False);
+        }
+
+        [TestCase("null")]
+        [TestCase("0")]
+        [TestCase("-1")]
+        [TestCase("751")]
+        [TestCase("\"invalid\"")]
+        [TestCase("\"NaN\"")]
+        public void ExplicitInvalidFreshnessDoesNotUseLegacyFallback(string limit)
+        {
+            var value = NeuralResponsePanel.Parse("{\"fresh\":true,\"ageMs\":0,\"staleAfterMs\":" + limit + "}");
+            Assert.That(value.staleAfterMsPresent, Is.True);
+            Assert.That(NeuralResponsePanel.IsFresh(value, 0), Is.False);
+        }
+
+        [Test]
+        public void FreshEventCannotExtendOlderBodyObservation()
+        {
+            var value = NeuralResponsePanel.Parse(@"{""fresh"":true,""ageMs"":0,""staleAfterMs"":400,
+                ""body"":{""fresh"":true,""correlated"":true,""ageMs"":390}}");
+            Assert.That(NeuralResponsePanel.IsBodyFresh(value, 10), Is.True);
+            Assert.That(NeuralResponsePanel.IsFresh(value, 20), Is.True);
+            Assert.That(NeuralResponsePanel.IsBodyFresh(value, 20), Is.False);
+            value.body.correlated = false;
+            Assert.That(NeuralResponsePanel.IsBodyFresh(value, 0), Is.False);
+        }
+
+        [Test]
+        public void OnlyMissingLimitUsesLegacy750AndInvalidAgesFailClosed()
+        {
+            var value = NeuralResponsePanel.Parse(@"{""fresh"":true,""ageMs"":300}");
+            Assert.That(value.staleAfterMsPresent, Is.False);
+            Assert.That(NeuralResponsePanel.IsFresh(value, 450), Is.True);
+            Assert.That(NeuralResponsePanel.IsFresh(value, 451), Is.False);
+            Assert.That(NeuralResponsePanel.IsFresh(value, -1), Is.False);
+            Assert.That(NeuralResponsePanel.IsFresh(value, double.NaN), Is.False);
+            value.ageMs = "-1";
+            Assert.That(NeuralResponsePanel.IsFresh(value, 0), Is.False);
+        }
+
+        [Test]
+        public void ArtifactVerifiedDoesNotImplyClassificationReady()
+        {
+            var calibration = new NeuralResponsePanel.Calibration { valid = true, artifactVerified = true, identityMatched = true };
+            string text = NeuralResponsePanel.CalibrationText(calibration);
+            Assert.That(text, Does.Not.Contain("Response F: ready"));
+            Assert.That(text, Does.Not.Contain("Response F: 判定可能"));
+            var comparison = new NeuralResponsePanel.Comparison { eligible = true, axes = new NeuralResponsePanel.ComparisonAxes {
+                forward = new NeuralResponsePanel.AxisComparison { eligible = true, changed = true, deltaMeanMv = "-0.2" },
+                turn = new NeuralResponsePanel.AxisComparison { eligible = true, changed = true, deltaMeanMv = "0.1" } } };
+            text = NeuralResponsePanel.ComparisonText(comparison, calibration);
+            Assert.That(text, Does.Not.Contain("above calibrated threshold"));
+            Assert.That(text, Does.Not.Contain("校正閾値超"));
+            calibration.classificationReady = new NeuralResponsePanel.ClassificationReady { changeTurn = true };
+            text = NeuralResponsePanel.ComparisonText(comparison, calibration);
+            string[] lines = text.Split('\n');
+            Assert.That(lines[1], Does.Not.Contain("above calibrated threshold").And.Not.Contain("校正閾値超"));
+            Assert.That(lines[2].Contains("above calibrated threshold") || lines[2].Contains("校正閾値超"), Is.True);
+            calibration.identityMatched = false;
+            text = NeuralResponsePanel.ComparisonText(comparison, calibration);
+            Assert.That(text, Does.Not.Contain("above calibrated threshold").And.Not.Contain("校正閾値超"));
+        }
         [Test]
         public void BothRelevantAxisDeltasAreVisibleWithoutCalibration()
         {
