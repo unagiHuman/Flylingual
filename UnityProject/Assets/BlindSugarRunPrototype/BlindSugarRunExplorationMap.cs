@@ -10,6 +10,14 @@ namespace Flylingual.BlindSugarRun
         public float height;
     }
 
+    public struct BlindSugarRunCurrentSample
+    {
+        public bool ground;
+        public float height;
+        public Collider hitCollider;
+        public Vector3 point, normal;
+    }
+
     /// <summary>Remembers only local, visible physics samples. No whole-scene map or Brain output.</summary>
     [DefaultExecutionOrder(400)]
     [DisallowMultipleComponent]
@@ -19,15 +27,24 @@ namespace Flylingual.BlindSugarRun
         public BlindSugarRunSession stage;
         public BlindSugarRunLocalVisibility visibility;
         static readonly Dictionary<Vector2Int, MapCell> memory = new Dictionary<Vector2Int, MapCell>();
+        readonly Dictionary<Vector2Int, BlindSugarRunCurrentSample> currentSamples = new Dictionary<Vector2Int, BlindSugarRunCurrentSample>();
         static string memoryScene;
         readonly RaycastHit[] hits = new RaycastHit[32];
         readonly Collider[] overlaps = new Collider[16];
         FlyTerrainSensor sensor;
         float nextSample;
         public IReadOnlyDictionary<Vector2Int, MapCell> Cells => memory;
+        public IReadOnlyDictionary<Vector2Int, BlindSugarRunCurrentSample> CurrentSamples => currentSamples;
         public Vector3 PlayerPosition => stage?.fly == null ? Vector3.zero : stage.fly.Position;
         public Vector3 PlayerForward => stage?.fly == null ? Vector3.forward : stage.fly.transform.forward;
         public bool MappingActive { get; private set; }
+        // This is captured before this tick writes the current cell.  Consumers can
+        // distinguish returning to remembered space from merely standing on a cell
+        // that this tick just added.
+        public bool PlayerCellKnownBeforeSample { get; private set; }
+        public bool PlayerCellVisitedBeforeSample { get; private set; }
+        public float SampledAt { get; private set; } = -1f;
+        public long Sequence { get; private set; }
         public int Revision { get; private set; }
         public int LastLocalQueries { get; private set; }
 
@@ -42,21 +59,30 @@ namespace Flylingual.BlindSugarRun
             if (memoryScene != gameObject.scene.path) { memory.Clear(); memoryScene = gameObject.scene.path; }
             var view = GetComponent<BlindSugarRunMinimapView>() ?? gameObject.AddComponent<BlindSugarRunMinimapView>();
             view.Configure(this, visibility == null ? null : visibility.stageCamera);
+            var localVision = GetComponent<BlindSugarRunLocalVision>() ?? gameObject.AddComponent<BlindSugarRunLocalVision>();
+            localVision.Configure(this);
         }
 
         void Update()
         {
+            if (stage?.fly == null || stage.State != BlindSugarRunSession.StageState.Playing)
+            { MappingActive = false; currentSamples.Clear(); return; }
             if (Time.unscaledTime < nextSample) return;
             nextSample = Time.unscaledTime + .2f;
-            MappingActive = false;
-            if (stage?.fly == null || stage.State != BlindSugarRunSession.StageState.Playing) return;
+            MappingActive = false; currentSamples.Clear();
+            PlayerCellKnownBeforeSample = PlayerCellVisitedBeforeSample = false;
             if (sensor == null) sensor = stage.fly.GetComponent<FlyTerrainSensor>();
             var observation = sensor?.Observation;
             if (sensor == null || !sensor.Fresh || observation == null || observation.queryOverflow ||
                 !observation.groundPresent || observation.bodyUnsafe || Vector3.Dot(sensor.Up, Vector3.up) < .99f) return;
             MappingActive = true;
-            ObserveLocal(PlayerPosition, observation.ground.point.y, visibility == null ? 3f : visibility.visibleRadius,
+            var playerCell = CellAt(PlayerPosition);
+            PlayerCellKnownBeforeSample = memory.TryGetValue(playerCell, out var playerMemory);
+            PlayerCellVisitedBeforeSample = PlayerCellKnownBeforeSample && playerMemory.visited;
+            ObserveLocal(PlayerPosition, observation.ground.point.y, Mathf.Min(3f, visibility == null ? 3f : visibility.visibleRadius),
                 Mathf.Max(.5f, sensor.MaximumDrop));
+            SampledAt = Time.unscaledTime;
+            Sequence++;
         }
 
         void ObserveLocal(Vector3 position, float groundHeight, float radius, float maximumDrop)
@@ -82,6 +108,11 @@ namespace Flylingual.BlindSugarRun
                 if (blocked || overflow) continue; // Do not discover terrain behind an occluding object.
                 // Vertical faces and steep walls are not evidence of empty space beyond an edge.
                 if (found && Vector3.Angle(floor.normal, Vector3.up) > 45f) continue;
+                currentSamples[key] = new BlindSugarRunCurrentSample {
+                    ground = found, height = found ? floor.point.y : groundHeight - maximumDrop,
+                    hitCollider = found ? floor.collider : null,
+                    point = found ? floor.point : center, normal = found ? floor.normal : Vector3.up
+                };
                 memory.TryGetValue(key, out var previous);
                 var cell = new MapCell { ground = found, height = found ? floor.point.y : groundHeight - maximumDrop,
                     visited = previous.visited || (found && key == playerCell) };

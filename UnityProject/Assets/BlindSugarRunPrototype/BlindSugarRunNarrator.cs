@@ -36,7 +36,12 @@ namespace Flylingual.BlindSugarRun
         public long SentCues { get; private set; }
         public string LastCue { get; private set; }
 
-        void Awake() { stage = GetComponent<BlindSugarRunSession>(); }
+        void Awake()
+        {
+            stage = GetComponent<BlindSugarRunSession>();
+            if (GetComponent<BlindSugarRunVisionPublisher>() == null)
+                gameObject.AddComponent<BlindSugarRunVisionPublisher>();
+        }
 
         void Update()
         {
@@ -86,8 +91,8 @@ namespace Flylingual.BlindSugarRun
             {
                 float age = Mathf.Max(0, (Time.unscaledTime - o.sampledAt) * 1000f);
                 // Urgent local hazards take priority over tutorial and normal observations.
-                if (o.rightEdge == "very_near") { Observe("right_edge_urgent", "{\"rightEdge\":\"very_near\"}", age, true); return; }
-                if (o.leftEdge == "very_near") { Observe("left_edge_urgent", "{\"leftEdge\":\"very_near\"}", age, true); return; }
+                if (!conversation.LocalVisualAvailable && o.rightEdge == "very_near") { Observe("right_edge_urgent", "{\"rightEdge\":\"very_near\"}", age, true); return; }
+                if (!conversation.LocalVisualAvailable && o.leftEdge == "very_near") { Observe("left_edge_urgent", "{\"leftEdge\":\"very_near\"}", age, true); return; }
                 if (Once("vision", "{\"externalVisionAvailable\":true}", age)) return;
             }
             if (once.Contains("vision") && Once("ask", "{\"tutorialPrompt\":true}")) return;
@@ -96,6 +101,9 @@ namespace Flylingual.BlindSugarRun
             string action = conversation.LastAppliedAction;
             if (action == "FORWARD" && Once("turn_lesson", "{\"tutorialPrompt\":true}")) return;
             if ((action == "TURN_L" || action == "TURN_R") && Once("stop_lesson", "{\"tutorialPrompt\":true}")) return;
+            // The shared minimap/vision samples own spatial descriptions on capable Bridges.
+            // A stale visual snapshot stays unknown instead of falling back to the larger locomotion sensor.
+            if (conversation.LocalVisualAvailable) return;
             if (!fresh) { stableSince = -1f; return; }
             float observedAge = Mathf.Max(0, (Time.unscaledTime - o.sampledAt) * 1000f);
             if (o.rightEdge == "near" && Observe("right_edge", "{\"rightEdge\":\"near\"}", observedAge)) return;

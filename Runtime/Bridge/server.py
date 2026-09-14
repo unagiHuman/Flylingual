@@ -19,6 +19,7 @@ from .brain_adapter import BrainAdapter, BrainAdapterError
 from .action_plans import (BoundedPlanRunner, LocalSafetyObservation, PLAN_REPLY, PLAN_STEPS,
                            DISTANCE_ACTIONS, valid_distance, validate_intent)
 from .blind_run_script import BlindRunScript
+from .local_visual_observation import LocalVisualObservation
 from .config import load_config
 from .control import ControlArbiter, ControlError
 from .conversation import ConversationAdapter, ConversationError
@@ -51,6 +52,21 @@ VOICE_TEST_FIELDS = frozenset({
 })
 
 
+def command_error_message(exc, event, current_epoch):
+    """Bounded correlation for stale requests; never echo command payloads."""
+    code = str(exc) if isinstance(exc, (ControlError, ConversationError, BrainAdapterError)) else 'invalid_message'
+    result = {'type': 'error', 'error': code}
+    if code == 'old_epoch' and isinstance(event, dict):
+        kind, submitted = event.get('type'), event.get('controlEpoch')
+        if (kind in ('local_safety_observation', 'local_visual_observation', 'blind_run_cue', 'resume', 'conversation_start',
+                     'set_action', 'player_text', 'configure_conversation')
+                and type(submitted) is int and type(current_epoch) is int
+                and 0 <= submitted <= 2**31 - 1 and 0 <= current_epoch <= 2**31 - 1):
+            result.update(requestType=kind, submittedEpoch=submitted, currentEpoch=current_epoch,
+                          hasEpochContext=True)
+    return result
+
+
 class Bridge:
     def __init__(self, config):
         self.config = config
@@ -62,6 +78,8 @@ class Bridge:
                                                 self.voice_utterance, self.transcript_utterance)
         self.blind_script = BlindRunScript()
         self.local_observation = LocalSafetyObservation()
+        self.local_visual = LocalVisualObservation()
+        self.local_visual_commentary_count = 0
         self.edge_warning_scope = None
         self.edge_warning_sent = False
         self.plans = BoundedPlanRunner(self)
@@ -149,6 +167,7 @@ class Bridge:
                 active['distancePhase'] = execution['distancePhase']
                 active['stopApplied'] = bool(self.requests.get(execution.get('stopRequestId'), {}).get('applied'))
         return {**self.summary(), 'localSafety': self.local_observation.summary(),
+                'localVisual': self.local_visual.summary(),
                 'activeCommand': active}
 
     def current_execution(self):
@@ -327,7 +346,7 @@ class Bridge:
                 'target': {'host': self.target['host'], 'port': self.target['port']},
                 'brainConnected': bool(self.adapter and self.adapter.connected), 'brainReady': False,
                 'conversationState': self.conversation.state, 'conversationMode': self.conversation.mode,
-                'capabilities': ['conversation_only_v1', 'native_voice_actions_v1', 'blind_run_script_v1', 'bounded_action_plans_v1', 'persistent_intents_v1', 'distance_intents_v1'],
+                'capabilities': ['conversation_only_v1', 'native_voice_actions_v1', 'blind_run_script_v1', 'local_visual_observation_v1', 'bounded_action_plans_v1', 'persistent_intents_v1', 'distance_intents_v1'],
                 'activeExecution': self.execution_state(),
                 'actionPlan': ({k: self.plans.active[k] for k in ('planId', 'name', 'step', 'requestId')}
                                if self.plans.active else None),
@@ -376,6 +395,7 @@ class Bridge:
         self.last_execution_context = None
         self.plans.cancel()
         self.local_observation.clear()
+        self.local_visual.clear()
         self.blind_script.last_fact = None
         self.intent_revision += 1
         for task in tuple(self.intent_tasks):
@@ -625,6 +645,9 @@ class Bridge:
                         'Conversation only. No action was executed. Current Brain observations are unavailable. '
                         'Continue the conversation; explain that body control is disabled if requested.', delegation_id)
                 return
+            if self.is_local_visual_question(text):
+                await self.answer_local_visual_question(text, delegation_id)
+                return
             command_id = 'voice-' + str(uuid.uuid4())
             try:
                 self.start_intent(text, command_id, self.arbiter.epoch, delegation_id)
@@ -649,6 +672,10 @@ class Bridge:
         context = self.intent_context()
         context['transcriptCandidate'] = True
         context['utteranceFinalized'] = candidate.get('finalized', False)
+        if candidate.get('finalized') is True and self.is_local_visual_question(text):
+            if self.conversation.claim_transcript(candidate):
+                await self.answer_local_visual_question(text, candidate.get('delegationId'))
+            return
         try:
             self.log('intent_classification_started', inputId=candidate['inputId'],
                      utteranceFinalized=context['utteranceFinalized'])
@@ -689,7 +716,7 @@ class Bridge:
             self.log('transcript_candidate_result', inputId=candidate['inputId'],
                      outcome='rejected', reason='classification_timeout' if isinstance(exc, (asyncio.TimeoutError, TimeoutError)) else str(exc))
 
-    def non_action_reply_context(self, text, kind):
+    def non_action_reply_context(self, text, kind, visual_direction=None):
         # Live already has the utterance. Keep a complete observation payload
         # inside ConversationAdapter.append's 380-character transport limit.
         context = self.intent_context()
@@ -703,17 +730,67 @@ class Bridge:
                    'neuralStale': context.get('stale', True),
                    'neural': context.get('interpretation') if not context.get('stale', True) else None,
                    'scene': self.blind_script.current_fact()}
+        visual = context.get('localVisual', {})
+        description = self.local_visual.describe(visual_direction or 'all', self.conversation.settings['language'])
+        if kind == 'local_visual_question':
+            label = visual_direction or 'all'
+            return ('プレイヤーの質問「' + str(text)[:48] + '」へ、観測された局所事実だけで回答する。ハエ基準の「' + label + '」方向。未確認は不明と述べ、安全を保証しない。'
+                    + ' 観測: ' + description)[:379]
+        payload['localVisualDescription'] = description if len(description) <= 180 else description.split('。')[0] + '。'
         instruction = ('最新の発言へ自然に回答。雑談は操作要求にしない。不明な操作だけ確認。'
                        '状態の質問には以下の観測を使い、一般質問にはその話題で答える。'
                        'brainAppliedは身体の動作成功ではない。')
         def encode():
             return instruction + json.dumps(payload, ensure_ascii=False, separators=(',', ':'))
         # Omit whole optional fields rather than truncate JSON or factual text.
-        for key in ('scene', 'neural', 'facts'):
+        for key in ('scene', 'neural', 'facts', 'neuralStale', 'brainApplied', 'localFresh', 'active'):
             if len(encode()) <= 380:
                 break
             payload.pop(key, None)
         return encode()
+
+    @staticmethod
+    def local_visual_question_direction(text):
+        if not isinstance(text, str):
+            return None
+        normalized = ''.join(text.strip().lower().split())
+        normalized = normalized.rstrip('。.!！?？')
+        exact = {
+            '周りは': 'all', '周りには': 'all', '周りには何が見える': 'all', '何が見える': 'all',
+            '右はどう': 'right', '右は危ない': 'right', '右に何がある': 'right',
+            '左はどう': 'left', '左は危ない': 'left', '左に何がある': 'left',
+            '前はどう': 'front', '前は危ない': 'front', '前に何がある': 'front',
+            '後ろはどう': 'back', '後ろは危ない': 'back', '後ろに何がある': 'back',
+            '前右はどう': 'front-right', '前左はどう': 'front-left',
+            '後右はどう': 'back-right', '後左はどう': 'back-left',
+            '右斜めはどう': 'front-right', '左斜めはどう': 'front-left',
+            '右斜めに何がある': 'front-right', '左斜めに何がある': 'front-left',
+            '右斜めは危ない': 'front-right', '左斜めは危ない': 'front-left',
+            'whatisaround': 'all', 'whatcanyousee': 'all', 'whatisahead': 'front',
+            'istherightsidedangerous': 'right', 'whatisontheright': 'right',
+            'istheleftsidedangerous': 'left', 'whatisontheleft': 'left'}
+        return exact.get(normalized)
+
+    @classmethod
+    def is_local_visual_question(cls, text):
+        return cls.local_visual_question_direction(text) is not None
+
+    async def answer_local_visual_question(self, text, delegation_id=None):
+        if not self.conversation_accepting or self.conversation.state != 'live':
+            return
+        direction = self.local_visual_question_direction(text) or 'all'
+        context = self.non_action_reply_context(text, 'local_visual_question', direction)
+        epoch = self.arbiter.epoch
+        generation = self.conversation_generation
+        context_generation = self.conversation.context_generation
+        self.local_visual.last_spoken_at = time.monotonic()  # Give the requested answer room before ambient speech.
+        await self.conversation.append('commentary', context, delegation_id)
+        if (epoch != self.arbiter.epoch or generation != self.conversation_generation
+                or context_generation != self.conversation.context_generation):
+            return
+        self.emit({'type': 'local_visual_reply', 'sequence': self.local_visual.sequence,
+                   'fresh': self.local_visual.summary()['fresh'], 'direction': direction,
+                   'conversationGeneration': self.conversation_generation})
 
     def start_intent(self, text, command_id, epoch, delegation_id=None, *, prepared=None):
         if self.conversation_interaction == 'chat_only':
@@ -958,6 +1035,39 @@ class Bridge:
             await self.inhibit(concern)
         await self.warn_local_edge()
 
+    async def accept_local_visual_observation(self, event):
+        if (self.control_ws is None or self.conversation_interaction != 'control'
+                or not self.conversation_accepting or self.conversation.state != 'live'):
+            raise ControlError('local_visual_observation_control_required')
+        if type(event.get('controlEpoch')) is not int or event['controlEpoch'] != self.arbiter.epoch:
+            raise ControlError('old_epoch')
+        if (type(event.get('conversationGeneration')) is not int
+                or event['conversationGeneration'] != self.conversation_generation):
+            raise ControlError('old_conversation_generation')
+        previous = self.local_visual.summary()
+        try:
+            self.local_visual.accept(event)
+        except (ControlError, TypeError, KeyError):
+            self.local_visual.sample = None  # Withdraw invalid facts without rewinding the sequence watermark.
+            raise ControlError('invalid_local_visual_observation') from None
+        current = self.local_visual.summary()
+        announcement = self.local_visual.announcement()
+        self.emit({'type': 'local_visual_observation_result', 'sequence': self.local_visual.sequence,
+                   'fresh': True, 'conversationGeneration': self.conversation_generation})
+        if not previous['fresh'] or previous.get('facts') != current.get('facts'):
+            self.log('local_visual_observation_received', sequence=self.local_visual.sequence,
+                     reason=announcement['kind'] if announcement else 'clear')
+        # Descriptive only; existing local safety warning remains authoritative.
+        if announcement:
+            self.local_visual_commentary_count += 1
+            self.emit({'type': 'local_visual_commentary', 'sequence': self.local_visual.sequence,
+                       'reason': announcement['kind'], 'count': self.local_visual_commentary_count,
+                       'conversationGeneration': self.conversation_generation})
+            facts = announcement['facts'].get('text', '')[:240]
+            await self.conversation.append('commentary',
+                '最新の局所センサーで確認した事実を' + ('一言だけ' if announcement['kind'] == 'hazard' else '短く') +
+                '説明する。推測や進路指示を足さない。' + facts)
+
     async def warn_local_edge(self):
         scope = (self.arbiter.epoch, self.conversation_generation,
                  self.conversation.context_generation)
@@ -969,6 +1079,10 @@ class Bridge:
             return
         observation = self.local_observation.summary()
         if not observation['fresh']:
+            return
+        visual = self.local_visual.summary()
+        if visual['fresh']:
+            # The richer local visual producer owns speech; safety admission remains above.
             return
         facts = observation['facts']
         edges = (facts.get('leftEdge'), facts.get('rightEdge'))
@@ -1029,6 +1143,8 @@ class Bridge:
             await self.blind_run_cue(event)
         elif kind == 'local_safety_observation':
             await self.accept_local_observation(event)
+        elif kind == 'local_visual_observation':
+            await self.accept_local_visual_observation(event)
         elif kind == 'emergency_stop':
             await self.inhibit('emergency_stop')
         elif kind == 'set_owner':
@@ -1064,6 +1180,15 @@ class Bridge:
             await self.submit(event['action'], 'manual_ui', event['commandId'])
         elif kind == 'player_text':
             self.emit({'type': 'conversation_text', 'role': 'user', 'text': str(event.get('text', ''))[:2000], 'append': False})
+            if self.is_local_visual_question(event.get('text')):
+                if self.conversation_interaction == 'chat_only':
+                    self.start_intent(event.get('text'), event.get('commandId'), event.get('controlEpoch'))
+                if (not self.conversation_accepting or self.control_ws is None
+                        or type(event.get('controlEpoch')) is not int
+                        or event['controlEpoch'] != self.arbiter.epoch):
+                    raise ControlError('old_epoch')
+                await self.answer_local_visual_question(event.get('text'))
+                return
             self.start_intent(event.get('text'), event.get('commandId'), event.get('controlEpoch'))
         elif kind == 'switch_target':
             if self.switching:
@@ -1100,6 +1225,7 @@ class Bridge:
             self.blind_script.reset()
             self.conversation_generation += 1
             self.local_observation.clear()
+            self.local_visual.clear()
             self.conversation_accepting = True
             self.emit(self.state())
             self.conversation_operation = self.task(self.conversation.start())
@@ -1142,6 +1268,7 @@ class Bridge:
         self.plans.cancel()
         self.clear_execution('conversation_stopped')
         self.local_observation.clear()
+        self.local_visual.clear()
         if had_plan or had_execution:
             self.task(self.inhibit('plan_conversation_stopped'))
         self.blind_script.reset()
@@ -1455,10 +1582,12 @@ class Bridge:
                 self.emit(self.frame)
             async for message in ws:
                 if message.type == WSMsgType.TEXT:
+                    event = None
                     try:
-                        await self.command(json.loads(message.data))
+                        event = json.loads(message.data)
+                        await self.command(event)
                     except (ValueError, TypeError, KeyError, BrainAdapterError, ConversationError) as exc:
-                        self.emit({'type': 'error', 'error': str(exc) if isinstance(exc, (ControlError, ConversationError, BrainAdapterError)) else 'invalid_message'})
+                        self.emit(command_error_message(exc, event, self.arbiter.epoch))
                 elif message.type in (WSMsgType.ERROR, WSMsgType.CLOSE):
                     if message.type == WSMsgType.ERROR:
                         error = message.data

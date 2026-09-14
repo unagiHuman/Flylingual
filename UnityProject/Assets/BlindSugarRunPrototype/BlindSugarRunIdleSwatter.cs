@@ -35,6 +35,7 @@ namespace Flylingual.BlindSugarRun
         UIDocument warningDocument;
         PanelSettings warningPanel;
         Label warningLabel;
+        bool presentationInitialized;
 
         void Awake() { stage = GetComponent<BlindSugarRunSession>(); }
 
@@ -83,11 +84,14 @@ namespace Flylingual.BlindSugarRun
                 if (audioSource != null) audioSource.PlayOneShot(warningClip, .5f);
                 Debug.Log("BLIND_SUGAR_SWATTER_WARNING idleSeconds=" + IdleElapsed + " position=" + position);
             }
-            if (presentation != null)
+            if (warningLabel != null)
             {
                 warningLabel.style.display = DisplayStyle.Flex;
                 warningLabel.text = GameLanguage.Text("ハエたたきが来る！ 動いて逃げよう\nあと ", "A fly swatter is coming! Move to escape!\nTime left: ")
                     + Mathf.CeilToInt(Mathf.Max(0, total - IdleElapsed)) + GameLanguage.Text(" 秒", " seconds");
+            }
+            if (presentation != null && swatter != null)
+            {
                 presentation.SetActive(true);
                 // The final fast descent is part of the warning: escape remains possible until impact.
                 float remaining = total - IdleElapsed;
@@ -114,13 +118,34 @@ namespace Flylingual.BlindSugarRun
 
         void BuildPresentation()
         {
-            if (presentation != null) return;
+            if (presentationInitialized) return;
+            presentationInitialized = true;
+            // Cosmetic initialization must not prevent the idle rule reaching KillBySwatter.
+            BuildPresentationPart("warning UI", BuildWarningUI);
+            BuildPresentationPart("audio", BuildAudio);
+            BuildPresentationPart("geometry", BuildGeometry);
+        }
+
+        void BuildPresentationPart(string part, System.Action build)
+        {
+            try { build(); }
+            catch (System.Exception exception)
+            {
+                Debug.LogWarning("BLIND_SUGAR_SWATTER_PRESENTATION_UNAVAILABLE part=" + part + " " + exception.Message, this);
+            }
+        }
+
+        void BuildGeometry()
+        {
+            // Resources includes this shader in Players; Shader.Find-only shaders can be stripped.
+            Shader shader = Resources.Load<Shader>("IdleSwatter");
+            if (shader == null || !shader.isSupported)
+                throw new System.InvalidOperationException("IdleSwatter shader is missing or unsupported.");
+            red = new Material(shader) { color = new Color(.8f, .12f, .08f) };
+            dark = new Material(shader) { color = new Color(.16f, .1f, .08f) };
             presentation = new GameObject("Idle swatter presentation (no physics)");
             presentation.transform.SetParent(transform, false);
             swatter = presentation.transform;
-            Shader shader = Shader.Find("Universal Render Pipeline/Unlit") ?? Shader.Find("Unlit/Color") ?? Shader.Find("Standard");
-            red = new Material(shader) { color = new Color(.8f, .12f, .08f) };
-            dark = new Material(shader) { color = new Color(.16f, .1f, .08f) };
             // A shared authored cube mesh avoids even transient primitive colliders.
             cube = new Mesh { name = "Swatter presentation cube" };
             cube.vertices = new[] { new Vector3(-.5f,-.5f,-.5f), new Vector3(.5f,-.5f,-.5f), new Vector3(.5f,.5f,-.5f), new Vector3(-.5f,.5f,-.5f),
@@ -134,10 +159,18 @@ namespace Flylingual.BlindSugarRun
                 Bar("Mesh X", new Vector3(0, 0, offset), new Vector3(2.5f, .1f, .08f), red);
                 Bar("Mesh Z", new Vector3(offset, 0, 0), new Vector3(.08f, .1f, 2.5f), red);
             }
+        }
+
+        void BuildAudio()
+        {
             // Audio lives on the session so hiding the geometry cannot truncate impact playback.
             audioSource = gameObject.AddComponent<AudioSource>();
             audioSource.playOnAwake = false; audioSource.spatialBlend = 0; audioSource.ignoreListenerPause = true;
             warningClip = MakeCue(false); impactClip = MakeCue(true);
+        }
+
+        void BuildWarningUI()
+        {
             var template = Resources.Load<PanelSettings>("PlayScreenPanelSettings");
             warningPanel = template != null ? Instantiate(template) : ScriptableObject.CreateInstance<PanelSettings>();
             warningPanel.sortingOrder = 900;

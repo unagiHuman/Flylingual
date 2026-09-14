@@ -110,6 +110,8 @@ namespace Flylingual.Conversation
         public long PlayedNonzeroSamples => replyAudio == null ? 0L : replyAudio.PlayedNonzeroSamples;
         public bool VoiceActionsAvailable { get; private set; }
         public bool BlindRunScriptAvailable { get; private set; }
+        public bool LocalVisualAvailable { get; private set; }
+        long localVisualSequence;
         // Raw messages are exposed only to passive local observers of this existing control socket.
         public event Action<string> ControlEventReceived;
         // Passive local observers share the existing control socket; they never acquire control.
@@ -464,6 +466,7 @@ namespace Flylingual.Conversation
             ConversationInteraction = string.IsNullOrEmpty(state.conversationInteraction) ? "chat_only" : state.conversationInteraction;
             Ready = HasCapability(state.capabilities, "conversation_only_v1");
             BlindRunScriptAvailable = HasCapability(state.capabilities, "blind_run_script_v1");
+            LocalVisualAvailable = HasCapability(state.capabilities, "local_visual_observation_v1");
             if (Ready) Status = "connected";
             Backend = state.backend;
             BrainReady = state.brainReady;
@@ -545,6 +548,17 @@ namespace Flylingual.Conversation
         void HandleError(ErrorMessage error)
         {
             if (error == null) return;
+            if (error.error == "old_epoch" && error.hasEpochContext
+                && error.submittedEpoch >= 0 && error.submittedEpoch < error.currentEpoch
+                && (error.requestType == "local_safety_observation" || error.requestType == "blind_run_cue"
+                    || error.requestType == "local_visual_observation"))
+            {
+                // Queued observations can cross a stop/retry boundary. The Bridge rejected them
+                // correctly; do not latch a recovered-session UI error. Control failures stay visible.
+                Debug.Log("Discarded stale observation: " + error.requestType + " epoch "
+                    + error.submittedEpoch + " -> " + error.currentEpoch);
+                return;
+            }
             if (!string.IsNullOrEmpty(error.requestId) && error.requestId == expectedSettingsRequestId) expectedSettingsRequestId = null;
             string code = string.IsNullOrEmpty(error.error) ? "control_error" : error.error;
             if (code.IndexOf("schema", StringComparison.OrdinalIgnoreCase) >= 0) SchemaError = code;
@@ -695,6 +709,27 @@ namespace Flylingual.Conversation
             public long sequence;
         }
 
+        // Read-only presentation data shares this socket; never acquire control or queue behind audio/actions.
+        internal bool TrySendLocalVisualObservation(string factsJson, float ageMs)
+        {
+            if (!Ready || !LocalVisualAvailable || !ConversationLive || ConversationInteraction != "control"
+                || conversationStopping || ConversationGeneration < 0 || transport == null || !transport.IsConnected
+                || transport.QueueDepth >= 4 || string.IsNullOrEmpty(factsJson)
+                || float.IsNaN(ageMs) || float.IsInfinity(ageMs) || ageMs < 0 || ageMs > 750) return false;
+            var envelope = new LocalVisualEnvelope { controlEpoch = ControlEpoch,
+                conversationGeneration = ConversationGeneration, sequence = ++localVisualSequence };
+            string json = JsonUtility.ToJson(envelope);
+            json = json.Substring(0, json.Length - 1) + ",\"ageMs\":__OBSERVATION_AGE__,\"facts\":" + factsJson + "}";
+            try { transport.EnqueueFresh(json, ageMs); return true; }
+            catch (ConversationTransportException) { return false; }
+        }
+        [Serializable] sealed class LocalVisualEnvelope
+        {
+            public string type = "local_visual_observation";
+            public int controlEpoch, conversationGeneration;
+            public long sequence;
+        }
+
         public void SendLocalSafetyObservation(int sequence, float ageMs, bool groundPresent, string leftEdge, string rightEdge, bool forwardBlocked, bool bodyUnsafe, double travelMeters = -1, float horizontalSpeedMetersPerSecond = -1)
         {
             if (!Ready || ConversationInteraction != "control" || ConversationGeneration < 0 ||
@@ -830,7 +865,12 @@ namespace Flylingual.Conversation
         [Serializable] class GenerationMessage { public int conversationGeneration = -1; }
         [Serializable] sealed class ConversationTextMessage : GenerationMessage { public string text; public string role; public bool append; }
         [Serializable] sealed class AudioMessage : GenerationMessage { public string audio; }
-        [Serializable] sealed class ErrorMessage { public string error; public string requestId; }
+        [Serializable] sealed class ErrorMessage
+        {
+            public string error, requestId, requestType;
+            public bool hasEpochContext;
+            public int submittedEpoch, currentEpoch;
+        }
         [Serializable] sealed class ConversationSettingsMessage { public string requestId; public ConversationSettings settings; public int revision; }
         [Serializable] sealed class ConversationStart { public string type; public string interaction; public int controlEpoch; public bool nativeVoiceControl; }
         [Serializable] sealed class ResumeMessage { public string type; public int controlEpoch; }
