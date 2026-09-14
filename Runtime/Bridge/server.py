@@ -1318,7 +1318,8 @@ class Bridge(VisualThreatFeedbackMixin):
             self.local_visual.sample = None  # Withdraw invalid facts without rewinding the sequence watermark.
             raise ControlError('invalid_local_visual_observation') from None
         current = self.local_visual.summary()
-        announcement = self.local_visual.announcement()
+        # Do not consume one-shot guidance while it must yield to the player.
+        announcement = None if self.player_has_priority() else self.local_visual.announcement(language=self.conversation.settings['language'])
         self.emit({'type': 'local_visual_observation_result', 'sequence': self.local_visual.sequence,
                    'fresh': True, 'conversationGeneration': self.conversation_generation})
         if not previous['fresh'] or previous.get('facts') != current.get('facts'):
@@ -1331,9 +1332,13 @@ class Bridge(VisualThreatFeedbackMixin):
                        'reason': announcement['kind'], 'count': self.local_visual_commentary_count,
                        'conversationGeneration': self.conversation_generation})
             facts = announcement['facts'].get('text', '')[:240]
+            if self.conversation.mode == 'text':
+                self.emit({'type': 'conversation_text', 'role': 'assistant', 'text': facts, 'append': False})
+                return
             await self.conversation.append('commentary',
                 '最新の局所センサーで確認した事実を' + ('一言だけ' if announcement['kind'] == 'hazard' else '短く') +
-                '説明する。推測や進路指示を足さない。' + facts)
+                '説明する。観測に含まれる橋の向き合わせは伝えてよい。'
+                '未観測の進路や安全保証を足さず、案内から自動で操作しない。' + facts)
 
     async def warn_local_edge(self):
         scope = (self.arbiter.epoch, self.conversation_generation,

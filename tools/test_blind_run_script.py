@@ -106,6 +106,16 @@ class CueSelectorTests(unittest.TestCase):
             self.assertEqual(script.last_fact, text)
         self.assertTrue(script.accept(cue('right_edge_urgent', 4), 'ja', now=30)[1])
 
+    def test_bridge_cues_explain_observed_alignment_bilingually(self):
+        for language in ('ja', 'en'):
+            for name, direction in (('ruler_right', '右' if language=='ja' else 'right'),
+                                    ('ruler_left', '左' if language=='ja' else 'left')):
+                script=self.started()
+                text,speak=script.accept(cue(name,2),language,now=14)
+                self.assertTrue(speak)
+                self.assertIn('橋' if language=='ja' else 'bridge',text)
+                self.assertIn(direction,text)
+
     def test_swatter_warning_urgent_deduplicated_and_rearmed_by_escape(self):
         script = self.started()
         self.assertTrue(script.accept(cue('swatter_warning', 2), 'ja', now=10.1)[1])

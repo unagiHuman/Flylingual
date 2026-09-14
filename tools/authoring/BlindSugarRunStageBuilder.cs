@@ -9,6 +9,7 @@ using UnityEngine.SceneManagement;
 /// <summary>Authoring-only, environment-only Blind Sugar Run prototype.</summary>
 public static class BlindSugarRunStageBuilder
 {
+    const float RulerWidth = 16f;
     const string Root = "Assets/BlindSugarRunPrototype";
     const string ScenePath = Root + "/BlindSugarRunPrototype.unity";
     const string PrefabPath = Root + "/BlindSugarRunEnvironment.prefab";
@@ -91,7 +92,7 @@ public static class BlindSugarRunStageBuilder
         Material sugar = MaterialAsset("Sugar", new Color(.96f,.92f,.72f));
         Box(geometry, "StartArea", new Vector3(0,0,0), new Vector3(28,.8f,24), desk);
         Box(geometry, "PlanningArea", new Vector3(0,0,21), new Vector3(22,.8f,20), paper);
-        Segment(geometry, "RulerBridge", new Vector3(0,0,29), new Vector3(9,0,53), 8, ruler);
+        Segment(geometry, "RulerBridge", new Vector3(0,0,29), new Vector3(9,0,53), RulerWidth, ruler);
         Box(geometry, "BookPlatform", new Vector3(9,0,64), new Vector3(24,.8f,24), book);
         Segment(geometry, "NarrowRoute", new Vector3(-1,0,73), new Vector3(-1,0,96), 6, ruler);
         Segment(geometry, "WideRouteA", new Vector3(19,0,72), new Vector3(34,0,78), 12, paper);
@@ -102,15 +103,15 @@ public static class BlindSugarRunStageBuilder
         Box(geometry, "WideConnectionPad1", new Vector3(34,0,78), new Vector3(14,.8f,14), paper);
         Box(geometry, "WideConnectionPad2", new Vector3(34,0,97), new Vector3(14,.8f,14), paper);
         Transform decorations = Child(root, "MinimalArt");
-        ThinEdge(decorations, "RulerEdgeL", new Vector3(0,0.05f,29), new Vector3(9,0.05f,53), 3.9f, ruler);
-        ThinEdge(decorations, "RulerEdgeR", new Vector3(0,0.05f,29), new Vector3(9,0.05f,53), -3.9f, ruler);
+        ThinEdge(decorations, "RulerEdgeL", new Vector3(0,0.05f,29), new Vector3(9,0.05f,53), (RulerWidth * .5f - .1f), ruler);
+        ThinEdge(decorations, "RulerEdgeR", new Vector3(0,0.05f,29), new Vector3(9,0.05f,53), -(RulerWidth * .5f - .1f), ruler);
         Vector3 bridgeDirection = new Vector3(9, 0, 24).normalized;
         Vector3 bridgeRight = Vector3.Cross(Vector3.up, bridgeDirection);
         for (int i = 1; i < 24; i++)
         {
             float length = i % 5 == 0 ? 1.6f : .9f;
             Vector3 p = Vector3.Lerp(new Vector3(0, .015f, 29), new Vector3(9, .015f, 53), i / 24f);
-            p += bridgeRight * (3.7f - length / 2);
+            p += bridgeRight * (RulerWidth * .5f - .3f - length / 2);
             var tick = BoxVisual(decorations, "RulerTick_" + i, p, new Vector3(length, .02f, .08f), ink);
             tick.transform.rotation = Quaternion.LookRotation(bridgeDirection);
         }
@@ -299,8 +300,8 @@ public static class BlindSugarRunStageBuilder
         }
         return true;
     }
-    static bool RulerSidesClear(){for(int i=5;i<=15;i++){Vector3 p=Vector3.Lerp(new Vector3(0,0,29),new Vector3(9,0,53),i/20f);Vector3 d=(new Vector3(9,0,24)).normalized;Vector3 side=Vector3.Cross(Vector3.up,d);for(int k=-1;k<=1;k+=2)if(Physics.Raycast(p+side*k*5+Vector3.up,Vector3.down,2f,Physics.DefaultRaycastLayers,QueryTriggerInteraction.Ignore))return false;}return true;}
-    static bool DimensionsValid(){return Size("RulerBridge",8)&&Size("NarrowRoute",6)&&Size("WideRouteA",12)&&Size("WideRouteB",12)&&Size("WideRouteC",12);}
+    static bool RulerSidesClear(){for(int i=5;i<=15;i++){Vector3 p=Vector3.Lerp(new Vector3(0,0,29),new Vector3(9,0,53),i/20f);Vector3 d=(new Vector3(9,0,24)).normalized;Vector3 side=Vector3.Cross(Vector3.up,d);for(int k=-1;k<=1;k+=2)if(Physics.Raycast(p+side*k*(RulerWidth*.5f+1f)+Vector3.up,Vector3.down,2f,Physics.DefaultRaycastLayers,QueryTriggerInteraction.Ignore))return false;}return true;}
+    static bool DimensionsValid(){return Size("RulerBridge",RulerWidth)&&Size("NarrowRoute",6)&&Size("WideRouteA",12)&&Size("WideRouteB",12)&&Size("WideRouteC",12);}
     static bool Size(string name, float expected)
     {
         var root = GameObject.Find("BlindSugarRunEnvironment");

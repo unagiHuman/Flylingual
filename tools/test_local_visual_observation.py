@@ -1,4 +1,8 @@
 import unittest
+import copy
+import time
+from unittest.mock import AsyncMock, Mock
+from Runtime.Bridge.config import _DEFAULT
 
 from Runtime.Bridge.local_visual_observation import LocalVisualObservation
 from Runtime.Bridge.control import ControlError
@@ -106,10 +110,100 @@ class LocalVisualObservationTests(unittest.TestCase):
         observation.accept(hazard, now=106)
         self.assertEqual(observation.announcement(now=106)['kind'], 'hazard')
 
+    def test_bridge_guidance_precedes_near_edges_and_deduplicates(self):
+        observation = LocalVisualObservation()
+        sample = event()
+        sample['facts']['directions'][1].update(surface='ruler', distance=2, alignment='right')
+        sample['facts']['directions'][6].update(edge='near', edgeDistance=2)
+        observation.accept(sample, now=100)
+        announcement=observation.announcement(now=100)
+        self.assertEqual(announcement['kind'], 'discovery')
+        self.assertIn('橋', announcement['facts']['text'])
+        self.assertIn('少し右', announcement['facts']['text'])
+        self.assertIn('bridge', observation.describe('all', 'en', now=100))
+        sample['sequence']=2; observation.accept(sample, now=105)
+        self.assertIsNone(observation.announcement(now=105))
+        sample['sequence']=3; sample['facts']['directions'][1]['alignment']='left'
+        observation.accept(sample, now=106)
+        self.assertIn('少し左', observation.announcement(now=106)['facts']['text'])
+        sample['sequence']=4; sample['facts']['directions'][1]['alignment']='right'
+        sample['facts']['directions'][6].update(edge='very_near', edgeDistance=.2)
+        observation.accept(sample, now=111)
+        self.assertEqual(observation.announcement(now=111)['kind'], 'hazard')
+        self.assertIsNone(observation.announcement(now=112))
+
     def test_question_matching_is_exact_and_bilingual(self):
         self.assertEqual(Bridge.local_visual_question_direction('  右は危ない？ '), 'right')
         self.assertEqual(Bridge.local_visual_question_direction('What can you see?'), 'all')
         self.assertIsNone(Bridge.local_visual_question_direction('右へ進んで、危なければ止まって'))
+
+
+class BridgeAnnouncementPriorityTests(unittest.IsolatedAsyncioTestCase):
+    async def test_text_edition_receives_english_bridge_guidance_without_actions(self):
+        bridge = Bridge(copy.deepcopy(_DEFAULT))
+        bridge.control_ws = object()
+        bridge.conversation_accepting = True
+        bridge.conversation_interaction = 'control'
+        bridge.conversation.state = bridge.conversation.mode = 'text'
+        bridge.conversation.settings['language'] = 'en'
+        bridge.conversation.last_voice_end_at = time.monotonic() - 10
+        bridge.arbiter.epoch = 2
+        bridge.conversation_generation = 4
+        bridge.player_priority_until = 0
+        bridge.neural_output_at = -1e15
+        bridge.conversation.append = AsyncMock()
+        bridge.adapter = AsyncMock()
+        bridge.submit = AsyncMock()
+        bridge.emit = Mock()
+        bridge.log = Mock()
+        sample = event()
+        sample['facts']['directions'][1].update(surface='ruler', distance=2, alignment='right')
+        await bridge.accept_local_visual_observation(sample)
+        messages = [c.args[0] for c in bridge.emit.call_args_list if c.args[0]['type'] == 'conversation_text']
+        self.assertEqual(len(messages), 1)
+        self.assertIn('bridge', messages[0]['text'])
+        self.assertIn('Turn slightly right', messages[0]['text'])
+        bridge.conversation.append.assert_not_awaited()
+        bridge.submit.assert_not_called()
+        bridge.adapter.send_action.assert_not_called()
+
+    async def test_busy_player_keeps_bridge_fact_pending_without_actions(self):
+        bridge = Bridge(copy.deepcopy(_DEFAULT))
+        bridge.control_ws = object()
+        bridge.conversation_accepting = True
+        bridge.conversation_interaction = 'control'
+        bridge.conversation.state = 'live'
+        bridge.conversation.last_voice_end_at = time.monotonic() - 10
+        bridge.arbiter.epoch = 2
+        bridge.conversation_generation = 4
+        bridge.player_priority_until = time.monotonic() + 10
+        bridge.neural_output_at = -1e15
+        bridge.conversation.append = AsyncMock()
+        bridge.adapter = AsyncMock()
+        bridge.submit = AsyncMock()
+        bridge.emit = Mock()
+        bridge.log = Mock()
+        sample = event()
+        sample['facts']['directions'][1].update(surface='ruler', distance=2, alignment='right')
+        await bridge.accept_local_visual_observation(sample)
+        self.assertEqual(bridge.local_visual.sequence, 1)
+        self.assertTrue(bridge.local_visual.summary()['fresh'])
+        self.assertEqual(bridge.local_visual.summary()['facts']['directions'][1]['surface'], 'ruler')
+        bridge.conversation.append.assert_not_awaited()
+        self.assertIsNone(bridge.local_visual.last_bridge_signature)
+        bridge.player_priority_until = 0
+        sample['sequence'] = 2
+        await bridge.accept_local_visual_observation(sample)
+        self.assertEqual(bridge.local_visual.sequence, 2)
+        bridge.conversation.append.assert_awaited_once()
+        self.assertEqual(bridge.conversation.append.await_args.args[0], 'commentary')
+        self.assertIn('橋', bridge.conversation.append.await_args.args[1])
+        self.assertIn('少し右', bridge.conversation.append.await_args.args[1])
+        sample['sequence'] = 3
+        await bridge.accept_local_visual_observation(sample)
+        bridge.conversation.append.assert_awaited_once()
+        bridge.submit.assert_not_called()
+        bridge.adapter.send_action.assert_not_called()
 
 
 if __name__ == '__main__':

@@ -17,6 +17,19 @@ _KIND_LABELS = {'unknown': '未確認', 'desk': '机', 'ruler': '定規', 'book'
                 'plate': '皿', 'sugar': '砂糖', 'path': '通路', 'obstacle': '障害物'}
 
 
+def bridge_guidance(sector, language='ja'):
+    direction=sector['direction']; alignment=sector['alignment']
+    if language == 'en':
+        place={'front':'ahead','front-right':'ahead to the right','front-left':'ahead to the left',
+               'right':'to the right','left':'to the left','back':'behind','back-right':'behind to the right','back-left':'behind to the left'}[direction]
+        turn={'right':' Turn slightly right to align with it.','left':' Turn slightly left to align with it.',
+              'center':' It is aligned with your heading.','unknown':' Its alignment is unknown.'}[alignment]
+        return 'A bridge (ruler) is '+place+'.'+turn
+    turn={'right':'少し右に向きを合わせて。','left':'少し左に向きを合わせて。',
+          'center':'橋の向きは今の正面に合っている。','unknown':'橋の向きはまだ未確認。'}[alignment]
+    return _DIRECTION_LABELS[direction]+'に橋（定規）。'+turn
+
+
 class LocalVisualObservation:
     """The latest bounded snapshot; expired or superseded generations are unusable."""
 
@@ -32,6 +45,7 @@ class LocalVisualObservation:
         self.last_spoken_at = -float('inf')
         self.last_spoken_signature = None
         self.saw_motion = False
+        self.last_bridge_signature = None
 
     @staticmethod
     def _number(value, allow_unknown=True):
@@ -104,6 +118,12 @@ class LocalVisualObservation:
             return '未確認' if value == -1 else ('%.1fm' % value)
         def sector_text(s):
             label = _DIRECTION_LABELS[s['direction']]
+            if s['surface'] == 'ruler':
+                slope = ('上り坂。' if s['slope']=='up' else '下り坂。' if s['slope']=='down' else '')
+                if language == 'en': slope = 'Uphill. ' if s['slope']=='up' else 'Downhill. ' if s['slope']=='down' else ''
+                edge = ('端が非常に近い。' if s['edge']=='very_near' else '端が近い。' if s['edge']=='near' else '')
+                if language == 'en': edge = 'Edge very close. ' if s['edge']=='very_near' else 'Edge nearby. ' if s['edge']=='near' else ''
+                return edge + bridge_guidance(s, language) + slope
             bits = []
             if s['surface'] != 'unknown': bits.append(_KIND_LABELS[s['surface']])
             if s['distance'] != -1: bits.append(distance(s['distance']))
@@ -120,7 +140,8 @@ class LocalVisualObservation:
         hazards = sorted([s for s in sectors if s['edge'] in ('near', 'very_near')], key=lambda s: s['edgeDistance'] if s['edgeDistance'] >= 0 else 4)
         objects = sorted([s for s in sectors if s['surface'] not in ('unknown', facts['ground'])], key=lambda s: s['distance'] if s['distance'] >= 0 else 4)
         chosen = []
-        for s in hazards + objects:
+        bridges = [s for s in sectors if s['surface']=='ruler']
+        for s in [s for s in hazards if s['edge']=='very_near'] + bridges + hazards + objects:
             if s not in chosen and not any(c['surface'] == s['surface'] and c['edge'] == s['edge'] for c in chosen): chosen.append(s)
         sentences = [sector_text(s) for s in chosen[:2]]
         if len(sentences) < 2:
@@ -141,7 +162,7 @@ class LocalVisualObservation:
                 'ageMs': round(age, 1) if age is not None else None, 'fresh': fresh,
                 'facts': self.sample if fresh else {}}
 
-    def announcement(self, now=None):
+    def announcement(self, now=None, language='ja'):
         """Return a changed, useful local fact at most once per four seconds."""
         if self.sample is None:
             return None
@@ -151,12 +172,24 @@ class LocalVisualObservation:
         facts = self.sample
         hazards = tuple((s['direction'], s['edge'], s['trend'] == 'closer') for s in facts['directions'] if s['edge'] in ('near', 'very_near'))
         objects = tuple((s['direction'], s['surface'], s['alignment']) for s in facts['directions'] if s['surface'] not in ('unknown', facts['ground']))
+        bridges = [s for s in facts['directions'] if s['surface']=='ruler'
+                   and s['direction'] in ('front','front-right','front-left')]
+        bridge = min(bridges, key=lambda s:s['distance'] if s['distance'] >= 0 else 4) if bridges else None
+        bridge_signature = (bridge['direction'],bridge['alignment']) if bridge else None
+        if bridge is None: self.last_bridge_signature = None
+        urgent = any(s['edge']=='very_near' for s in facts['directions'])
+        if bridge is not None and not urgent and bridge_signature != self.last_bridge_signature:
+            self.last_bridge_signature = bridge_signature
+            self.last_spoken_signature = (facts["ground"], hazards, objects)
+            self.last_spoken_at = now
+            return {'kind':'discovery','facts':{'text':bridge_guidance(bridge, language)}}
         signature = (facts['ground'], hazards, objects)
         if signature == self.last_spoken_signature and not facts['revisited']:
             return None
         self.last_spoken_signature, self.last_spoken_at = signature, now
         if hazards:
-            closest = min((s for s in facts['directions'] if s['edge'] in ('near', 'very_near')), key=lambda s:s['edgeDistance'] if s['edgeDistance'] >= 0 else 4)
+            closest = min((s for s in facts['directions'] if s['edge'] in ('near', 'very_near')),
+                          key=lambda s:(s['edge'] != 'very_near', s['edgeDistance'] if s['edgeDistance'] >= 0 else 4))
             return {'kind': 'hazard', 'facts': {'text': self.describe(closest['direction'], now=now)}}
         if facts['revisited']:
             return {'kind': 'memory', 'facts': {'text': '以前通った場所に戻った。今見える範囲: ' + self.describe('all', now=now, include_body=False)}}
