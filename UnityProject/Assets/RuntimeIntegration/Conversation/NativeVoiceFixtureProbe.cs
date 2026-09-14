@@ -169,6 +169,7 @@ namespace Flylingual.Conversation
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         static void Bootstrap()
         {
+            if (Array.IndexOf(Environment.GetCommandLineArgs(), "-flyCourseProbe") >= 0) return;
             if (Array.IndexOf(Environment.GetCommandLineArgs(), "-flyVoiceFixtures") < 0) return;
             new GameObject("Native synthetic voice fixture probe").AddComponent<NativeVoiceFixtureProbe>();
         }
