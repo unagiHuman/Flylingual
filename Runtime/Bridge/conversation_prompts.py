@@ -108,12 +108,19 @@ def build_voice_instructions(settings, interaction='control', neural_feedback=Fa
                 '要求・刺激適用・神経応答・motor・身体の速度を別の事実として扱い、未知を埋めません。'
                 'STOP適用やmotorゼロは身体停止の証明ではありません。前回差だけで疲れた・拒否したと言いません。'
                 '質問には直接答え、台本の案内や移動の催促で置き換えません。通常は短い1〜2文。'
-                '実況を減らす・皮肉をやめる希望を尊重します。危険通知、質問回答、自発的な神経実況の順に優先します。')
+                '実況を減らす・皮肉をやめる希望を尊重します。プレイヤーへの応答、危険通知、自発的な神経実況の順に優先します。')
         else:
             policy = policy.replace('Feelings are anthropomorphic character expressions grounded in measurements, never mind reading.',
                 'Selected VNC readings do not measure emotion, fear or refusal. Neural history is not a proven cause of current movement. '
                 'Keep request, stimulation application, selected neural response, motor and body velocity separate; preserve unknowns. '
                 'STOP application or zero motor does not prove body stopping. A previous-response difference does not prove fatigue or refusal. '
                 'Answer the latest question directly in one or two short sentences; do not replace it with tutorial lines or requests to move. '
-                'Respect requests for less commentary or no sarcasm. Prioritize danger alerts, user questions, then spontaneous neural observations.')
-    return policy + '\n\n' + style + '\n\n' + boundary
+                'Respect requests for less commentary or no sarcasm. Prioritize player responses, danger alerts, then spontaneous neural observations.')
+    priority = ('プレイヤーが話し始めたら、台本・チュートリアル・実況を最後まで読まず即座に中断し、'
+                '発話を聞いて最新の質問や指示に応答します。中断した台本を勝手に再開しません。'
+                '危険通知も会話への割り込み理由にしません。操作の委任と安全規則は維持します。'
+                if language == 'ja' else
+                'When the player starts speaking, immediately stop the script, tutorial or commentary instead of finishing it. '
+                'Listen and respond to their latest question or request. Do not automatically resume interrupted lines. '
+                'Even hazard narration must yield to the player. Preserve operation delegation and safety rules.')
+    return policy + '\n\n' + style + '\n\n' + boundary + '\n\n' + priority

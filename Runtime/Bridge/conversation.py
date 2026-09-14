@@ -259,7 +259,8 @@ class ConversationAdapter:
                                 self._diagnostics['outputNonzeroChunks'] += 1
                             else:
                                 self._diagnostics['outputZeroChunks'] += 1
-                        await self.on_event({'type': 'audio', 'audio': event['delta']})
+                        await self.on_event({'type': 'audio', 'audio': event['delta'],
+                                             'audible': bool(output_pcm and any(output_pcm))})
                 elif kind in ('session.input_transcript.delta', 'session.output_transcript.delta'):
                     text = event.get('delta', '')
                     if not isinstance(text, str):
@@ -631,10 +632,16 @@ class ConversationAdapter:
                     raw, tag = raw
                 audio_start = self.sent_audio_samples / 24
                 context_generation = self.context_generation
+                previous_voice_end = self.last_voice_end_at
+                self._observe_voice_activity(raw)
+                if (self.last_voice_end_at != previous_voice_end
+                        and asyncio.get_running_loop().time() - previous_voice_end >= .6):
+                    # Local envelope onset clears queued playback before ASR.
+                    # It is presentation only, never an Action or a transcript.
+                    await self.on_event({'type': 'player_speech_started'})
                 await self._send_event({'type': 'session.input_audio.append',
                                         'audio': base64.b64encode(raw).decode('ascii')})
                 self.sent_audio_samples += len(raw) // 2
-                self._observe_voice_activity(raw)
                 if (tag is not None and self.voice_test_observation
                         and context_generation == self.context_generation):
                     await self.on_event({'type': 'voice_test_diagnostic',
@@ -661,7 +668,7 @@ class ConversationAdapter:
             samples.byteswap()
         # Envelope only; no audio is saved and no words are inferred here.
         if samples and sum(x*x for x in samples) / len(samples) >= (32768 * .012) ** 2:
-            self.last_voice_end_ms = self.sent_audio_samples / 24
+            self.last_voice_end_ms = (self.sent_audio_samples + len(raw) // 2) / 24
             self.last_voice_end_at = asyncio.get_running_loop().time() + len(raw) / 48000
 
     async def interpret(self, text, context, default_ms, max_ms):

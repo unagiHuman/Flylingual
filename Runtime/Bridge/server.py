@@ -38,7 +38,7 @@ VOICE_TEST_EVENTS = frozenset({
     'plan_stopped', 'local_observation_received', 'audio_fixture_sent', 'delegation_observed',
     'execution_updated', 'execution_started', 'execution_ended',
     'input_transcript_observed', 'transcript_candidate_observed', 'transcript_candidate_result',
-    'context_append_observed',
+    'context_append_observed', 'player_speech_interrupt',
     'intent_classification_started',
 })
 VOICE_TEST_FIELDS = frozenset({
@@ -132,6 +132,8 @@ class Bridge(VisualThreatFeedbackMixin):
         self.neural_body = None
         self.neural_sender = None
         self.neural_output_at = -1e15
+        self.player_priority_until = -1e15
+        self.player_transcript_at = -1e15
         self.neural_last_hud = None
         self.neural_last_context = None
         self.neural_context_appends = 0
@@ -221,7 +223,7 @@ class Bridge(VisualThreatFeedbackMixin):
                 or current.get('identity') != event.get('identity')
                 or (event.get('current') or {}).get('requestedRequestId') != self.request_counter
                 or (current.get('current') or {}).get('requestedRequestId') != self.request_counter
-                or (channel == 'commentary' and (current.get('eventType') not in SPONTANEOUS
+                or (channel == 'commentary' and (self.player_has_priority() or current.get('eventType') not in SPONTANEOUS
                     or current.get('eventType') != event.get('eventType')
                     or current.get('allowedClaims') != event.get('allowedClaims')
                     or time.monotonic()-self.conversation.last_voice_end_at < 1
@@ -250,7 +252,7 @@ class Bridge(VisualThreatFeedbackMixin):
         # pending event with the correlated snapshot before presentation.
         self.neural_scheduler.offer(event)
         now = time.monotonic()*1000
-        busy = (now - self.conversation.last_voice_end_at*1000 < 1000
+        busy = (self.player_has_priority() or now - self.conversation.last_voice_end_at*1000 < 1000
                 or now - self.neural_output_at < 1500 or bool(self.intent_tasks))
         selected, reason = self.neural_scheduler.take(now, epoch=self.arbiter.epoch,
             generation=self.conversation_generation, request_id=self.request_counter,
@@ -269,6 +271,22 @@ class Bridge(VisualThreatFeedbackMixin):
     def neural_user_input(self, text):
         self.neural_scheduler.interrupt(time.monotonic()*1000)
         self.neural_scheduler.preference(text)
+        self.player_priority_until = time.monotonic() + 6
+
+    def player_speech_started(self):
+        if not self.conversation_accepting:
+            return
+        self.player_priority_until = time.monotonic() + 6
+        self.neural_scheduler.interrupt(time.monotonic()*1000, 6000)
+        self.emit({'type': 'discard_audio', 'epoch': self.arbiter.epoch})
+        self.log('player_speech_interrupt')
+
+    def player_has_priority(self):
+        now = time.monotonic()
+        return (now < self.player_priority_until
+                or now - self.conversation.last_voice_end_at < 1
+                or bool(self.intent_tasks)
+                or (self.player_priority_until > 0 and now*1000 - self.neural_output_at < 1500))
 
     async def speak_non_action(self, context, delegation_id=None):
         if self.neural.enabled:
@@ -794,12 +812,36 @@ class Bridge(VisualThreatFeedbackMixin):
             self.emit(self.state())
 
     async def conversation_event(self, event):
+        if event.get('type') == 'player_speech_started':
+            self.player_speech_started()
+            return
         if event.get('type') == 'conversation_context_receipt':
             self.log('conversation_context_receipt', **{k: v for k, v in event.items() if k != 'type'})
             return
         if event.get('type') == 'audio':
-            self.neural_output_at = time.monotonic()*1000
+            audible = event.pop('audible', True)
+            now = time.monotonic()
+            if now - self.conversation.last_voice_end_at < .15:
+                # Live has no response.cancel/output-done event. Drop output
+                # while input is voiced; never queue it for later replay.
+                return
+            if audible:
+                self.neural_output_at = now*1000
         elif event.get('type') == 'conversation_text' and event.get('role') == 'user':
+            if not self.conversation_accepting or not event.get('text', '').strip():
+                return
+            now = time.monotonic()
+            # One redirect per utterance burst; later ASR fragments must not
+            # repeatedly erase the answer already being produced.
+            if now - self.player_transcript_at >= 1.5:
+                self.player_speech_started()
+                await self.conversation.append('instructions',
+                    'プレイヤーが話しかけています。現在の台本・実況を中断し、最新の発話を優先して聞いて応答してください。'
+                    '中断した台本は再開しないでください。操作依頼の委任規則は維持してください。'
+                    if self.conversation.settings['language'] == 'ja' else
+                    'The player is speaking. Interrupt the current script or commentary, listen and respond to the latest utterance first. '
+                    'Do not resume the interrupted script. Preserve operation delegation rules.')
+            self.player_transcript_at = now
             self.neural_user_input(event.get('text'))
         if event['type'] == 'voice_test_diagnostic':
             if self.voice_test_observation and event.get('event') in VOICE_TEST_EVENTS:
@@ -815,6 +857,7 @@ class Bridge(VisualThreatFeedbackMixin):
             self.last_spoken_state = None
             self.conversation_announced = False
             if event['state'] in ('live', 'text'):
+                self.player_priority_until = self.player_transcript_at = -1e15
                 # A fresh voice session has no old-epoch audio awaiting ASR.
                 self.voice_control_epoch = self.arbiter.epoch
                 if self.conversation_interaction == 'chat_only' and self.conversation_accepting:
@@ -1282,7 +1325,7 @@ class Bridge(VisualThreatFeedbackMixin):
             self.log('local_visual_observation_received', sequence=self.local_visual.sequence,
                      reason=announcement['kind'] if announcement else 'clear')
         # Descriptive only; existing local safety warning remains authoritative.
-        if announcement:
+        if announcement and not self.player_has_priority():
             self.local_visual_commentary_count += 1
             self.emit({'type': 'local_visual_commentary', 'sequence': self.local_visual.sequence,
                        'reason': announcement['kind'], 'count': self.local_visual_commentary_count,
@@ -1315,7 +1358,7 @@ class Bridge(VisualThreatFeedbackMixin):
         safe = facts.get('groundPresent') is True and all(edge == 'safe' for edge in edges)
         if safe:
             self.edge_warning_sent = False
-        elif danger and not self.edge_warning_sent:
+        elif danger and not self.edge_warning_sent and not self.player_has_priority():
             # One utterance per observed approach, not an Action or motor stop.
             # Unknown/stale samples do not rearm a continuing hazard.
             self.edge_warning_sent = True
@@ -1346,6 +1389,8 @@ class Bridge(VisualThreatFeedbackMixin):
             speak = True
             self.blind_script.last_cue = event['cue']
             self.blind_script.last_spoken_at = time.monotonic()
+        if self.player_has_priority():
+            speak = False
         if speak:
             self.neural_scheduler.interrupt(time.monotonic()*1000, 4000)
         # Send only the selected line, never the catalog, run ID or cue name.
@@ -1359,9 +1404,10 @@ class Bridge(VisualThreatFeedbackMixin):
                 self.emit({'type': 'conversation_text', 'role': 'assistant', 'text': text, 'append': False})
         else:
             if measured is not None:
-                await self.conversation.append('commentary', measured[0], trace=measured[1])
+                await self.conversation.append('commentary' if speak else 'thinking', measured[0], trace=measured[1])
             else:
-                await self.conversation.append('commentary' if speak else 'thinking', instruction + text)
+                await self.conversation.append('commentary' if speak else 'thinking',
+                    instruction + text if speak else 'Observed scene context only; do not speak or resume this cue: ' + text)
         self.emit({'type': 'blind_run_cue_result', 'sequence': event['sequence'],
                    'stage': 'queued', 'speakRequested': speak})
         self.log('blind_run_cue_queued', cue=event['cue'], sequence=event['sequence'], speakRequested=speak)
@@ -1421,7 +1467,7 @@ class Bridge(VisualThreatFeedbackMixin):
         if fact is None or self.environment.latest['sequence'] != observation['sequence']:
             return
         # Swatter/fall narration already exists. Contact alone may add one line.
-        channel = 'commentary' if observation['kind'] == 'sugar_contact' else 'thinking'
+        channel = 'commentary' if observation['kind'] == 'sugar_contact' and not self.player_has_priority() else 'thinking'
         if channel == 'commentary':
             fact += (' 設定中の人格で接触の事実だけを短い一言に。神経反応を創作しない。' if self.conversation.settings['language'] == 'ja'
                      else ' Keep the selected persona; briefly describe contact only. Do not invent a neural response.')
@@ -1490,6 +1536,10 @@ class Bridge(VisualThreatFeedbackMixin):
                                 event.get('controlEpoch'), event.get('validForMs'))
             await self.submit(event['action'], 'manual_ui', event['commandId'])
         elif kind == 'player_text':
+            if (self.conversation_accepting and type(event.get('controlEpoch')) is int
+                    and event['controlEpoch'] == self.arbiter.epoch
+                    and isinstance(event.get('text'), str) and event['text'].strip()):
+                self.player_speech_started()
             self.neural_user_input(event.get('text'))
             self.emit({'type': 'conversation_text', 'role': 'user', 'text': str(event.get('text', ''))[:2000], 'append': False})
             if self.conversation.mode != 'text' and self.is_local_visual_question(event.get('text')):
@@ -1843,7 +1893,7 @@ class Bridge(VisualThreatFeedbackMixin):
                         'bodyMovementVerified': False}, ensure_ascii=False)
                     # Changes of *observed* state drive character speech; no
                     # speech is generated just because an action was requested.
-                    channel = ('commentary' if brain_changed and self.conversation_announced and self.blind_script.run_id is None
+                    channel = ('commentary' if brain_changed and self.conversation_announced and self.blind_script.run_id is None and not self.player_has_priority()
                                else 'thinking')
                     self.conversation_announced = self.conversation.state in ('live', 'mock', 'text')
                     self.task(self.conversation.append(channel, context))

@@ -121,10 +121,16 @@ class TranscriptSemanticControlTests(unittest.IsolatedAsyncioTestCase):
             await self.socket.feed(transcript(0, 500, '今どういう状態？'))
             await self.finish_semantic()
             claim.assert_not_called()
-        self.a.append.assert_not_awaited()
+        # Initial ASR redirects presentation, but does not answer or claim
+        # the still-incomplete utterance as a semantic question.
+        self.a.append.assert_awaited_once()
+        self.assertEqual(self.a.append.await_args.args[0], 'instructions')
         self.b.adapter.send_action.assert_not_awaited()
 
     def test_large_context_is_complete_and_stale_facts_are_omitted(self):
+        # This is the legacy structured-context branch. Neural-enabled
+        # questions intentionally use compact_summary instead of JSON.
+        self.b.neural.enabled = False
         self.b.intent_context = Mock(return_value={
             'activeCommand': {'action': 'FORWARD', 'brainApplied': True},
             'localSafety': {'fresh': False, 'facts': {'groundPresent': True}},
@@ -391,7 +397,9 @@ class TranscriptSemanticControlTests(unittest.IsolatedAsyncioTestCase):
                     patch.object(self.a, 'claim_transcript', return_value=True) as claim:
                 await self.b.transcript_utterance('こんにちは', candidate)
                 claim.assert_called_once_with(candidate)
-        self.assertEqual(self.a.append.await_count, 2)
+        self.assertEqual([call.args[0] for call in self.a.append.await_args_list],
+                         ['thinking', 'instructions', 'thinking', 'instructions'])
+        self.assertTrue(all(len(call.args[1]) <= 380 for call in self.a.append.await_args_list))
         self.assertEqual(self.b.intent_revision, 0)
         self.b.adapter.send_action.assert_not_awaited()
 

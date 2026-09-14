@@ -123,7 +123,7 @@ def evaluate_status(report, *, timeout, remaining, ports_free, exit_code, except
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--fixtures", required=True, type=Path, help="manifest.json")
-    ap.add_argument("--suite", choices=("smoke", "full", "duration", "plans", "soak", "persistent", "handoff"), default="smoke")
+    ap.add_argument("--suite", choices=("smoke", "full", "duration", "plans", "soak", "persistent", "handoff", "script_interrupt"), default="smoke")
     ap.add_argument("--capture-test-transcript", action="store_true",
                     help="opt-in recognized text for synthetic fixtures only; never enables the microphone")
     ap.add_argument("--seconds", type=int, default=None)
@@ -175,7 +175,7 @@ def main() -> int:
         event("launch", suite=args.suite)
         started = time.monotonic()
         stdout_path = output / "player-stdout.log"
-        deadline_seconds = args.seconds if args.seconds is not None else {"smoke": 240, "full": 900, "duration": 180, "plans": 240, "soak": 300, "persistent": 180, "handoff": 120}[args.suite]
+        deadline_seconds = args.seconds if args.seconds is not None else {"smoke": 240, "full": 900, "duration": 180, "plans": 240, "soak": 300, "persistent": 180, "handoff": 120, "script_interrupt": 120}[args.suite]
         timeout = False; process = None; owned = None; peak_rss = 0; runner_exception = None
         try:
             with stdout_path.open("w", encoding="utf-8", newline="\n") as player_output:

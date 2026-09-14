@@ -11,6 +11,7 @@ using UnityEngine;
 namespace Flylingual.Conversation
 {
     /// <summary>Opt-in synthetic PCM input; all interpretation, neural output and physics remain real.</summary>
+    [DefaultExecutionOrder(-10000)]
     public sealed class NativeVoiceFixtureProbe : MonoBehaviour
     {
         [Serializable] sealed class Manifest { public int schemaVersion; public Fixture[] fixtures; }
@@ -109,6 +110,11 @@ namespace Flylingual.Conversation
             public string result = "incomplete", status = "incomplete", suite, inputSource = "synthetic_fixture";
             public string manifest, manifestSha256, error, backend, brainSessionId, brainInstanceId;
             public bool pass, brainReady, microphoneTested, startupFreshStop, overlapVerified;
+            public bool scriptCueAccepted, scriptOverlapAtFirstChunk, scriptStopMaintained;
+            public double scriptCueSentAt = -1, scriptCueAcceptedAt = -1, scriptAudioStartedAt = -1;
+            public double scriptDiscardReceivedAt = -1, scriptInterruptDiagnosticAt = -1;
+            public long scriptSamplesBefore, scriptSamplesAtStart;
+            public int scriptNarratorsDisabled;
             public bool persistentHeld, persistentContinued, persistentStopped, persistentFiniteExpired, persistentNoRevival;
             public bool stopped, controllerReleasedObserved, bridgeStoppedObserved, protocolShutdownObserved, processCleanupObserved;
             public int ttlReacceptChecks, physicsResetCount;
@@ -164,6 +170,7 @@ namespace Flylingual.Conversation
         long sampleCursor;
         double nextAudioAt, audioNotBefore, previousAudioAt = -1, nextObservationAt, deadline;
         bool running, quit, observationEnabled, textDiagnosticsEnabled;
+        bool scriptProducerConflict;
         ActiveExecution activeExecution;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
@@ -206,7 +213,8 @@ namespace Flylingual.Conversation
             if (!initialStop) { yield return FinishRun("startup_stop_not_observed"); yield break; }
             CaptureBaseline();
 
-            if (report.suite == "plans") yield return RunPlans();
+            if (report.suite == "script_interrupt") yield return RunScriptInterrupt();
+            else if (report.suite == "plans") yield return RunPlans();
             else if (report.suite == "duration") yield return RunDuration();
             else if (report.suite == "persistent") yield return RunPersistent();
             else if (report.suite == "handoff") yield return RunPersistent(3);
@@ -263,8 +271,8 @@ namespace Flylingual.Conversation
                 Directory.CreateDirectory(outputDirectory);
                 if (File.Exists(Path.Combine(outputDirectory, "report.json"))) throw new ArgumentException("output_already_contains_report");
                 string suite = Argument("-flyVoiceFixtureSuite") ?? "smoke";
-                if (suite != "smoke" && suite != "full" && suite != "soak" && suite != "plans" && suite != "duration" && suite != "persistent" && suite != "handoff") throw new ArgumentException("invalid_suite");
-                double seconds = suite == "full" ? 900 : suite == "soak" ? 300 : suite == "duration" ? 180 : suite == "persistent" ? 180 : suite == "handoff" ? 120 : 240;
+                if (suite != "smoke" && suite != "full" && suite != "soak" && suite != "plans" && suite != "duration" && suite != "persistent" && suite != "handoff" && suite != "script_interrupt") throw new ArgumentException("invalid_suite");
+                double seconds = suite == "full" ? 900 : suite == "soak" ? 300 : suite == "duration" ? 180 : suite == "persistent" ? 180 : (suite == "handoff" || suite == "script_interrupt") ? 120 : 240;
                 string duration = Argument("-flyVoiceFixtureSeconds");
                 if (duration != null && (!double.TryParse(duration, NumberStyles.Float, CultureInfo.InvariantCulture, out seconds)
                     || double.IsNaN(seconds) || double.IsInfinity(seconds) || seconds < 1 || seconds > 3600)) throw new ArgumentException("invalid_duration");
@@ -294,7 +302,7 @@ namespace Flylingual.Conversation
                     if (fixture.expectedKind == "update" && !IsAction(fixture.expectedAction)) throw new ArgumentException("invalid_expected_action");
                     fixtures.Add(fixture.id, fixture);
                 }
-                string[] required = suite == "plans" ? Array.Empty<string>() : (suite == "persistent" || suite == "handoff")
+                string[] required = suite == "script_interrupt" ? new[] { "stop" } : suite == "plans" ? Array.Empty<string>() : (suite == "persistent" || suite == "handoff")
                     ? new[] { "persistent_forward", "persistent_continue", "persistent_conditions", "stop", "forward8" } : suite == "duration"
                     ? new[] { "forward_default", "right_default", "left_default" } : suite == "full"
                     ? new[] { "stop", "forward8", "right8", "ambiguous_forward", "ambiguous_right", "left8", "forward_right8", "forward_left8" }
@@ -311,6 +319,75 @@ namespace Flylingual.Conversation
                 Close();
                 return false;
             }
+        }
+
+        void SilenceScriptProducer()
+        {
+            if (Argument("-flyVoiceFixtureSuite") != "script_interrupt") return;
+            foreach (var narrator in FindObjectsByType<Flylingual.BlindSugarRun.BlindSugarRunNarrator>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+            {
+                if (narrator.SentCues > 0) scriptProducerConflict = true;
+                if (!narrator.enabled) continue;
+                narrator.enabled = false;
+                if (report != null) report.scriptNarratorsDisabled++;
+            }
+        }
+
+        IEnumerator RunScriptInterrupt()
+        {
+            SilenceScriptProducer();
+            if (scriptProducerConflict) { report.error = "script_producer_already_sent"; yield break; }
+            report.limitation += " Script suite disables the scene narrator only. Audio has no public response ID: intro acknowledgement plus new nonzero playback establishes temporal overlap, not response-ID provenance; script resumption is not verified.";
+            double quiet = -1, until = Math.Min(deadline, Now + 15);
+            while (Now < until && CanObserve())
+            {
+                if (!controller.ReplyPlaying) { if (quiet < 0) quiet = Now; if (Now - quiet >= 1) break; }
+                else quiet = -1;
+                yield return null;
+            }
+            if (quiet < 0 || Now - quiet < 1 || !CanObserve()) { report.error = "script_initial_audio_not_quiet"; yield break; }
+            report.scriptSamplesBefore = controller.PlayedNonzeroSamples;
+            report.scriptCueSentAt = Now;
+            if (!controller.TrySendBlindRunCue(Guid.NewGuid().ToString("N"), 1, 1, "intro", "{\"stageStarted\":true}", 0))
+            { report.error = "script_intro_not_sent"; yield break; }
+            Log("script_intro_sent", null);
+            until = Math.Min(deadline, Now + 25);
+            while (Now < until && CanObserve() && !(report.scriptCueAccepted && controller.ReplyPlaying
+                   && controller.PlayedNonzeroSamples > report.scriptSamplesBefore)) yield return null;
+            if (!report.scriptCueAccepted || !controller.ReplyPlaying || controller.PlayedNonzeroSamples <= report.scriptSamplesBefore)
+            { report.error = "script_audio_overlap_unavailable"; yield break; }
+            report.scriptAudioStartedAt = Now;
+            report.scriptSamplesAtStart = controller.PlayedNonzeroSamples;
+            Log("script_audio_observed", null);
+            Case stop = Begin("stop");
+            if (stop == null) yield break;
+            stop.replyOverlapRequested = true;
+            yield return AwaitApplied(stop, 20);
+            bool settled = false;
+            if (stop.applied) yield return WaitStopped(15, value => settled = value, stop.appliedSequence, stop.requestId);
+            stop.settled = settled;
+            double hold = Now + 2;
+            bool maintained = settled;
+            while (Now < hold && maintained)
+            {
+                bool received = demo.client.TryGetLatestFrame(out BrainFrame frame, out double age);
+                var motor = demo.controller.CurrentMotor;
+                maintained = Healthy(stop) && received && age <= .75 && frame != null
+                    && MatchesApplied(frame, stop.appliedSequence, stop.requestId, stop.brainSessionId, stop.brainInstanceId, "STOP")
+                    && frame.requestedAction == "STOP" && frame.motor != null
+                    && Mathf.Abs(frame.motor.forward) < .01f && Mathf.Abs(frame.motor.turn) < .01f
+                    && Mathf.Abs(motor.forward) < .03f && Mathf.Abs(motor.turn) < .03f
+                    && Vector3.ProjectOnPlane(demo.body.LinearVelocity, Vector3.up).magnitude < .05f
+                    && demo.body.GroundContactCount > 0;
+                yield return null;
+            }
+            report.scriptStopMaintained = maintained;
+            report.overlapVerified = report.scriptOverlapAtFirstChunk;
+            if (!report.scriptOverlapAtFirstChunk) Fail(stop, "script_not_playing_at_first_fixture_chunk");
+            if (!settled || !maintained) Fail(stop, "script_interrupt_stop_not_maintained");
+            if (report.scriptDiscardReceivedAt < stop.firstAudioAt) Fail(stop, "script_discard_not_observed_after_input");
+            EndCase(stop, stop.applied && settled && maintained && report.scriptOverlapAtFirstChunk);
+            if (stop.status != "pass") SetRunError(stop);
         }
 
         IEnumerator RunSmoke()
@@ -729,6 +806,7 @@ namespace Flylingual.Conversation
 
         void Update()
         {
+            SilenceScriptProducer();
             if (!running || controller == null) return;
             if (current != null && current.status == "pending") ObserveCase(current);
             if (Now >= nextObservationAt) { WriteObservation(); nextObservationAt = Now + .2; }
@@ -763,7 +841,9 @@ namespace Flylingual.Conversation
             previousAudioAt = sendStarted; nextAudioAt += .1; audioNotBefore = sendStarted + .09;
             if (playing != null)
             {
-                if (chunkIndex == 0) { current.firstAudioAt = Now; current.sourceSampleStart = sampleCursor; Log("fixture_audio_started", id); }
+                if (chunkIndex == 0) { if (report.suite == "script_interrupt")
+                    report.scriptOverlapAtFirstChunk = controller.ReplyPlaying && controller.PlayedNonzeroSamples > report.scriptSamplesBefore;
+                    current.firstAudioAt = Now; current.sourceSampleStart = sampleCursor; Log("fixture_audio_started", id); }
                 current.sentChunks++; current.lastAudioAt = Now;
                 current.replyOverlap |= controller.ReplyPlaying && controller.PlayedNonzeroSamples > current.replySamplesAtStart;
                 chunkIndex++;
@@ -782,6 +862,15 @@ namespace Flylingual.Conversation
             try { item = JsonUtility.FromJson<Control>(json); }
             catch (ArgumentException) { return; }
             if (item == null) return;
+            if (report != null && report.suite == "script_interrupt")
+            {
+                if (item.type == "blind_run_cue_result" && item.sequence == 1 && item.stage == "queued" && report.scriptCueSentAt >= 0)
+                { report.scriptCueAccepted = true; report.scriptCueAcceptedAt = Now; Log("script_intro_accepted", null); }
+                if (item.type == "discard_audio" && current != null && current.firstAudioAt >= 0 && report.scriptDiscardReceivedAt < 0)
+                { report.scriptDiscardReceivedAt = Now; Log("script_discard_received", null); }
+                if (item.type == "voice_test_diagnostic" && item.@event == "player_speech_interrupt" && report.scriptInterruptDiagnosticAt < 0)
+                    report.scriptInterruptDiagnosticAt = Now;
+            }
             if (item.type == "conversation_text")
             {
                 ObserveInputTranscript(json);
@@ -1070,10 +1159,14 @@ namespace Flylingual.Conversation
             bool handoffPass = report.suite == "handoff" && report.persistentObservationSeconds >= 3
                 && report.persistentHeld && report.persistentContinued
                 && report.persistentStopped && report.persistentFiniteExpired && report.persistentNoRevival;
-            bool standardPass = report.suite != "duration" && report.suite != "persistent" && report.suite != "handoff"
+            bool scriptPass = report.suite == "script_interrupt" && report.scriptCueAccepted
+                && report.scriptOverlapAtFirstChunk && report.scriptStopMaintained && report.startupFreshStop
+                && report.cases.Count == 1 && report.cases[0].applied && report.cases[0].settled
+                && report.scriptDiscardReceivedAt >= report.cases[0].firstAudioAt;
+            bool standardPass = report.suite != "duration" && report.suite != "persistent" && report.suite != "handoff" && report.suite != "script_interrupt"
                 && report.ttlReacceptChecks >= 3 && report.overlapVerified;
             report.pass = string.IsNullOrEmpty(error) && report.cases.Count > 0 && report.cases.TrueForAll(x => x.status == "pass")
-                && (durationPass || persistentPass || handoffPass || standardPass);
+                && (durationPass || persistentPass || handoffPass || scriptPass || standardPass);
             if (report.suite != "duration" && report.suite != "persistent" && report.suite != "handoff" && string.IsNullOrEmpty(report.error) && !report.overlapVerified) report.error = "reply_overlap_not_observed";
             report.status = report.pass ? "pass" : report.cases.Exists(x => x.status == "blocked") ? "blocked" : "incomplete";
             report.result = report.pass ? "native_voice_fixture_pass" : report.status;
