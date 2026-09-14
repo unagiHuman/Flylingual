@@ -114,11 +114,11 @@ namespace Flylingual.PlayScreen
             cover.style.display = coverVisible ? DisplayStyle.Flex : DisplayStyle.None;
             heading.text = tutorial ? GameLanguage.Text("遊び方", "How to play") : "FLYLINGUAL";
             subtitle.text = tutorial ? GameLanguage.Text("説明中はゲームの時間が止まっています。", "The game is paused while you read.")
-                : GameLanguage.Text("声を頼りに、砂糖を探そう。", "Follow your voice. Find the sugar.");
+                : GameLanguage.Text("声を頼りに、危険を避けてゴールを目指そう。", "Avoid danger and reach the goal.");
             instructions.style.display = tutorial ? DisplayStyle.Flex : DisplayStyle.None;
             instructions.text = GameLanguage.Text(
-                "声でハエに話しかけて、砂糖を目指しましょう。\n\n「前へ」「右を向いて」「左を向いて」「止まって」と伝えます。\nハエの案内を聞きながら進みましょう。砂糖に到着すると、歩いてきた世界が見えます。\n\n困ったときは「緊急停止」。マイクや文字入力はプレイ画面の「設定と診断」から設定できます。\n右上の設定ボタンから、いつでも表示言語を変更できます。",
-                "Talk to the fly and help it find the sugar.\n\nSay “forward”, “turn right”, “turn left”, or “stop”.\nListen to the fly as you explore. Reach the sugar to reveal the world you walked through.\n\nUse Emergency stop when needed. Microphone and text input options are in Settings and diagnostics on the play screen.\nChange the display language anytime using Settings at the top right.");
+                "声でハエに話しかけて、危険を避けてゴールを目指しましょう。\n\n「前へ」「右を向いて」「左を向いて」「止まって」と伝えます。\nハエの案内を聞き、崖やハエたたきなどの危険を避けて進みましょう。ゴールに到着すると、歩いてきた世界が見えます。\n\n困ったときは「緊急停止」。マイクや文字入力はプレイ画面の「設定と診断」から設定できます。\n右上の設定ボタンから、いつでも表示言語を変更できます。",
+                "Talk to the fly. Avoid danger and reach the goal.\n\nSay “forward”, “turn right”, “turn left”, or “stop”.\nListen to the fly and avoid hazards such as edges and the fly swatter. Reach the goal to reveal the world you walked through.\n\nUse Emergency stop when needed. Microphone and text input options are in Settings and diagnostics on the play screen.\nChange the display language anytime using Settings at the top right.");
             start.text = tutorial ? GameLanguage.Text("わかった・遊ぶ", "Got it — play") : GameLanguage.Text("はじめる", "Start");
             settingsButton.text = settingsOpen ? GameLanguage.Text("設定を閉じる", "Close settings") : GameLanguage.Text("設定", "Settings");
             settingsHeading.text = GameLanguage.Text("表示言語", "Display language");

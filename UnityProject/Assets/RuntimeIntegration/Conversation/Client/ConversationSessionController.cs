@@ -28,6 +28,7 @@ namespace Flylingual.Conversation
         int requestNumber;
         int neuralSubscribedEpoch = -1, neuralSubscribedGeneration = -1;
         public bool NeuralResponseAvailable { get; private set; }
+        public bool EnvironmentFeedbackAvailable { get; private set; }
         public NeuralResponsePanel.Observation NeuralResponse { get; private set; }
         public double NeuralResponseReceivedAt { get; private set; } = double.NegativeInfinity;
         bool requestedStart;
@@ -477,6 +478,7 @@ namespace Flylingual.Conversation
             BlindRunScriptAvailable = HasCapability(state.capabilities, "blind_run_script_v1");
             LocalVisualAvailable = HasCapability(state.capabilities, "local_visual_observation_v1");
             NeuralResponseAvailable = HasCapability(state.capabilities, "neural_response_v1");
+            EnvironmentFeedbackAvailable = HasCapability(state.capabilities, "environment_feedback_v1");
             if (!NeuralResponseAvailable) ResetNeuralResponse();
             if (Ready) Status = "connected";
             Backend = state.backend;
@@ -737,6 +739,28 @@ namespace Flylingual.Conversation
         }
 
         // Stage observations only: does not acquire control or submit an Action.
+        public bool TrySendEnvironmentEvent(string runId, int attempt, long sequence, string kind, string sourceId, float ageMs)
+        {
+            if (!Ready || !EnvironmentFeedbackAvailable || !ConversationActive || ConversationInteraction != "control"
+                || !bridgeConnected || conversationStopping || !HasFreshBrain || transport == null || !transport.IsConnected
+                || transport.QueueDepth >= 4 || ConversationGeneration < 0 || Sequence < 0
+                || string.IsNullOrEmpty(BrainSessionId) || string.IsNullOrEmpty(BrainInstanceId)
+                || float.IsNaN(ageMs) || float.IsInfinity(ageMs) || ageMs < 0 || ageMs > 750) return false;
+            var envelope = new EnvironmentEnvelope { runId = runId, attempt = attempt, sequence = sequence,
+                kind = kind, sourceId = sourceId, controlEpoch = ControlEpoch, conversationGeneration = ConversationGeneration,
+                brainSessionId = BrainSessionId, brainInstanceId = BrainInstanceId, brainSequence = Sequence };
+            string json = JsonUtility.ToJson(envelope);
+            json = json.Substring(0, json.Length - 1) + ",\"ageMs\":__OBSERVATION_AGE__}";
+            try { transport.EnqueueFresh(json, ageMs); return true; }
+            catch (ConversationTransportException) { return false; }
+        }
+        [Serializable] sealed class EnvironmentEnvelope
+        {
+            public string type = "environment_event", runId, kind, sourceId, brainSessionId, brainInstanceId;
+            public int attempt, controlEpoch, conversationGeneration;
+            public long sequence, brainSequence;
+        }
+
         internal bool TrySendBlindRunCue(string runId, int attempt, long sequence, string cue, string evidenceJson, float ageMs)
         {
             if (!Ready || !BlindRunScriptAvailable || !ConversationActive || ConversationInteraction != "control"
@@ -834,7 +858,7 @@ namespace Flylingual.Conversation
         }
         void Disconnected(string code)
         {
-            NeuralResponseAvailable = false; ResetNeuralResponse();
+            NeuralResponseAvailable = false; EnvironmentFeedbackAvailable = false; ResetNeuralResponse();
             Status = "disconnected"; Ready = false; requestedStart = false; ConversationLive = false; TextConversation = false;
             ActiveExecution = null;
             autoStartPending = false;

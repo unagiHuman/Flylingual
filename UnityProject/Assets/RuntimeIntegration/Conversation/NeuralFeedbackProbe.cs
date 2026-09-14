@@ -13,7 +13,7 @@ namespace Flylingual.Conversation
     public sealed class NeuralFeedbackProbe : MonoBehaviour
     {
         string output, originalLanguage;
-        bool english;
+        bool english, environmentProbe;
         int questionIndex;
         ConversationSessionController controller;
         readonly HashSet<long> frames = new HashSet<long>();
@@ -25,6 +25,8 @@ namespace Flylingual.Conversation
             public string result = "startup_timeout", backend, error, language;
             public bool live, brainReady, fresh, stopped, neuralAvailable;
             public int frames, neuralFrames, correlatedBodyFrames;
+            public int juiceContacts, threatStarts, threatEnds;
+            public bool environmentProbe, repositionedForContact;
             public long firstSequence, lastSequence;
             public float displacement, unityFrameP95Ms;
             public string brainEndpoint = "127.0.0.1:18766";
@@ -43,6 +45,7 @@ namespace Flylingual.Conversation
             var probe = go.AddComponent<NeuralFeedbackProbe>();
             probe.output = Path.GetFullPath(args[i + 1]);
             probe.english = Array.IndexOf(args, "-neuralFeedbackEnglish") >= 0;
+            probe.environmentProbe = Array.IndexOf(args, "-environmentFeedbackProbe") >= 0;
             int q = Array.IndexOf(args, "-neuralFeedbackQuestion");
             if (q >= 0 && q + 1 < args.Length && int.TryParse(args[q + 1], out int selected))
                 probe.questionIndex = Mathf.Clamp(selected, 0, 3);
@@ -63,11 +66,20 @@ namespace Flylingual.Conversation
         }
         void Capture(string json)
         {
+            if (json.Contains("\"environment_observation\""))
+            {
+                events?.WriteLine(json);
+                var item = JsonUtility.FromJson<EnvironmentEvent>(json);
+                if (item.kind == "sugar_contact") result.juiceContacts++;
+                if (item.kind == "threat_started") result.threatStarts++;
+                if (item.kind == "threat_ended") result.threatEnds++;
+            }
             // This opt-in artifact contains fixture dialogue, no audio or credentials.
             if (json.StartsWith("{\"type\": \"neural_response\"") || json.Contains("\"type\":\"neural_response\"")
                 || json.Contains("\"type\": \"command_result\"") || json.Contains("\"type\": \"conversation_text\""))
                 events?.WriteLine(json);
         }
+        [Serializable] sealed class EnvironmentEvent { public string kind; }
         IEnumerator Start()
         {
             Directory.CreateDirectory(Path.GetDirectoryName(output));
@@ -99,6 +111,17 @@ namespace Flylingual.Conversation
                 result.firstSequence = controller.Sequence;
                 controller.SendPlayerText(english ? "Stop" : "止まって");
                 yield return new WaitForSecondsRealtime(2);
+                result.environmentProbe = environmentProbe;
+                if (environmentProbe && controller.LastAppliedAction == "STOP" && stage.fly.Thorax != null)
+                {
+                    // Explicit diagnostic initial placement, not a contact/event injection.
+                    // Move the articulation root once; real Brain output then crosses the authored juice band.
+                    var root = stage.fly.Thorax;
+                    root.TeleportRoot(new Vector3(0, stage.fly.Position.y, 18.5f), root.transform.rotation);
+                    Physics.SyncTransforms();
+                    result.repositionedForContact = true;
+                    yield return new WaitForSecondsRealtime(1);
+                }
                 Vector3 initial = stage.fly.Position;
                 controller.SendPlayerText(english ? "Move forward" : "前に進んで");
                 yield return new WaitForSecondsRealtime(3);
@@ -106,6 +129,18 @@ namespace Flylingual.Conversation
                 controller.SendPlayerText(english ? "Stop" : "止まって");
                 yield return new WaitForSecondsRealtime(2);
                 result.stopped = controller.LastAppliedAction == "STOP";
+                if (environmentProbe)
+                {
+                    var swatter = stage.GetComponent<BlindSugarRunIdleSwatter>();
+                    float warningDeadline = Time.realtimeSinceStartup + 20;
+                    while (Time.realtimeSinceStartup < warningDeadline && swatter != null && !swatter.WarningActive
+                        && stage.State == BlindSugarRunSession.StageState.Playing) yield return null;
+                    controller.SendPlayerText(english ? "Move forward" : "前に進んで");
+                    yield return new WaitForSecondsRealtime(3);
+                    controller.SendPlayerText(english ? "Stop" : "止まって");
+                    yield return new WaitForSecondsRealtime(2);
+                    result.stopped = controller.LastAppliedAction == "STOP";
+                }
                 ScreenCapture.CaptureScreenshot(output + ".png");
                 string[] questions = english ? new[] { "What state are you in now?", "Did you refuse because you were afraid?", "Less commentary and no sarcasm, please.", "Tell me a little about space." }
                     : new[] { "今どういう状態？", "怖くて動きを拒否したの？", "実況を減らして、皮肉はやめて。", "宇宙について少し教えて。" };
@@ -128,6 +163,8 @@ namespace Flylingual.Conversation
                 frameMs.Sort();
                 result.unityFrameP95Ms = frameMs.Count == 0 ? 0 : frameMs[(int)((frameMs.Count - 1) * .95f)];
                 result.result = result.live && result.fresh && result.stopped && result.frames >= 30 && result.displacement > .05f ? "control_pass" : "control_failed";
+                if (environmentProbe) result.result = result.result == "control_pass" && result.repositionedForContact
+                    && result.juiceContacts == 1 && result.threatStarts >= 1 && result.threatEnds >= 1 ? "environment_pass" : "environment_failed";
                 controller.ControlEventReceived -= Capture;
             }
             else if (controller != null) result.error = controller.Error;

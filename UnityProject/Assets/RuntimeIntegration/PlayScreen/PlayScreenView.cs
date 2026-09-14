@@ -108,7 +108,7 @@ namespace Flylingual.PlayScreen
             gameFrame = Card(); gameFrame.style.flexGrow = 7; gameFrame.style.flexBasis = 0; gameFrame.style.marginRight = 12; main.Add(gameFrame);
             var gameTitle = LocalizedLabel("ゲーム画面 / GAME VIEW", "GAME VIEW", 13, amber, FontStyle.Bold); gameTitle.style.marginLeft = 14; gameTitle.style.marginTop = 12; gameFrame.Add(gameTitle);
             gameImage = new Image { scaleMode = ScaleMode.ScaleToFit }; gameImage.style.flexGrow = 1; gameImage.style.marginLeft = gameImage.style.marginRight = 10; gameImage.style.marginBottom = 10; gameFrame.Add(gameImage);
-            blindMessage = LocalizedLabel("BLIND SUGAR RUN\n\n声を頼りに、砂糖を探そう。\nたどり着いたら、歩いてきた世界が見える。", "BLIND SUGAR RUN\n\nUse your voice to find the sugar.\nReach it to reveal the world you explored.", 22, cream);
+            blindMessage = LocalizedLabel("BLIND SUGAR RUN\n\n声を頼りに、危険を避けてゴールを目指そう。\nたどり着いたら、歩いてきた世界が見える。", "BLIND SUGAR RUN\n\nAvoid danger and reach the goal using your voice.\nReach the goal to reveal the world you explored.", 22, cream);
             blindMessage.style.flexGrow = 1; blindMessage.style.unityTextAlign = TextAnchor.MiddleCenter;
             blindMessage.style.whiteSpace = WhiteSpace.Normal; blindMessage.style.display = DisplayStyle.None; gameFrame.Add(blindMessage);
             gameFrame.RegisterCallback<GeometryChangedEvent>(_ => UpdateGameImageRect());

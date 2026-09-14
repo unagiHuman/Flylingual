@@ -44,6 +44,7 @@ namespace Flylingual.BlindSugarRun
             if (fly == null) { Debug.LogError("BLIND_SUGAR_SESSION_MISSING_FLY"); enabled = false; yield break; }
             bool restoring = pendingScene == gameObject.scene.path;
             Attempt = restoring ? nextAttempt : 1;
+            if (GetComponent<BlindSugarRunEnvironmentFeedback>() == null) gameObject.AddComponent<BlindSugarRunEnvironmentFeedback>();
             Deaths = deaths;
             State = restoring ? StageState.Retrying : StageState.Playing;
             if (!restoring) yield break;
@@ -79,6 +80,7 @@ namespace Flylingual.BlindSugarRun
             LastFallPosition = position;
             LastFallAction = conversation == null ? "unknown" : conversation.LastAppliedAction ?? "unknown";
             GetComponent<BlindSugarRunNarrator>()?.NotifyFall(healthy, LastFallAction);
+            GetComponent<BlindSugarRunEnvironmentFeedback>()?.Finish(healthy);
             StopAttempt();
             if (healthy)
             {
@@ -112,6 +114,7 @@ namespace Flylingual.BlindSugarRun
             LastFallPosition = fly.Position;
             LastFallAction = conversation == null ? "unknown" : conversation.LastAppliedAction ?? "unknown";
             GetComponent<BlindSugarRunNarrator>()?.NotifySwatted();
+            GetComponent<BlindSugarRunEnvironmentFeedback>()?.Finish(false, true);
             State = StageState.GameOver;
             Flylingual.Audio.SEManager.Instance?.Play(Flylingual.Audio.SEType.GameOver);
             Deaths = ++deaths;
@@ -124,6 +127,7 @@ namespace Flylingual.BlindSugarRun
         {
             if (State != StageState.Playing) return;
             State = StageState.Goal;
+            GetComponent<BlindSugarRunEnvironmentFeedback>()?.Finish(false);
             Flylingual.Audio.SEManager.Instance?.Play(Flylingual.Audio.SEType.Goal);
             BindConversation();
             // Completion pauses PhysX; keep the existing live adapters running for final speech.

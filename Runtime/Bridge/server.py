@@ -27,6 +27,7 @@ from .conversation_settings import SettingsError, options_message, validate_sett
 from .translation import message_text, summarize
 from .neural_response import NeuralResponseAnalyzer, number
 from .neural_feedback import NeuralFeedbackScheduler, compact_summary, SPONTANEOUS
+from .environment_feedback import EnvironmentFeedback
 
 
 VOICE_TEST_EVENTS = frozenset({
@@ -79,6 +80,9 @@ class Bridge:
         self.conversation = ConversationAdapter(config['conversation'], self.conversation_event,
                                                 self.voice_utterance, self.transcript_utterance)
         self.blind_script = BlindRunScript()
+        self.environment = EnvironmentFeedback(config['control']['staleMs'])
+        self.environment_generation = None
+        self.environment_sender = None
         self.local_observation = LocalSafetyObservation()
         self.local_visual = LocalVisualObservation()
         self.local_visual_commentary_count = 0
@@ -132,6 +136,9 @@ class Bridge:
         self.neural_max_chars = 0
 
     def clear_neural(self):
+        self.environment.clear_current()
+        if self.environment_sender is not None and not self.environment_sender.done():
+            self.environment_sender.cancel()
         self.neural.reset()
         self.neural_scheduler.reset()
         self.neural_body = None
@@ -507,7 +514,7 @@ class Bridge:
                 'target': {'host': self.target['host'], 'port': self.target['port']},
                 'brainConnected': bool(self.adapter and self.adapter.connected), 'brainReady': False,
                 'conversationState': self.conversation.state, 'conversationMode': self.conversation.mode,
-                'capabilities': ['conversation_only_v1', 'native_voice_actions_v1', 'blind_run_script_v1', 'local_visual_observation_v1', 'bounded_action_plans_v1', 'persistent_intents_v1', 'distance_intents_v1'] + (['neural_response_v1'] if self.neural.enabled else []),
+                'capabilities': ['conversation_only_v1', 'native_voice_actions_v1', 'blind_run_script_v1', 'environment_feedback_v1', 'local_visual_observation_v1', 'bounded_action_plans_v1', 'persistent_intents_v1', 'distance_intents_v1'] + (['neural_response_v1'] if self.neural.enabled else []),
                 'activeExecution': self.execution_state(),
                 'actionPlan': ({k: self.plans.active[k] for k in ('planId', 'name', 'step', 'requestId')}
                                if self.plans.active else None),
@@ -1340,11 +1347,67 @@ class Bridge:
                    'stage': 'queued', 'speakRequested': speak})
         self.log('blind_run_cue_queued', cue=event['cue'], sequence=event['sequence'], speakRequested=speak)
 
+    def accept_environment_event(self, event):
+        required = {'type', 'kind', 'sourceId', 'runId', 'attempt', 'sequence', 'ageMs',
+                    'controlEpoch', 'conversationGeneration', 'brainSequence', 'brainSessionId', 'brainInstanceId'}
+        if set(event) != required:
+            raise ControlError('invalid_environment_event')
+        if (self.control_ws is None or not self.conversation_accepting or self.switching or self.release_unknown
+                or self.conversation_interaction != 'control' or self.conversation.state not in ('live', 'text')):
+            raise ControlError('environment_control_required')
+        if type(event['controlEpoch']) is not int or event['controlEpoch'] != self.arbiter.epoch:
+            raise ControlError('old_epoch')
+        if type(event['conversationGeneration']) is not int or event['conversationGeneration'] != self.conversation_generation:
+            raise ControlError('old_conversation_generation')
+        self.require_fresh()
+        status = self.adapter.status if self.adapter else {}
+        frame = self.frame or {}
+        if (event['brainSessionId'] != status.get('sessionId') or event['brainInstanceId'] != status.get('instanceId')
+                or not event['brainSessionId'] or not event['brainInstanceId']
+                or type(event['brainSequence']) is not int or event['brainSequence'] < 0
+                or event['brainSequence'] > frame.get('sequence', -1)
+                or frame.get('sequence', 0) - event['brainSequence'] > 16):
+            raise ControlError('environment_brain_identity_mismatch')
+        scope = (self.conversation_generation, status.get('sessionId'), status.get('instanceId'))
+        if scope != self.environment_generation:
+            self.environment.reset()
+            self.environment_generation = scope
+        observation = self.environment.accept(event, time.monotonic()*1000)
+        if observation is None:
+            return
+        # Nonessential observations never fill the command queue or touch motor.
+        if self.control_queue is not None and not self.control_queue.full() and self.control_queue.qsize() < 96:
+            self.control_queue.put_nowait(observation)
+        self.log('environment_observation', observation=observation)
+        if self.environment_sender is None or self.environment_sender.done():
+            self.environment_sender = self.task(self.send_environment_context(observation))
+
+    async def send_environment_context(self, observation):
+        if (observation['controlEpoch'] != self.arbiter.epoch or
+                observation['conversationGeneration'] != self.conversation_generation or
+                not self.conversation_accepting or self.switching or self.release_unknown or self.arbiter.inhibited
+                or self.conversation_interaction != 'control' or self.conversation.state not in ('live', 'text')
+                or self.adapter is None or not self.adapter.connected or self.summary()['stale']
+                or observation['brainSessionId'] != self.adapter.status.get('sessionId')
+                or observation['brainInstanceId'] != self.adapter.status.get('instanceId')):
+            return
+        fact = self.environment.summary(time.monotonic()*1000, self.conversation.settings['language'])
+        if fact is None or self.environment.latest['sequence'] != observation['sequence']:
+            return
+        # Swatter/fall narration already exists. Contact alone may add one line.
+        channel = 'commentary' if observation['kind'] == 'sugar_contact' else 'thinking'
+        if channel == 'commentary':
+            fact += (' 設定中の人格で接触の事実だけを短い一言に。神経反応を創作しない。' if self.conversation.settings['language'] == 'ja'
+                     else ' Keep the selected persona; briefly describe contact only. Do not invent a neural response.')
+        await self.conversation.append(channel, fact)
+
     async def command(self, event):
         if not isinstance(event, dict):
             raise ControlError('invalid_message')
         kind = event.get('type')
-        if kind == 'neural_observation_subscribe':
+        if kind == 'environment_event':
+            self.accept_environment_event(event)
+        elif kind == 'neural_observation_subscribe':
             if set(event) != {'type', 'controlEpoch', 'conversationGeneration', 'enabled'} or type(event.get('enabled')) is not bool:
                 raise ControlError('invalid_neural_subscription')
             if (type(event['controlEpoch']) is int and event['controlEpoch'] == self.arbiter.epoch
@@ -1816,6 +1879,12 @@ class Bridge:
                         if current is None:
                             continue
                         event = {'type': 'neural_response', **current}
+                    elif event.get('type') == 'environment_observation':
+                        current = self.environment.snapshot(time.monotonic()*1000)
+                        if (current is None or current['controlEpoch'] != self.arbiter.epoch
+                                or current['conversationGeneration'] != self.conversation_generation):
+                            continue
+                        event = current
                     await asyncio.wait_for(ws.send_json(event), timeout=2)
             sender = self.task(send())
             self.emit(self.state())

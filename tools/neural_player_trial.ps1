@@ -3,7 +3,8 @@ param(
     [ValidateSet('ja','en')][string]$Language = 'ja',
     [ValidateRange(0,3)][int]$Question = 0,
     [switch]$ObservationOff,
-    [switch]$RenderScreenshot
+    [switch]$RenderScreenshot,
+    [switch]$EnvironmentFeedback
 )
 $ErrorActionPreference = 'Stop'
 $trialRoot = Split-Path $PSScriptRoot -Parent
@@ -27,6 +28,7 @@ try {
     $launchArguments = @('-batchmode','-neuralFeedbackProbe',$resultPath,'-neuralFeedbackQuestion',"$Question",'-flyConversationNoMicrophone','-logFile',(Join-Path $trialOutput ($Name + '-player.log')))
     if ($RenderScreenshot) { $launchArguments = @($launchArguments | Where-Object { $_ -ne '-batchmode' }) }
     if ($Language -eq 'en') { $launchArguments += '-neuralFeedbackEnglish' }
+    if ($EnvironmentFeedback) { $launchArguments += '-environmentFeedbackProbe' }
     $trialProcess = Start-Process -FilePath $trialExe -WorkingDirectory (Split-Path $trialExe) -WindowStyle Hidden -ArgumentList $launchArguments -PassThru
     $trialProcess | Select-Object Id,StartTime,Path | ConvertTo-Json | Set-Content (Join-Path $trialOutput ($Name + '-process.json'))
     $deadline = [DateTime]::UtcNow.AddSeconds(180)

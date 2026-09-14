@@ -1,7 +1,7 @@
 {
   "version": 1,
   "cues": {
-    "intro": {"evidence": {"stageStarted": true}, "ja": "ぼくの声で、砂糖を探そう。", "en": "Let's find sugar by my voice."},
+    "intro": {"evidence": {"stageStarted": true}, "ja": "ぼくの声を聞いて、危険を避けてゴールを目指そう。", "en": "Listen to my voice. Avoid danger and reach the goal."},
     "vision": {"evidence": {"externalVisionAvailable": true}, "ja": "外付けの目で、近くがわかるよ。", "en": "My added sensors see nearby."},
     "ask": {"evidence": {"tutorialPrompt": true}, "ja": "周りのこと、聞いてね。", "en": "Ask me what's nearby."},
     "forward_lesson": {"evidence": {"tutorialPrompt": true}, "ja": "「前に進んで」って言ってみて。", "en": "Try saying, 'Move forward.'"},
@@ -22,7 +22,7 @@
     "branch_left_narrow": {"evidence": {"localBranchesVisible": true, "leftWidth": "narrow", "rightWidth": "wide"}, "ja": "左は細くて、右は広い。", "en": "Left is narrow; right is wide."},
     "branch_right_narrow": {"evidence": {"localBranchesVisible": true, "leftWidth": "wide", "rightWidth": "narrow"}, "ja": "左は広くて、右は細い。", "en": "Left is wide; right is narrow."},
     "plate": {"evidence": {"forwardObject": "sugar_plate"}, "ja": "近くに、白い皿。", "en": "A white plate nearby."},
-    "sugar": {"evidence": {"sugarDetected": true}, "ja": "砂糖、見つけた。", "en": "Found sugar."},
+    "sugar": {"evidence": {"sugarDetected": true}, "ja": "砂糖を確認。危険を避けて、ゴールを目指そう。", "en": "Sugar detected. Avoid danger and reach the goal."},
     "goal_wait": {"evidence": {"insideGoal": true, "bodyStable": false}, "ja": "ここで、落ち着こう。", "en": "Let's settle here."},
     "goal": {"evidence": {"insideGoal": true, "bodyStable": true, "goalConfirmed": true}, "ja": "着いた！", "en": "Made it!"},
     "reveal": {"evidence": {"revealStarted": true}, "ja": "ここを、歩いてきたんだ。", "en": "This is where we walked."},

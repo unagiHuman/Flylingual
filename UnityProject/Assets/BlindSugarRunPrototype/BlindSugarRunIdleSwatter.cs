@@ -56,6 +56,7 @@ namespace Flylingual.BlindSugarRun
             {
                 anchor = position; anchored = true; wasPaused = true;
                 if (WarningActive) stage.GetComponent<BlindSugarRunNarrator>()?.NotifySwatterEscaped();
+                if (WarningActive) stage.GetComponent<BlindSugarRunEnvironmentFeedback>()?.ThreatEnded(false);
                 WarningActive = false;
                 if (presentation != null) presentation.SetActive(false);
                 if (warningLabel != null) warningLabel.style.display = DisplayStyle.None;
@@ -68,7 +69,7 @@ namespace Flylingual.BlindSugarRun
             if (displacement.sqrMagnitude >= threshold * threshold)
             {
                 bool escaped = WarningActive;
-                ResetIdle(); anchor = position; anchored = true; Counting = true;
+                ResetIdle(true); anchor = position; anchored = true; Counting = true;
                 if (escaped) Debug.Log("BLIND_SUGAR_SWATTER_ESCAPED position=" + position);
             }
             IdleElapsed += Time.deltaTime;
@@ -79,6 +80,7 @@ namespace Flylingual.BlindSugarRun
             if (!WarningActive)
             {
                 WarningActive = true;
+                stage.GetComponent<BlindSugarRunEnvironmentFeedback>()?.ThreatStarted();
                 BuildPresentation();
                 stage.GetComponent<BlindSugarRunNarrator>()?.NotifySwatterWarning();
                 if (audioSource != null) audioSource.PlayOneShot(warningClip, .5f);
@@ -107,8 +109,9 @@ namespace Flylingual.BlindSugarRun
             stage.KillBySwatter();
         }
 
-        void ResetIdle()
+        void ResetIdle(bool escaped = false)
         {
+            if (WarningActive && stage != null) stage.GetComponent<BlindSugarRunEnvironmentFeedback>()?.ThreatEnded(escaped);
             if (WarningActive && stage != null) stage.GetComponent<BlindSugarRunNarrator>()?.NotifySwatterEscaped();
             IdleElapsed = 0; WarningActive = false; Counting = false; anchored = false; wasPaused = false;
             if (presentation != null) presentation.SetActive(false);
