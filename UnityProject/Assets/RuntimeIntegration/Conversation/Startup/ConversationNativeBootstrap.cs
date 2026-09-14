@@ -45,9 +45,10 @@ namespace Flylingual.Conversation
         public string StatusPath => statusPath;
         public string StartupError { get; private set; }
 
-        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void CreateForCommandLine()
         {
+            if (FindAnyObjectByType<Flylingual.PlayScreen.TitleScreen>() != null) return;
             if (!NativeConversationRuntime.Requested || FindFirstObjectByType<ConversationNativeBootstrap>() != null) return;
             new GameObject("ConversationNativeBootstrap").AddComponent<ConversationNativeBootstrap>();
         }

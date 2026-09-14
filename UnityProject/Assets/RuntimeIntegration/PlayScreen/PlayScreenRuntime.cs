@@ -2,6 +2,7 @@ using FlyBrainVisualization;
 using Flylingual.Conversation;
 using FlyVisualDemo;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 using UnityEngine.Rendering.Universal;
 
 namespace Flylingual.PlayScreen
@@ -24,11 +25,19 @@ namespace Flylingual.PlayScreen
         public static bool Active { get; private set; }
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
-        static void ResetStatics() { Active = false; }
+        static void ResetStatics()
+        {
+            Active = false;
+            SceneManager.sceneLoaded -= OnSceneLoaded;
+            SceneManager.sceneLoaded += OnSceneLoaded;
+        }
+
+        static void OnSceneLoaded(Scene scene, LoadSceneMode mode) => InstallForNativePlayer();
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         static void InstallForNativePlayer()
         {
+            if (FindAnyObjectByType<TitleScreen>() != null) return;
             if (NativeConversationRuntime.Enabled && FindFirstObjectByType<PlayScreenRuntime>() == null)
                 new GameObject("Flylingual Play Screen").AddComponent<PlayScreenRuntime>();
         }

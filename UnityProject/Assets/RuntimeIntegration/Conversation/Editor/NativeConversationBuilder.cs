@@ -29,7 +29,7 @@ public static class NativeConversationBuilder
         string player = Path.Combine(root, "artifacts/windows-native-conversation/unity/FlylingualConversation.exe");
         Directory.CreateDirectory(Path.GetDirectoryName(player));
         var report = BuildPipeline.BuildPlayer(new BuildPlayerOptions {
-            scenes = new[] { PlayScreenBuilder.ScenePath },
+            scenes = TitleScreenBuilder.BuildScenes(),
             locationPathName = player, target = BuildTarget.StandaloneWindows64,
             extraScriptingDefines = new[] { "FLY_NATIVE_CONVERSATION" },
             options = BuildOptions.Development
@@ -42,11 +42,12 @@ public static class NativeConversationBuilder
     [MenuItem("Flylingual/Conversation/Build Mac conversation Player")]
     public static void BuildMac()
     {
+        if (!File.Exists(PlayScreenBuilder.ScenePath)) BlindSugarRunPlayBuilder.CreateScene();
         string root = Path.GetFullPath(Path.Combine(Application.dataPath, "../.."));
         string player = Path.Combine(root, "artifacts/mac-native-conversation/unity/FlylingualConversation.app");
         Directory.CreateDirectory(Path.GetDirectoryName(player));
         var report = BuildPipeline.BuildPlayer(new BuildPlayerOptions {
-            scenes = new[] { "Assets/VisualDemo/SessionRealism/FlyGroundedRealismDemo.unity" },
+            scenes = TitleScreenBuilder.BuildScenes(),
             locationPathName = player, target = BuildTarget.StandaloneOSX,
             extraScriptingDefines = new[] { "FLY_NATIVE_CONVERSATION" },
             options = BuildOptions.Development

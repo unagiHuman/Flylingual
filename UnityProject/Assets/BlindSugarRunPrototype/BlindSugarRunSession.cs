@@ -1,10 +1,9 @@
-using System;
 using System.Collections;
 using Flylingual.Conversation;
 using FlyLocomotionPoC;
 using FlyVisualDemo;
 using UnityEngine;
-using UnityEngine.SceneManagement;
+using Flylingual.PlayScreen;
 
 namespace Flylingual.BlindSugarRun
 {
@@ -49,7 +48,7 @@ namespace Flylingual.BlindSugarRun
             State = restoring ? StageState.Retrying : StageState.Playing;
             if (!restoring) yield break;
             pendingScene = null;
-            view.ShowBusy("開始地点と音声操作を準備しています…", Attempt);
+            view.ShowBusy(GameLanguage.Text("開始地点と音声操作を準備しています…", "Preparing the starting point and voice controls…"), Attempt);
             // Scene Awake/Start must finish before recreating adapters that cache the scene's Fly.
             yield return null;
             yield return ResumeAtStart();
@@ -84,14 +83,15 @@ namespace Flylingual.BlindSugarRun
             if (healthy)
             {
                 State = StageState.GameOver;
+                Flylingual.Audio.SEManager.Instance?.Play(Flylingual.Audio.SEType.GameOver);
                 Deaths = ++deaths;
-                view.Show("GAME OVER", "崖から落下しました。\n開始地点からもう一度挑戦できます。", Attempt, () => BeginRetry());
+                view.Show("GAME OVER", GameLanguage.Text("崖から落下しました。\n開始地点からもう一度挑戦できます。", "You fell off the edge.\nTry again from the starting point."), Attempt, () => BeginRetry());
             }
             else
             {
                 // A known transport/Brain fault is an interruption, never an ordinary death.
                 State = StageState.Interrupted;
-                view.Show("プレイを中断しました", "落下時の接続状態を確認できませんでした。\n接続を確認して、開始地点からやり直してください。", Attempt, () => BeginRetry());
+                view.Show(GameLanguage.Text("プレイを中断しました", "Play interrupted"), GameLanguage.Text("落下時の接続状態を確認できませんでした。\n接続を確認して、開始地点からやり直してください。", "The connection could not be verified when you fell.\nCheck the connection and try again."), Attempt, () => BeginRetry());
             }
             Debug.Log("BLIND_SUGAR_FALL state=" + State + " attempt=" + Attempt + " deaths=" + Deaths +
                 " position=" + position + " lastObservedAction=" + LastFallAction);
@@ -113,9 +113,10 @@ namespace Flylingual.BlindSugarRun
             LastFallAction = conversation == null ? "unknown" : conversation.LastAppliedAction ?? "unknown";
             GetComponent<BlindSugarRunNarrator>()?.NotifySwatted();
             State = StageState.GameOver;
+            Flylingual.Audio.SEManager.Instance?.Play(Flylingual.Audio.SEType.GameOver);
             Deaths = ++deaths;
             StopAttempt();
-            view.Show("GAME OVER", "動かずにいたため、ハエたたきに叩かれました。\n開始地点からもう一度挑戦できます。", Attempt, () => BeginRetry());
+            view.Show("GAME OVER", GameLanguage.Text("動かずにいたため、ハエたたきに叩かれました。\n開始地点からもう一度挑戦できます。", "You stayed still and were hit by the fly swatter.\nTry again from the starting point."), Attempt, () => BeginRetry());
             Debug.Log("BLIND_SUGAR_SWATTED attempt=" + Attempt + " deaths=" + Deaths + " position=" + LastFallPosition);
         }
 
@@ -123,6 +124,7 @@ namespace Flylingual.BlindSugarRun
         {
             if (State != StageState.Playing) return;
             State = StageState.Goal;
+            Flylingual.Audio.SEManager.Instance?.Play(Flylingual.Audio.SEType.Goal);
             BindConversation();
             // Completion pauses PhysX; keep the existing live adapters running for final speech.
             Time.timeScale = 0f;
@@ -148,52 +150,33 @@ namespace Flylingual.BlindSugarRun
 
         public bool BeginRetry()
         {
+            if (GameSceneTransition.IsLoading) return false;
             bool completedReveal = (State == StageState.Goal || State == StageState.Reveal)
                 && GetComponent<BlindSugarRunReveal>() != null && GetComponent<BlindSugarRunReveal>().Complete;
             if (State != StageState.GameOver && State != StageState.Interrupted && !completedReveal) return false;
+            Flylingual.Audio.SEManager.Instance?.Play(Flylingual.Audio.SEType.Retry);
             if (completedReveal) pendingRetryMicrophoneMute = microphoneMutedBeforeGoal;
             State = StageState.Retrying;
-            view.ShowBusy("開始地点へ戻っています…", Attempt + 1);
+            view.ShowBusy(GameLanguage.Text("開始地点へ戻っています…", "Returning to the starting point…"), Attempt + 1);
             StopAttempt();
-            StartCoroutine(ReloadStage());
-            return true;
-        }
-
-        IEnumerator ReloadStage()
-        {
-            string path = gameObject.scene.path;
-            if (string.IsNullOrEmpty(path) || !Application.CanStreamedLevelBeLoaded(path))
-            { RetryFailed("開始シーンを読み込めませんでした。"); yield break; }
-            // Services and session controller persist. Only the two scene-bound adapters are replaced.
-            if (nativeBody != null) Destroy(nativeBody);
-            if (conversation != null)
-            {
-                var reaction = conversation.GetComponent<NativeConversationReaction>();
-                if (reaction != null) { reaction.enabled = false; Destroy(reaction); }
-            }
-            yield return null;
-            pendingScene = path;
+            pendingScene = gameObject.scene.path;
             nextAttempt = Attempt + 1;
-            AsyncOperation load = null;
-            try { load = SceneManager.LoadSceneAsync(path, LoadSceneMode.Single); }
-            catch (Exception e) { Debug.LogError("BLIND_SUGAR_RETRY_LOAD_FAILED " + e.GetType().Name); }
-            if (load == null)
+            return GameSceneTransition.TryLoad(pendingScene, message =>
             {
                 pendingScene = null;
-                RetryFailed("開始シーンの読み込みに失敗しました。");
-                yield break;
-            }
-            while (!load.isDone) yield return null;
+                RetryFailed(message);
+            });
         }
 
         IEnumerator ResumeAtStart()
         {
+            while (GameSceneTransition.IsLoading) yield return null;
             Time.timeScale = 0f;
             float deadline = Time.realtimeSinceStartup + 15f;
             while (conversation == null && Time.realtimeSinceStartup < deadline) { BindConversation(); yield return null; }
-            if (conversation == null) { RetryFailed("接続の準備ができませんでした。"); yield break; }
+            if (conversation == null) { RetryFailed(GameLanguage.Text("接続の準備ができませんでした。", "The connection was not ready.")); yield break; }
             var demo = FindFirstObjectByType<WindowsReplayDemo>();
-            if (demo == null || demo.body != fly) { RetryFailed("ハエの再配置を確認できませんでした。"); yield break; }
+            if (demo == null || demo.body != fly) { RetryFailed(GameLanguage.Text("ハエの再配置を確認できませんでした。", "The fly could not be located at the starting point.")); yield break; }
             if (conversation.GetComponent<NativeConversationBody>() == null)
                 nativeBody = conversation.gameObject.AddComponent<NativeConversationBody>();
             else nativeBody = conversation.GetComponent<NativeConversationBody>();
@@ -204,7 +187,7 @@ namespace Flylingual.BlindSugarRun
             while (Time.realtimeSinceStartup < deadline &&
                 (!conversation.Ready || !conversation.HasFreshBrain || !conversation.VoiceActionsAvailable || !conversation.OutputInhibited)) yield return null;
             if (!conversation.Ready || !conversation.HasFreshBrain || !conversation.VoiceActionsAvailable || !conversation.OutputInhibited)
-            { RetryFailed("接続の停止確認ができませんでした。"); yield break; }
+            { RetryFailed(GameLanguage.Text("接続の停止確認ができませんでした。", "The stopped connection could not be confirmed.")); yield break; }
             // The explicit retry click authorizes a fresh STOP/voice-generation/resume handshake.
             // No old Action, microphone buffer, or motor value is submitted again.
             if (pendingRetryMicrophoneMute.HasValue)
@@ -216,7 +199,7 @@ namespace Flylingual.BlindSugarRun
             deadline = Time.realtimeSinceStartup + 65f;
             while (Time.realtimeSinceStartup < deadline && !(conversation.BodyControlActive && nativeBody.BodyActive)) yield return null;
             if (!conversation.BodyControlActive || !nativeBody.BodyActive)
-            { RetryFailed("音声操作を再開できませんでした。"); yield break; }
+            { RetryFailed(GameLanguage.Text("音声操作を再開できませんでした。", "Voice controls could not be resumed.")); yield break; }
             State = StageState.Playing;
             view.Hide();
             Debug.Log("BLIND_SUGAR_RETRY_READY attempt=" + Attempt + " position=" + fly.Position +
@@ -227,7 +210,7 @@ namespace Flylingual.BlindSugarRun
         {
             StopAttempt();
             State = StageState.Interrupted;
-            view.Show("再開の準備ができませんでした", message + "\n接続を確認して、もう一度リトライしてください。", Attempt, () => BeginRetry());
+            view.Show(GameLanguage.Text("再開の準備ができませんでした", "Unable to resume"), message + GameLanguage.Text("\n接続を確認して、もう一度リトライしてください。", "\nCheck the connection and try again."), Attempt, () => BeginRetry());
         }
     }
 }

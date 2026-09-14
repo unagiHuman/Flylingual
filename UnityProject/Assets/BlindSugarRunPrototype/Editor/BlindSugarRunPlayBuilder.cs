@@ -94,6 +94,7 @@ public static class BlindSugarRunPlayBuilder
         var buildScenes = EditorBuildSettings.scenes.Where(item => item.path != PlayScreenBuilder.ScenePath).ToList();
         buildScenes.Insert(0, new EditorBuildSettingsScene(PlayScreenBuilder.ScenePath, true));
         EditorBuildSettings.scenes = buildScenes.ToArray();
+        if (File.Exists(Flylingual.PlayScreen.TitleScreen.ScenePath)) TitleScreenBuilder.RegisterScenes();
         AssetDatabase.SaveAssets();
         Debug.Log("BLIND_SUGAR_STARTUP_SCENE_PASS scene=" + PlayScreenBuilder.ScenePath +
             " preservedBodyComponents=" + bodySnapshot.Count + " removedEnvironmentRoots=" + removed.Count +

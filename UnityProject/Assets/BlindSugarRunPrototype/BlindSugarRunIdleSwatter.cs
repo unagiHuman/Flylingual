@@ -1,3 +1,4 @@
+using Flylingual.PlayScreen;
 using Flylingual.Conversation;
 using UnityEngine;
 using UnityEngine.Rendering;
@@ -85,8 +86,8 @@ namespace Flylingual.BlindSugarRun
             if (presentation != null)
             {
                 warningLabel.style.display = DisplayStyle.Flex;
-                warningLabel.text = "ハエたたきが来る！ 動いて逃げよう\nあと "
-                    + Mathf.CeilToInt(Mathf.Max(0, total - IdleElapsed)) + " 秒";
+                warningLabel.text = GameLanguage.Text("ハエたたきが来る！ 動いて逃げよう\nあと ", "A fly swatter is coming! Move to escape!\nTime left: ")
+                    + Mathf.CeilToInt(Mathf.Max(0, total - IdleElapsed)) + GameLanguage.Text(" 秒", " seconds");
                 presentation.SetActive(true);
                 // The final fast descent is part of the warning: escape remains possible until impact.
                 float remaining = total - IdleElapsed;

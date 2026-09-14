@@ -42,7 +42,7 @@ public static class PlayScreenBuilder
         string player = Path.Combine(root, "artifacts/windows-native-conversation/unity/FlylingualConversation.exe");
         Directory.CreateDirectory(Path.GetDirectoryName(player));
         var report = BuildPipeline.BuildPlayer(new BuildPlayerOptions {
-            scenes = new[] { ScenePath }, locationPathName = player, target = BuildTarget.StandaloneWindows64,
+            scenes = TitleScreenBuilder.BuildScenes(), locationPathName = player, target = BuildTarget.StandaloneWindows64,
             extraScriptingDefines = new[] { "FLY_NATIVE_CONVERSATION" }, options = BuildOptions.Development
         });
         if (report.summary.result != BuildResult.Succeeded) throw new InvalidOperationException("Play screen build failed: " + report.summary.result);

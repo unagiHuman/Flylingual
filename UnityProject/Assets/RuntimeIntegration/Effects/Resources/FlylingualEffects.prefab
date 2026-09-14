@@ -1,0 +1,62 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1 &5187468481851283399
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 6783702611594114935}
+  - component: {fileID: 4763365912743898724}
+  m_Layer: 0
+  m_Name: FlylingualEffects
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &6783702611594114935
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5187468481851283399}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &4763365912743898724
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5187468481851283399}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 52926c52aee24c5f9bc20999b4cf0138, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Flylingual.Effects.EffectManager
+  effects:
+  - id: spark
+    prefab: {fileID: 8084344355094579512, guid: b2e3e4ed54b934cf6afbe49d1236340f, type: 3}
+    initialCapacity: 4
+    maxInstances: 16
+    maxLifetime: 10
+  - id: confetti
+    prefab: {fileID: 6642475166069709413, guid: fc2918a1c5a2440f69a0dc03fb3bd373, type: 3}
+    initialCapacity: 4
+    maxInstances: 16
+    maxLifetime: 10
+  - id: smoke
+    prefab: {fileID: 5638539442450994864, guid: 1168504c366c843a886f2b1f11f6f217, type: 3}
+    initialCapacity: 4
+    maxInstances: 16
+    maxLifetime: 10

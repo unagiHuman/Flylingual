@@ -1,3 +1,4 @@
+using Flylingual.PlayScreen;
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -34,6 +35,11 @@ namespace Flylingual.Conversation
         bool captureAttempted;
         bool fixtureInputEnabled;
         string expectedSettingsRequestId;
+        string startupLanguageAttempt;
+        bool startupLanguageAcknowledged;
+        double settingsRequestedAt;
+        public bool SelectedLanguageReady => Settings.language == GameLanguage.Code
+            && expectedSettingsRequestId == null && (startupLanguageAttempt == null || startupLanguageAcknowledged);
         string selectedDevice;
         string captionRole;
         int mainThreadCount;
@@ -115,7 +121,7 @@ namespace Flylingual.Conversation
         public string BrainInstanceId { get; private set; }
         public string BridgeMotorHost { get; private set; }
         public int BridgeMotorPort { get; private set; }
-        public string ActionFeedback { get; private set; } = "接続後に音声操作を開始します";
+        public string ActionFeedback { get; private set; } = string.Empty;
         public int SubmittedActions { get; private set; }
         public int AppliedActions { get; private set; }
         public int RejectedActions { get; private set; }
@@ -130,9 +136,10 @@ namespace Flylingual.Conversation
 
         void Awake()
         {
+            ActionFeedback = GameLanguage.Text("接続後に音声操作を開始します", "Voice controls will start after connecting");
             var commandLine = Environment.GetCommandLineArgs();
             startChatOnly = Array.IndexOf(commandLine, "-flyConversationChatOnly") >= 0;
-            if (startChatOnly) ActionFeedback = "会話のみ。身体操作は停止しています";
+            if (startChatOnly) ActionFeedback = GameLanguage.Text("会話のみ。身体操作は停止しています", "Chat only. Body controls are stopped");
             // The switch itself selects fixture input. A missing or invalid manifest must not
             // silently turn on physical capture.
             fixtureInputEnabled = Array.IndexOf(commandLine, "-flyVoiceFixtures") >= 0;
@@ -169,7 +176,8 @@ namespace Flylingual.Conversation
             }
             if (keepVoiceControl && Ready && Time.realtimeSinceStartupAsDouble - stateReceivedAt > 3)
                 Disconnected("control_state_timeout");
-            if (autoStartPending && Ready && OutputInhibited && transport != null && transport.IsConnected)
+            PrepareSelectedLanguage();
+            if (autoStartPending && SelectedLanguageReady && Ready && OutputInhibited && transport != null && transport.IsConnected)
             {
                 // The bootstrap starts once; continuous control owns subsequent recovery.
                 if (startChatOnly) StartConversation();
@@ -178,6 +186,24 @@ namespace Flylingual.Conversation
             UpdateMicrophone();
             if (bodyArmed && !BodyControlActive) BodyFault("voice_control_stopped_or_stale");
             MaintainVoiceControl();
+        }
+
+        void PrepareSelectedLanguage()
+        {
+            if (expectedSettingsRequestId != null && Time.realtimeSinceStartupAsDouble - settingsRequestedAt > 10)
+            {
+                expectedSettingsRequestId = null;
+                LastSettingsResult = "timeout";
+                SetError("conversation_settings_timeout");
+            }
+            if (!autoStartPending || !Ready || ConversationLive || conversationStopping || !OutputInhibited
+                || transport == null || !transport.IsConnected || expectedSettingsRequestId != null
+                || Settings.language == GameLanguage.Code || startupLanguageAttempt == GameLanguage.Code) return;
+            // One request per selected language. Wait for its matching acknowledgement before starting.
+            // Failure remains stopped; the settings UI can explicitly retry without a request loop.
+            startupLanguageAttempt = GameLanguage.Code;
+            startupLanguageAcknowledged = false;
+            ApplySettings(GameLanguage.Code, Settings.voice, Settings.persona, Settings.personaText);
         }
 
         void MaintainVoiceControl()
@@ -232,7 +258,7 @@ namespace Flylingual.Conversation
 
         public void StartConversation()
         {
-            if (EnablingVoiceActions) return;
+            if (EnablingVoiceActions || !SelectedLanguageReady) return;
             keepVoiceControl = false;
             autoStartPending = false;
             if (requestedStart) return;
@@ -268,13 +294,13 @@ namespace Flylingual.Conversation
 
         public void EnableVoiceActions()
         {
-            if (!Ready || !VoiceActionsAvailable || EnablingVoiceActions || BodyControlActive) return;
+            if (!SelectedLanguageReady || !Ready || !VoiceActionsAvailable || EnablingVoiceActions || BodyControlActive) return;
             int previousGeneration = ConversationGeneration;
             StopConversation();
             keepVoiceControl = true;
             EnablingVoiceActions = true;
             Error = null;
-            ActionFeedback = "声で操作の準備中：会話を切り替えています";
+            ActionFeedback = GameLanguage.Text("声で操作の準備中：会話を切り替えています", "Preparing voice controls: switching conversation");
             enableActionsRoutine = StartCoroutine(EnableActions(previousGeneration));
         }
 
@@ -289,7 +315,7 @@ namespace Flylingual.Conversation
             { FailActionStart("voice_control_stop_timeout"); yield break; }
             requestedStart = true;
             Send(new ConversationStart { type = "conversation_start", interaction = "control", nativeVoiceControl = true, controlEpoch = ControlEpoch });
-            ActionFeedback = "声で操作の準備中：実Brainの停止確認を待っています";
+            ActionFeedback = GameLanguage.Text("声で操作の準備中：実Brainの停止確認を待っています", "Preparing voice controls: waiting for Brain to confirm STOP");
             deadline = Time.realtimeSinceStartupAsDouble + 30;
             while (Ready && Time.realtimeSinceStartupAsDouble < deadline
                 && !(ConversationLive && resumeReady && voiceControlAvailable && HasFreshBrain && Owner == "gpt")) yield return null;
@@ -303,7 +329,7 @@ namespace Flylingual.Conversation
             if (!bodyArmed) { FailActionStart("voice_control_resume_failed"); yield break; }
             EnablingVoiceActions = false;
             enableActionsRoutine = null;
-            ActionFeedback = "声で操作できます：前へ、右、左、止まって";
+            ActionFeedback = GameLanguage.Text("声で操作できます：前へ、右、左、止まって", "Voice controls ready: forward, right, left, stop");
         }
 
         void FailActionStart(string code)
@@ -313,7 +339,7 @@ namespace Flylingual.Conversation
             EmergencyStop();
             keepVoiceControl = retry;
             nextRecoveryAt = Time.realtimeSinceStartupAsDouble + 5;
-            ActionFeedback = retry ? "音声操作への接続を再試行します：" + code : "操作を開始できません：" + code;
+            ActionFeedback = retry ? GameLanguage.Text("音声操作への接続を再試行します：", "Retrying voice controls: ") + code : GameLanguage.Text("操作を開始できません：", "Unable to start controls: ") + code;
             SetError(code);
         }
 
@@ -325,8 +351,8 @@ namespace Flylingual.Conversation
                 + " inhibited=" + OutputInhibited + " voice=" + voiceControlAvailable);
             bodyArmed = resumePending = false;
             nextRecoveryAt = Time.realtimeSinceStartupAsDouble + 2;
-            ActionFeedback = keepVoiceControl ? "身体を停止し、音声操作への接続を復旧しています：" + code
-                : "身体を停止しました：" + code;
+            ActionFeedback = keepVoiceControl ? GameLanguage.Text("身体を停止し、音声操作への接続を復旧しています：", "Body stopped; reconnecting voice controls: ") + code
+                : GameLanguage.Text("身体を停止しました：", "Body stopped: ") + code;
             SetError(code);
             if (transport != null && transport.IsConnected) Send(new EmergencyStopMessage { type = "emergency_stop" });
         }
@@ -341,11 +367,13 @@ namespace Flylingual.Conversation
 
         public void ApplySettings(string language, string voice, string persona, string personaText)
         {
-            if (ConversationLive || !OutputInhibited || transport == null || !transport.IsConnected)
+            if (!Ready || ConversationLive || conversationStopping || !OutputInhibited || expectedSettingsRequestId != null || transport == null || !transport.IsConnected)
             {
                 SetError("conversation_settings_require_stopped");
                 return;
             }
+            settingsRequestedAt = Time.realtimeSinceStartupAsDouble;
+            LastSettingsResult = "pending";
             expectedSettingsRequestId = "unity-settings-" + (++requestNumber).ToString(CultureInfo.InvariantCulture);
             Send(new ConfigureConversation {
                 type = "configure_conversation", requestId = expectedSettingsRequestId,
@@ -510,6 +538,8 @@ namespace Flylingual.Conversation
             SettingsRevision = settings.revision;
             LastSettingsResult = "applied";
             expectedSettingsRequestId = null;
+            startupLanguageAcknowledged = true;
+            GameLanguage.SetLanguage(Settings.language);
         }
 
         void HandleError(ErrorMessage error)
@@ -767,23 +797,23 @@ namespace Flylingual.Conversation
             if (result == null || ConversationInteraction != "control" || !requestedStart) return;
             if (result.stage == "execution_finished" && result.epoch == ControlEpoch)
             {
-                ActionFeedback = result.reason == "distance_reached" ? "指定距離の付近で停止。次の指示を待っています"
-                    : result.reason == "distance_stalled" ? "進めないため停止。次の指示を待っています"
-                    : result.reason == "distance_overshoot" ? "指定距離を越えて停止。次の指示を待っています"
-                    : result.reason == "distance_shortfall" ? "指定距離の手前で停止。次の指示を待っています"
-                    : "距離移動を中断。次の指示を待っています";
+                ActionFeedback = result.reason == "distance_reached" ? GameLanguage.Text("指定距離の付近で停止。次の指示を待っています", "Stopped near the requested distance. Waiting for your next command")
+                    : result.reason == "distance_stalled" ? GameLanguage.Text("進めないため停止。次の指示を待っています", "Stopped because movement stalled. Waiting for your next command")
+                    : result.reason == "distance_overshoot" ? GameLanguage.Text("指定距離を越えて停止。次の指示を待っています", "Stopped past the requested distance. Waiting for your next command")
+                    : result.reason == "distance_shortfall" ? GameLanguage.Text("指定距離の手前で停止。次の指示を待っています", "Stopped short of the requested distance. Waiting for your next command")
+                    : GameLanguage.Text("距離移動を中断。次の指示を待っています", "Distance movement interrupted. Waiting for your next command");
                 return;
             }
             if (result.stage == "submitted" && result.epoch == ControlEpoch && result.commandId != null
                 && result.commandId.StartsWith("expired-stop-", StringComparison.Ordinal))
-                ActionFeedback = "行動時間が終了。次の音声指示を待っています";
+                ActionFeedback = GameLanguage.Text("行動時間が終了。次の音声指示を待っています", "Action time ended. Waiting for your next voice command");
             if (result.stage == "submitted" && result.epoch == ControlEpoch && result.commandId != null
                 && (result.commandId.StartsWith("voice-", StringComparison.Ordinal) || result.commandId.StartsWith("unity-intent-", StringComparison.Ordinal)))
             {
                 if (pendingActions.Count >= 32) pendingActions.Clear();
                 pendingActions[result.requestId] = result.action;
                 SubmittedActions++;
-                ActionFeedback = "指示を受付：" + result.action + "（Brain適用待ち）";
+                ActionFeedback = GameLanguage.Text("指示を受付：", "Command accepted: ") + result.action + GameLanguage.Text("（Brain適用待ち）", " (waiting for Brain to apply)");
             }
             else if (result.stage == "brain_applied" && pendingActions.TryGetValue(result.requestId, out string action))
             {
@@ -791,9 +821,9 @@ namespace Flylingual.Conversation
                 AppliedActions++;
                 LastAppliedRequestId = result.requestId;
                 LastAppliedAction = action;
-                ActionFeedback = "Brainが適用：" + action + "（移動結果は身体観測で確認）";
+                ActionFeedback = GameLanguage.Text("Brainが適用：", "Brain applied: ") + action + GameLanguage.Text("（移動結果は身体観測で確認）", " (movement is verified through body observations)");
             }
-            else if (result.stage == "rejected") { RejectedActions++; ActionFeedback = "指示を実行できません：" + result.reason; }
+            else if (result.stage == "rejected") { RejectedActions++; ActionFeedback = GameLanguage.Text("指示を実行できません：", "Unable to execute command: ") + result.reason; }
         }
 
         [Serializable] sealed class ConversationStateMessage { public string state; public int conversationGeneration = -1; }

@@ -1,3 +1,4 @@
+using Flylingual.PlayScreen;
 using Flylingual.Conversation;
 using FlyLocomotionPoC;
 using FlyVisualDemo;
@@ -99,12 +100,12 @@ namespace Flylingual.BlindSugarRun
             title.style.top = 42; title.style.left = 40; title.style.right = 40;
             title.style.fontSize = 36; title.style.color = new Color(1, .87f, .58f);
             title.style.unityTextAlign = TextAnchor.MiddleCenter; root.Add(title);
-            var note = new Label(worldCamera != null ? "ここを、歩いてきた。" : "砂糖に到着しました。カメラを利用できません。");
+            var note = new Label(worldCamera != null ? GameLanguage.Text("ここを、歩いてきた。", "This is where we walked.") : GameLanguage.Text("砂糖に到着しました。カメラを利用できません。", "You reached the sugar. The camera is unavailable."));
             note.style.position = Position.Absolute; note.style.bottom = 106; note.style.left = 40; note.style.right = 40;
             note.style.fontSize = 23; note.style.color = Color.white; note.style.unityTextAlign = TextAnchor.MiddleCenter; root.Add(note);
             retry = new Button(() => {
                 if (Complete && stage.BeginRetry()) document.rootVisualElement.style.display = DisplayStyle.None;
-            }) { text = "もう一度" };
+            }) { text = GameLanguage.Text("もう一度", "Play again") };
             retry.style.position = Position.Absolute; retry.style.bottom = 40; retry.style.width = 200;
             retry.style.height = 48; retry.style.alignSelf = Align.Center; retry.SetEnabled(false); root.Add(retry);
         }

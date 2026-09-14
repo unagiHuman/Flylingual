@@ -8,7 +8,7 @@ using System.Text.RegularExpressions;
 using FlyBrainPoC;
 using FlyLocomotionPoC;
 using UnityEngine;
-using UnityEngine.SceneManagement;
+using Flylingual.PlayScreen;
 
 namespace FlyVisualDemo
 {
@@ -412,7 +412,16 @@ namespace FlyVisualDemo
             if(game==null || !game.enabled) GUI.Label(new Rect(Screen.width/scale-400,Screen.height/scale-54,380,40), mode==BrainSourceMode.Replay?"REPLAY BENCHMARK\nPhysics-driven legs":"LIVE INTEGRATION\nPhysics-driven legs", smallStyle);
             GUI.matrix=previousMatrix;
         }
-        public void RestartDemo() {Time.timeScale=1;SceneManager.LoadScene(SceneManager.GetActiveScene().path);}
+        public void RestartDemo()
+        {
+            if (GameSceneTransition.IsLoading) return;
+            PauseDemo();
+            GameSceneTransition.TryLoad(gameObject.scene.path, message =>
+            {
+                error = message;
+                Debug.LogError("GAME_SCENE_RESTART_FAILED " + message);
+            });
+        }
         public void PauseDemo() {emergency=true;controller.SetMotorSource(null);Time.timeScale=0;if(!browserControlled && mode==BrainSourceMode.LiveTcp && client.ConnectionState=="CONNECTED") client.SetAction("STOP");}
         [Serializable] class Validation
         {
@@ -432,7 +441,8 @@ namespace FlyVisualDemo
             if(!string.IsNullOrEmpty(output)) File.WriteAllText(Path.Combine(output,"validation_"+DateTime.UtcNow.ToString("yyyyMMdd_HHmmss_fff")+".json"),JsonUtility.ToJson(report,true));
             if (!Flylingual.Conversation.NativeConversationRuntime.Enabled)
                 Debug.Log(browserControlled ? "BROWSER_BODY_VALIDATION observedFrames=" + observedFrames : "REPLAY_VALIDATION skippedFrames="+skippedFrames);
-            samples?.Dispose(); if(client!=null) client.Disconnect(); Time.timeScale=1;
+            samples?.Dispose(); if(client!=null) client.Disconnect();
+            if (!GameSceneTransition.IsLoading && !Flylingual.Conversation.NativeConversationRuntime.Enabled) Time.timeScale=1;
         }
     }
 }

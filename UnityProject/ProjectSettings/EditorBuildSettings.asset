@@ -6,6 +6,9 @@ EditorBuildSettings:
   serializedVersion: 2
   m_Scenes:
   - enabled: 1
+    path: Assets/RuntimeIntegration/PlayScreen/FlylingualTitle.unity
+    guid: 1207be4ef114f409392184cf55edddfd
+  - enabled: 1
     path: Assets/BlindSugarRunPrototype/BlindSugarRunPlay.unity
     guid: 553c449e522fb8640acc31f8720b6a32
   - enabled: 1

@@ -1,3 +1,4 @@
+using Flylingual.PlayScreen;
 using System;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -54,10 +55,10 @@ namespace Flylingual.BlindSugarRun
             root.Add(card);
             ownedFont = Font.CreateDynamicFontFromOSFont(new[] { "Yu Gothic UI", "Meiryo", "MS Gothic" }, 18);
             card.style.unityFont = ownedFont;
-            titleLabel = Text(card, "状況", 28, FontStyle.Bold);
+            titleLabel = Text(card, GameLanguage.Text("状況", "Status"), 28, FontStyle.Bold);
             messageLabel = Text(card, string.Empty, 16, FontStyle.Normal); messageLabel.style.whiteSpace = WhiteSpace.Normal; messageLabel.style.marginTop = 14;
             attemptLabel = Text(card, string.Empty, 13, FontStyle.Normal); attemptLabel.style.marginTop = 12; attemptLabel.style.opacity = .72f;
-            RetryButton = new Button(OnRetryClicked) { text = "もう一度挑戦する", name = "retry-button" };
+            RetryButton = new Button(OnRetryClicked) { text = GameLanguage.Text("もう一度挑戦する", "Try again"), name = "retry-button" };
             RetryButton.style.marginTop = 22; RetryButton.style.height = 44; RetryButton.style.fontSize = 16; RetryButton.style.unityFontStyleAndWeight = FontStyle.Bold;
             RetryButton.style.backgroundColor = new Color(.18f, .62f, .50f, 1f); RetryButton.style.color = Color.white;
             card.Add(RetryButton);
@@ -68,10 +69,10 @@ namespace Flylingual.BlindSugarRun
             Build();
             retryHandler = retry;
             retryConsumed = false;
-            titleLabel.text = string.IsNullOrEmpty(title) ? "ゲームオーバー" : title;
+            titleLabel.text = string.IsNullOrEmpty(title) ? GameLanguage.Text("ゲームオーバー", "Game over") : title;
             messageLabel.text = message ?? string.Empty;
-            attemptLabel.text = "挑戦 " + Mathf.Max(1, attempt);
-            RetryButton.text = "もう一度挑戦する";
+            attemptLabel.text = GameLanguage.Text("挑戦 ", "Attempt ") + Mathf.Max(1, attempt);
+            RetryButton.text = GameLanguage.Text("もう一度挑戦する", "Try again");
             RetryButton.SetEnabled(true);
             root.style.display = DisplayStyle.Flex;
             document.rootVisualElement.style.display = DisplayStyle.Flex;
@@ -82,10 +83,10 @@ namespace Flylingual.BlindSugarRun
         {
             Build();
             retryConsumed = true;
-            titleLabel.text = "リトライ中";
-            messageLabel.text = message ?? "再開しています…";
-            attemptLabel.text = "挑戦 " + Mathf.Max(1, attempt);
-            RetryButton.text = "再開中…";
+            titleLabel.text = GameLanguage.Text("リトライ中", "Retrying");
+            messageLabel.text = message ?? GameLanguage.Text("再開しています…", "Resuming…");
+            attemptLabel.text = GameLanguage.Text("挑戦 ", "Attempt ") + Mathf.Max(1, attempt);
+            RetryButton.text = GameLanguage.Text("再開中…", "Resuming…");
             RetryButton.SetEnabled(false);
             root.style.display = DisplayStyle.Flex;
             document.rootVisualElement.style.display = DisplayStyle.Flex;

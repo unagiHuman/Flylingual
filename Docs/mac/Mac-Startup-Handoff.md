@@ -92,7 +92,8 @@ http://127.0.0.1:8771/
 Windows申し送りのシーンはそのままMacネイティブPlayerの起動シーンにはなりません。
 
 - 通常のUnity Editor／基礎移動確認のBuild Settings先頭は `UnityProject/Assets/Scenes/FlyLocomotionSandbox.unity` です。
-- `FlyGroundedRealismDemo.unity` はWindows／MacのConversation Playerビルドで共用します。Windowsは既存のWindowsメニュー、Macは `Build Mac conversation Player` を使います。
+- `BlindSugarRunPlay.unity` はWindows／Macの正式Conversation Player起動Sceneです。Windowsは `Play Screen > Build Windows Player`、Macは `Conversation > Build Mac conversation Player` を使います。
+- `FlyGroundedRealismDemo.unity` は正式起動Sceneを生成する元Sceneであり、Playerへ直接焼き込みません。
 - `NativeConversationTest.unity` はWindowsネイティブ会話の独立Editor検証用です。
 - Mac用Unityネイティブ会話PlayerはBrain接続、会話UI、マイク、音声再生、身体制御の入口を持ちます。ただし実マイク、実API、継続動作、身体動作品質は別途実測が必要です。
 
