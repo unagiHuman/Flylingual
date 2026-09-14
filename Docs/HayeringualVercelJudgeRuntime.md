@@ -1,6 +1,6 @@
 # Hayeringual Vercel Judge Runtime
 
-更新: 2026-09-14。Judge最終Playerで実Cloud返答と実Brain移動・停止を確認し、Windows配布ZIPを作成した。Dev／DemoのLocal実Brain操作も確認済み。Vercel実翻訳20件は全成功、P50=1037ms、P95=1469ms。**仕様全項目の完成判定は未達**。active keyのbudget／期限、別PCのclean-machine受入れ、OS全体のネット切断試験が未確認である。
+更新: 2026-09-14。最新の提出候補・受入れ状態は [提出前レビュー対応](windows/PreSubmission-Review-Response.md) と本書末尾のレビュー対応節を参照。以下のJudge最終Player／配布ZIPの記録はレビュー対応前の歴史的実績であり、最新候補の合格証拠ではない。Judge最終Playerで実Cloud返答と実Brain移動・停止を確認し、Windows配布ZIPを作成した。Dev／DemoのLocal実Brain操作も確認済み。Vercel実翻訳20件は全成功、P50=1037ms、P95=1469ms。**仕様全項目の完成判定は未達**。active keyのbudget／期限、別PCのclean-machine受入れ、OS全体のネット切断試験が未確認である。
 
 ## 1. 既存調査と最終経路
 
@@ -108,7 +108,7 @@ Dev+LocalとDemo+Localのビルドも成功した。DemoのBuildReportは`Succee
 
 Bootstrapがbuild選択を探す場所は、誤った`AppDomain.BaseDirectory`から`Application.dataPath`の親へ修正した。Judge-v2で実行用`runtime-bridge.json`の生成とCloud設定の反映を実見した。package endpointが古いbuild選択に上書きされる問題も修正済み。
 
-**最終配布ZIP**は [`Hayeringual-Judge-Windows.zip`](../artifacts/hayeringual-release/Hayeringual-Judge-Windows.zip)、196,961,039 bytes、SHA256 `bcd3c7a4c1621efca163b3ce11a95f97172ddfd2c1a9afbae8c2c7023e8db5e8`。2253ファイルのmanifest hash一致と限定credential scan合格を確認し、ログ／cacheを除外した。旧candidate ZIPと区別する。Brainソース・校正config・4graph配列の原本hashは[`Judge-v2/judge-manifest.json`](../artifacts/hayeringual-release/Judge-v2/judge-manifest.json)で確認できる。
+**レビュー対応前の配布ZIP（歴史的記録。最新提出候補ではない）**は [`Hayeringual-Judge-Windows.zip`](../artifacts/hayeringual-release/Hayeringual-Judge-Windows.zip)、196,961,039 bytes、SHA256 `bcd3c7a4c1621efca163b3ce11a95f97172ddfd2c1a9afbae8c2c7023e8db5e8`。2253ファイルのmanifest hash一致と限定credential scan合格を確認し、ログ／cacheを除外した。旧candidate ZIPと区別する。Brainソース・校正config・4graph配列の原本hashは[`Judge-v2/judge-manifest.json`](../artifacts/hayeringual-release/Judge-v2/judge-manifest.json)で確認できる。
 
 「Pythonをユーザーにインストールさせない」はportable runtimeを同梱して達成する。実Brain用データも必要なので、小さいUnity exeだけの配布とは異なる。フォルダ全体を移動した環境でexeから起動し、Unity Editor・Ollama・既存Pythonなしの受入れを別途実施する。
 
@@ -129,7 +129,7 @@ Bootstrapがbuild選択を探す場所は、誤った`AppDomain.BaseDirectory`�
 
 実API測定はbackendディレクトリから `npx tsx scripts/benchmark.ts https://<YOUR-PROJECT>.vercel.app 20`。healthとschemaを検査し、全試行と成功試行を分けてP50/P95/min/max、error countをJSON出力する。20～100件の逐次実リクエストで通常の課金が発生する。成功0件なら成功レイテンシーはnull。目標P50<1秒、P95<2秒は保証ではない。
 
-初回の [`cloud-benchmark.json`](../artifacts/judge-validation/cloud-benchmark.json) は20件全失敗で、P50=262ms／P95=544msは失敗応答時間だった。修正後の [`cloud-benchmark-final.json`](../artifacts/judge-validation/cloud-benchmark-final.json) は20件全成功、P50=1037ms／P95=1469ms／min=869ms／max=1584ms。二つの試験を混ぜず、後者を現在の成功性能として扱う。
+初回の [`cloud-benchmark.json`](../artifacts/judge-validation/cloud-benchmark.json) は20件全失敗で、P50=262ms／P95=544msは失敗応答時間だった。修正後の [`cloud-benchmark-final.json`](../artifacts/judge-validation/cloud-benchmark-final.json) は20件全成功、P50=1037ms／P95=1469ms／min=869ms／max=1584ms。二つの試験を混ぜず、後者を当時の成功性能として扱う。最新候補の性能保証へ拡張しない。
 
 packageのbackend URL反映不具合も修正した。関連package試験6件を含む合計105件が最終実行で合格した。
 
@@ -164,10 +164,22 @@ packageのbackend URL反映不具合も修正した。関連package試験6件を
 - Cloud遅延: backendのrequest ID/model/latency/status/timeoutを確認し、実20件で測る。無限retryや会話履歴増大で解決しない。
 - Judgeで声が出ない: 今回のCloudはtext mode。Dev/DemoのGPT Live設定と区別する。
 
-active keyのbudget／expiry、別PCのclean-machine、OS全体のネット切断でのoffline受入れが残gate。配布v2実Player・ZIP、Demo最終確認、実Cloud翻訳と20件性能計測は完了し、同PCの到達不能endpoint試験は上記の限定条件で合格。Devの`old_conversation_generation`表示も残す。旧専用keyの予算設定を現在のkeyへ読み替えない。Streaming、別モデルfallback、高度rate limiting、WebSocketは未実装の任意P2。
+active keyのbudget／expiry、別PCのclean-machine、OS全体のネット切断でのoffline受入れが残gate。配布v2実Player・ZIP、Demo最終確認、実Cloud翻訳と20件性能計測は完了し、同PCの到達不能endpoint試験は上記の限定条件で合格。Devの`old_conversation_generation`表示も残す。旧専用keyの予算設定を現在のkeyへ読み替えない。Streaming、別モデルfallback、高度rate limiting、WebSocketは未実装の任意P2。基本的な公開WAF rate limitは下記レビュー対応で反映済み。
 
 ## Local LLMの最終限定回帰
 
 既存llama.cpp（127.0.0.1:11436、qwen3.5:4b、label・cache有効）に既知ケース先頭10件を実行。schema10/10、期限内10/10、意味一致9/10、禁止移動提案0。全試行P50=107.192ms／P95=111.767ms。うちLLM経路7件のP50=109.092ms、決定的経路3件。1件不一致のためbenchmark終了値は1であり、全項目合格とはしない。これはテキスト分類だけの限定回帰で、ゲームE2Eや独立holdoutではない。結果: [local-llm-final](../artifacts/judge-validation/local-llm-final)。
 
 不一致のdev-05（右側に寄って進んで）は、既存label-cache-label-on結果と同じくモデルが左右を誤分類し、Bridgeがclarifyへ拒否した。今回の10件内では新たな意味判定退行を認めていない。
+
+## 2026-09-14 提出前レビュー対応
+
+最新候補のbuild/hashおよびcold/warm・ゲーム受入れの確定結果は [PreSubmission-Review-Response](windows/PreSubmission-Review-Response.md) を正本とする。旧ZIPや過去PlayerのPASSを最新候補へ転記しない。通し試験はユーザーが後日人手で行う方針。
+
+公開WAFはCLI 59.16.0で未設定を確認後、`POST /api/fly/translate` だけを対象とするIP単位120 requests/60秒の `fixed_window` ルールを本番反映した。超過時は `rate_limit`、ブラウザchallengeは使用しない。反映後はEnabled、active rule 1件。health 200、不正POST 400を確認した。閾値到達の負荷試験は未実施で、共有IPの同時利用や厳密な請求上限を保証するものではない。原本: [firewall-review.json](../artifacts/submission-20260914/firewall-review.json)。
+
+実Cloudへの「こんにちは」はHTTP 200、返答あり、約2,297msだった。これは1件のsmoke確認であり、P50/P95やゲーム全体の受入れではない。原本: [cloud-smoke.json](../artifacts/submission-20260914/cloud-smoke.json)。
+
+ユーザー提供の稼働keyをメモリ内だけで使用し、`/v1/credits` で残高 `901.26050001` を2026-09-14 14:03:54 UTCに確認した。秘密値はログ・配布物へ記録していない。credits endpointからbudget/expiryは取得できず、両者は依然未確認。残高を専用keyの予算上限や有効期限と読み替えず、旧keyの$10/30日設定も流用しない。原本: [gateway-credits.json](../artifacts/submission-20260914/gateway-credits.json)。
+
+FastRuleのbare「前進」/`forward`/`right`/`left`登録欠落を修正した。429/503後も8つの基本操作語は追加Cloud呼出しなしで処理されることを純粋テストで確認し、パッケージ関連を含む26テストがPASS。これは実際にWAF閾値を超えた負荷試験の代替ではない。Judge-Cloudの配布READMEは日英のテキスト操作版・Live音声なしを明記している。

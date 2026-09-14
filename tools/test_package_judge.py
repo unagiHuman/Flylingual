@@ -1,8 +1,46 @@
 import unittest
-from tools.package_judge import configurations, validate_public, package_selection
+import ast
+from pathlib import Path
+from tools.package_judge import configurations, validate_public, package_selection, runtime_sources, ROOT
 
 
 class PackageConfigurationTests(unittest.TestCase):
+    def packaged_sources(self):
+        bridge, _ = configurations('https://judge.example/api/fly/translate')
+        return set(runtime_sources(bridge))
+
+    def test_all_brain_identity_sources_are_packaged(self):
+        packaged = self.packaged_sources()
+        self.assertIn(Path('Brain/MaleCNS/visual_threat.py'), packaged)
+        self.assertIn(Path('Brain/MaleCNS/config/visual_threat_v1.json'), packaged)
+        for origin in ('Runtime/Bridge/config.py', 'Brain/MaleCNS/brain_server_bridge.py'):
+            tree = ast.parse((ROOT / origin).read_text(encoding='utf-8'))
+            assignments = [node for node in tree.body if isinstance(node, ast.Assign)
+                           and any(isinstance(target, ast.Name) and target.id == '_SOURCE_FILES'
+                                   for target in node.targets)]
+            self.assertEqual(len(assignments), 1, origin)
+            for name in ast.literal_eval(assignments[0].value):
+                path = Path('Brain/MaleCNS') / name
+                self.assertIn(path, packaged, f'{origin} requires {path}')
+                self.assertTrue((ROOT / path).is_file(), str(path))
+
+    def test_packaged_brain_import_closure(self):
+        # No imports or graph loads: inspect local Python dependencies recursively
+        # because every packaged module is checked, including newly added ones.
+        packaged = self.packaged_sources()
+        brain = Path('Brain/MaleCNS')
+        for path in packaged:
+            if path.parent != brain or path.suffix != '.py':
+                continue
+            tree = ast.parse((ROOT / path).read_text(encoding='utf-8'))
+            for node in ast.walk(tree):
+                modules = ([item.name for item in node.names] if isinstance(node, ast.Import)
+                           else [node.module] if isinstance(node, ast.ImportFrom) and node.module else [])
+                for module in modules:
+                    local = brain / (module.split('.')[0] + '.py')
+                    if (ROOT / local).is_file():
+                        self.assertIn(local, packaged, f'{path} imports missing local module {local}')
+
     def test_relative_public_config(self):
         bridge, native = configurations('https://judge.example/api/fly/translate')
         self.assertEqual(bridge['conversation']['mode'], 'text')

@@ -13,6 +13,7 @@ from .control import ControlError
 
 
 _JA_ACTIONS = {
+    '前進': 'FORWARD',
     '前に進んで': 'FORWARD', '前へ進んで': 'FORWARD', '前進して': 'FORWARD',
     '進んで': 'FORWARD', '歩いて': 'FORWARD', '前に歩いて': 'FORWARD',
     '前へ歩いて': 'FORWARD',
@@ -24,6 +25,7 @@ _JA_ACTIONS = {
     '左を向いて': 'TURN_L', '左に向いて': 'TURN_L', '左': 'TURN_L',
 }
 _EN_ACTIONS = {
+    'forward': 'FORWARD', 'right': 'TURN_R', 'left': 'TURN_L',
     'move forward': 'FORWARD', 'go forward': 'FORWARD',
     'walk forward': 'FORWARD', 'walk': 'FORWARD',
     'stop': 'STOP', 'stop moving': 'STOP', 'stop the fly': 'STOP', 'halt': 'STOP',

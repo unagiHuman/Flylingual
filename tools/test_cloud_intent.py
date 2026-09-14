@@ -66,13 +66,27 @@ class CloudTransportTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn('unit-test-not-a-real-key', json.dumps(payload))
 
     async def test_402_and_redirect_fallback_without_retry(self):
-        for status in (402, 429, 500, 302):
+        for status in (402, 429, 500, 503, 302):
             self.status = status
             result, diagnostics = await self.invoke()
             self.assertEqual(result['kind'], 'clarify')
             self.assertEqual(diagnostics['cloudOutcome'], 'CloudUnavailable')
             self.assertEqual(diagnostics['httpStatus'], status)
-        self.assertEqual(len(self.calls), 4)
+        self.assertEqual(len(self.calls), 5)
+
+    async def test_rate_limit_and_unavailable_leave_basic_commands_local(self):
+        for status in (429, 503):
+            self.status = status
+            await self.invoke()
+            before = len(self.calls)
+            for text, action in (('前進', 'FORWARD'), ('右', 'TURN_R'), ('左', 'TURN_L'), ('停止', 'STOP'),
+                                 ('forward', 'FORWARD'), ('right', 'TURN_R'), ('left', 'TURN_L'), ('stop', 'STOP')):
+                diagnostics = {}
+                result = await interpret_intent(None, {'intentProvider': 'vercel', 'cloudIntentUrl': self.url},
+                                                text, {}, 'ja', 1000, 5000, diagnostics)
+                self.assertEqual(result['action'], action)
+                self.assertEqual(diagnostics['route'], 'deterministic')
+            self.assertEqual(len(self.calls), before)
 
     async def test_observation_is_bounded_fresh_and_not_body_claim(self):
         for context, expected in (

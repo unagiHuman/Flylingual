@@ -39,6 +39,7 @@ namespace Flylingual.Conversation
         [Serializable] sealed class Report
         {
             public string result, reason, initialState, finalState, manifest;
+            public string inputMode, limitation = "Automated position/heading oracle; not human blind-course acceptance.";
             public bool bridgeReady, brainReady, bodyActive, brainFresh, fixtureInput, microphoneCapturing, goalInside;
             public string backend;
             public int waypointReached, epoch, generation;
@@ -51,14 +52,14 @@ namespace Flylingual.Conversation
         }
         [Serializable] sealed class ControlWire
         {
-            public string type, @event, action, reason, error;
+            public string type, @event, action, reason, error, stage, commandId;
             public int requestId;
             public long sequence;
             public int epoch, conversationGeneration;
         }
         [Serializable] sealed class LifecycleRecord
         {
-            public string type, @event, action, reason, error;
+            public string type, @event, action, reason, error, stage, commandId;
             public int requestId;
             public long sequence;
         }
@@ -82,11 +83,13 @@ namespace Flylingual.Conversation
         Report report;
         int waypoint = 1;
         double startedAt, deadline, nextCommandAt, nextSampleAt;
-        bool quit, finishing;
+        bool quit, finishing, textMode;
         int titleStartPresses;
         readonly Dictionary<int, string> submittedActions = new Dictionary<int, string>();
         int diagnosticAppliedCount;
         int diagnosticAppliedGeneration = -1;
+        int textCommandEpoch = -1, textCommandGeneration = -1;
+        string textCommandId, textCommandSession, textCommandInstance;
         double diagnosticAppliedAt;
         string diagnosticAppliedAction, requestedCommand;
 
@@ -101,15 +104,16 @@ namespace Flylingual.Conversation
         IEnumerator Start()
         {
             outputDirectory = Path.GetFullPath(Argument("-flyCourseProbe"));
+            textMode = Array.IndexOf(Environment.GetCommandLineArgs(), "-flyCourseText") >= 0;
             manifestPath = Argument("-flyVoiceFixtures");
             quit = Array.IndexOf(Environment.GetCommandLineArgs(), "-flyCourseProbeQuit") >= 0;
             Directory.CreateDirectory(outputDirectory);
             progress = new StreamWriter(Path.Combine(outputDirectory, "course-progress.jsonl"), false, new UTF8Encoding(false)) { AutoFlush = true };
             actions = new StreamWriter(Path.Combine(outputDirectory, "course-actions.jsonl"), false, new UTF8Encoding(false)) { AutoFlush = true };
-            report = new Report { manifest = manifestPath };
+            report = new Report { manifest = manifestPath, inputMode = textMode ? "player_text" : "synthetic_voice" };
             startedAt = Time.realtimeSinceStartupAsDouble;
             deadline = startedAt + 480d;
-            try { LoadManifest(); }
+            try { if (!textMode) LoadManifest(); }
             catch (Exception exception) { Finish("incomplete", "fixture_initialization_" + exception.GetType().Name); yield break; }
 
             // Enter through the public title-button route. A first-run tutorial requires the
@@ -127,23 +131,23 @@ namespace Flylingual.Conversation
             if (TitleScreen.BlocksGameplay) { Finish("incomplete", "title_screen_blocked"); yield break; }
 
             // A bounded readiness wait, then the controller's normal STOP/start/resume handshake.
-            double readyDeadline = Math.Min(deadline, Time.realtimeSinceStartupAsDouble + 30d);
+            double readyDeadline = Math.Min(deadline, Time.realtimeSinceStartupAsDouble + (textMode ? 80d : 30d));
             while (Time.realtimeSinceStartupAsDouble < readyDeadline)
             {
                 Bind();
-                if (conversation != null && (conversation.BodyControlActive || (conversation.Ready && conversation.FixtureInputEnabled
+                if (conversation != null && (conversation.BodyControlActive || (conversation.Ready && (textMode || conversation.FixtureInputEnabled)
                     && conversation.VoiceActionsAvailable && conversation.OutputInhibited))) break;
                 yield return null;
             }
             Bind();
-            if (conversation == null || !conversation.Ready || !conversation.FixtureInputEnabled || !conversation.VoiceActionsAvailable)
+            if (conversation == null || !conversation.Ready || (!textMode && !conversation.FixtureInputEnabled) || !conversation.VoiceActionsAvailable)
             { Finish("incomplete", "voice_start_prerequisites_missing"); yield break; }
-            if (!fixtures.ContainsKey("forward") || !fixtures.ContainsKey("left") || !fixtures.ContainsKey("right") || !fixtures.ContainsKey("stop"))
+            if (!textMode && (!fixtures.ContainsKey("forward") || !fixtures.ContainsKey("left") || !fixtures.ContainsKey("right") || !fixtures.ContainsKey("stop")))
             { Finish("incomplete", "course_fixture_ids_missing"); yield break; }
             // Fixture tags are accepted only after the existing control-socket observation
             // opt-in. This is the same public setup used by NativeVoiceFixtureProbe.
             conversation.ControlEventReceived += OnControl;
-            if (!conversation.EnableVoiceTestObservation()) { Finish("incomplete", "fixture_observation_not_enabled"); yield break; }
+            if (!textMode && !conversation.EnableVoiceTestObservation()) { Finish("incomplete", "fixture_observation_not_enabled"); yield break; }
 
             if (!conversation.BodyControlActive) conversation.EnableVoiceActions();
             double armDeadline = Math.Min(deadline, Time.realtimeSinceStartupAsDouble + 40d);
@@ -210,7 +214,7 @@ namespace Flylingual.Conversation
 
         bool ReadyForCourse() => conversation != null && nativeBody != null && demo?.body != null
             && conversation.BodyControlActive && conversation.HasFreshBrain && nativeBody.BodyActive
-            && string.IsNullOrEmpty(nativeBody.Fault) && conversation.FixtureInputTransmitting;
+            && string.IsNullOrEmpty(nativeBody.Fault) && (textMode || conversation.FixtureInputTransmitting);
 
         void AdvanceWaypoint()
         {
@@ -233,12 +237,23 @@ namespace Flylingual.Conversation
 
         IEnumerator Speak(string command)
         {
-            if (!fixtures.TryGetValue(command, out Fixture fixture)) { Finish("incomplete", "missing_fixture_" + command); yield break; }
+            Fixture fixture = null;
+            if (!textMode && !fixtures.TryGetValue(command, out fixture)) { Finish("incomplete", "missing_fixture_" + command); yield break; }
             int epoch = conversation.ControlEpoch, generation = conversation.ConversationGeneration;
             int appliedAtStart = diagnosticAppliedCount;
             requestedCommand = command;
             double commandStartedAt = Time.realtimeSinceStartupAsDouble;
-            for (int index = 0; index < fixture.clip.Chunks.Length; index++)
+            if (textMode)
+            {
+                // Ordinary text intent only; the Bridge and real Brain still determine motor output.
+                string text = command == "forward" ? "前進" : command == "left" ? "左" : command == "right" ? "右" : "停止";
+                textCommandEpoch = epoch; textCommandGeneration = generation; textCommandId = null;
+                textCommandSession = conversation.BrainSessionId; textCommandInstance = conversation.BrainInstanceId;
+                submittedActions.Clear();
+                conversation.SendPlayerText(text);
+                actions?.WriteLine(JsonUtility.ToJson(new LifecycleRecord { type = "pilot_text_sent", action = command }));
+            }
+            for (int index = 0; !textMode && index < fixture.clip.Chunks.Length; index++)
             {
                 if (FixtureDiagnosticError(out string chunkError)) { Finish("incomplete", chunkError); yield break; }
                 if (!ReadyForCourse() || !conversation.TrySendFixturePcm(fixture.clip.Chunks[index], epoch, generation, fixture.id, index))
@@ -296,11 +311,33 @@ namespace Flylingual.Conversation
             if (item == null || !AllowedLifecycle(item.type) && !AllowedLifecycle(item.@event)) return;
             // This intentionally retains no transcription, fixture PCM, input IDs or raw event.
             actions?.WriteLine(JsonUtility.ToJson(new LifecycleRecord { type = item.type, @event = item.@event,
-                action = item.action, requestId = item.requestId, sequence = item.sequence, reason = item.reason, error = item.error }));
+                action = item.action, requestId = item.requestId, sequence = item.sequence, reason = item.reason, error = item.error,
+                stage = item.stage, commandId = item.commandId }));
             // The event is received on the current sole control socket; constrain its epoch
             // and observe the controller's current generation at receipt, rather than trust a
             // missing optional payload generation.
-            if (item.type != "voice_test_diagnostic" || conversation == null || item.epoch != conversation.ControlEpoch) return;
+            if (conversation == null) return;
+            if (textMode)
+            {
+                if (conversation.ControlEpoch != textCommandEpoch || conversation.ConversationGeneration != textCommandGeneration
+                    || conversation.BrainSessionId != textCommandSession || conversation.BrainInstanceId != textCommandInstance) return;
+                if (item.type != "command_result" || string.IsNullOrEmpty(item.commandId)
+                    || !item.commandId.StartsWith("unity-intent-", StringComparison.Ordinal)) return;
+                if (item.stage == "submitted" && item.epoch == textCommandEpoch && item.requestId > 0 && !string.IsNullOrEmpty(item.action) && textCommandId == null)
+                { textCommandId = item.commandId; submittedActions[item.requestId] = item.action; }
+                // Applied wire intentionally omits epoch. Accept only a previously
+                // epoch-validated submission in the unchanged session/generation.
+                if (item.stage == "brain_applied" && item.commandId == textCommandId && submittedActions.TryGetValue(item.requestId, out string applied))
+                {
+                    submittedActions.Remove(item.requestId);
+                    diagnosticAppliedAction = applied;
+                    diagnosticAppliedAt = Time.realtimeSinceStartupAsDouble;
+                    diagnosticAppliedGeneration = conversation.ConversationGeneration;
+                    diagnosticAppliedCount++;
+                }
+                return;
+            }
+            if (item.type != "voice_test_diagnostic" || item.epoch != conversation.ControlEpoch) return;
             if (item.@event == "command_submitted" && item.requestId > 0 && !string.IsNullOrEmpty(item.action))
                 submittedActions[item.requestId] = item.action;
             if (item.@event == "command_applied" && item.requestId > 0)
@@ -317,7 +354,7 @@ namespace Flylingual.Conversation
             }
         }
 
-        static bool AllowedLifecycle(string value) => value == "command_submitted" || value == "command_applied"
+        static bool AllowedLifecycle(string value) => value == "command_result" || value == "command_submitted" || value == "command_applied"
             || value == "command_expired" || value == "intent_classified" || value == "error";
         static bool ExpectedAction(string command, string action) => (command == "forward" && action == "FORWARD")
             || (command == "left" && action == "TURN_L") || (command == "right" && action == "TURN_R")
@@ -360,7 +397,7 @@ namespace Flylingual.Conversation
             report.controllerError = conversation?.Error; report.bodyFault = nativeBody?.Fault;
             if (conversation == null) report.missing.Add("conversation"); if (nativeBody == null) report.missing.Add("native_body");
             if (demo?.body == null) report.missing.Add("live_body"); if (stage == null) report.missing.Add("stage"); if (goal == null) report.missing.Add("goal");
-            if (conversation != null && !conversation.FixtureInputEnabled) report.missing.Add("fixture_input_disabled");
+            if (!textMode && conversation != null && !conversation.FixtureInputEnabled) report.missing.Add("fixture_input_disabled");
             WriteSample();
             ScreenCapture.CaptureScreenshot(Path.Combine(outputDirectory, "course-end.png"));
             File.WriteAllText(Path.Combine(outputDirectory, "report.json"), JsonUtility.ToJson(report, true), new UTF8Encoding(false));

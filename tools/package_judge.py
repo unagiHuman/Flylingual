@@ -18,7 +18,7 @@ GRAPH_FILES = ('body_ids.npy', 'indptr.npy', 'targets.npy', 'weights.npy')
 BRAIN_FILES = ('brain_server_bridge.py', 'brain_server_analog.py', 'brain_server_malecns.py',
                'analog_controller.py', 'neural_visualization.py', 'analog_motor_decoder.py',
                'game_controller.py', 'shiu_compatible.py', 'lif_kernels.py', 'temporal_motor_decoder.py',
-               'motor_decoder.py', 'malecns_brain.py')
+               'motor_decoder.py', 'malecns_brain.py', 'visual_threat.py')
 
 
 def validate_public(value):
@@ -76,6 +76,20 @@ def package_selection(selection, endpoint):
     return {**selection, 'backendUrl': endpoint}
 
 
+def runtime_sources(bridge):
+    """Explicit application allowlist shared by packaging and dependency tests."""
+    sources = [Path('tools') / name for name in ('dev.py', 'windows_native.py', 'windows_native_job.py')]
+    sources += [p.relative_to(ROOT) for p in (ROOT / 'Runtime/Bridge').glob('*.py')]
+    sources += [Path('Runtime/Bridge/blind_run_script.json'), Path('Runtime/Bridge/player.html')]
+    sources += [Path('Runtime/Config/profiles/windows-local.json')]
+    sources += [Path('Brain/MaleCNS') / name for name in BRAIN_FILES]
+    sources += [Path('Brain/MaleCNS/config/analog_temporal_v1.json'), Path('Brain/MaleCNS/config/analog_handoff_manifest.json'),
+                Path('Brain/MaleCNS/config/visual_threat_v1.json')]
+    sources += [Path('artifacts/neuron_checkpoint') / name for name in GRAPH_FILES]
+    sources += [Path(bridge['brain']['visualizationAtlas'])]
+    return sources
+
+
 def assemble(output, python_root, endpoint):
     output, python_root = Path(output).resolve(), Path(python_root).resolve()
     bridge, native = configurations(endpoint)
@@ -92,14 +106,7 @@ def assemble(output, python_root, endpoint):
         raise ValueError('Portable Python DLL missing')
     subprocess.run([str(python_root / 'python.exe'), '-I', '-c',
                     'import numpy,numba,llvmlite,psutil,aiohttp; print("PORTABLE_DEPENDENCIES_OK")'], check=True)
-    sources = [Path('tools') / name for name in ('dev.py', 'windows_native.py', 'windows_native_job.py')]
-    sources += [p.relative_to(ROOT) for p in (ROOT / 'Runtime/Bridge').glob('*.py')]
-    sources += [Path('Runtime/Bridge/blind_run_script.json'), Path('Runtime/Bridge/player.html')]
-    sources += [Path('Runtime/Config/profiles/windows-local.json')]
-    sources += [Path('Brain/MaleCNS') / name for name in BRAIN_FILES]
-    sources += [Path('Brain/MaleCNS/config/analog_temporal_v1.json'), Path('Brain/MaleCNS/config/analog_handoff_manifest.json')]
-    sources += [Path('artifacts/neuron_checkpoint') / name for name in GRAPH_FILES]
-    sources += [Path(bridge['brain']['visualizationAtlas'])]
+    sources = runtime_sources(bridge)
     for relative in sources:
         source = ROOT / relative
         if not source.is_file():
@@ -131,13 +138,25 @@ def assemble(output, python_root, endpoint):
         (output / 'Runtime/Config' / name).write_text(json.dumps(config, indent=2) + '\n', encoding='utf-8')
     selection_path.write_text(json.dumps(selection, indent=2) + '\n', encoding='utf-8')
     (output / 'README.txt').write_text(
-        'Hayeringual Judge\n\n'
-        'フォルダ全体を展開し、FlylingualConversation.exe を起動してください。\n'
-        'Python・Brainは同梱済み。PythonやローカルLLMの追加インストールは不要です。\n'
-        'この版はテキスト入力です。「前進」「右」「左」「停止」の短い指示から試してください。\n'
-        'Cloud APIが使えなくても、これらの基本操作は利用できます。\n'
-        '終了すると、このアプリが起動した同居サービスも終了します。\n'
-        'Cloud接続先はbuild-channel.jsonの公開metadataです。APIキーは含まれていません。\n',
+        'Flylingual Judge — Windows 64-bit\n\n'
+        'キー不要のテキスト操作版です。GPT Live音声・マイク操作は含みません。\n'
+        'フォルダ全体を展開し、FlylingualConversation.exeを起動してください。\n'
+        'Python・Brainを同梱。追加インストールは不要です。初回はBrain準備に時間がかかります。\n'
+        'タイトルから開始し、危険を避けてゴールを目指します。設定ボタンで日本語・英語を切り替えられます。\n'
+        '「前進」「右」「左」「停止」など短い指示を入力してください。\n'
+        '自由な文のCloud解釈にはインターネット接続が必要です。Cloud失敗時も対応する短い基本指示はFastRuleで処理します。\n'
+        'Windows 11で動作確認。他のWindows環境は未検証です。終了時はアプリが起動した同居サービスも終了します。\n'
+        '神経モデルは実験的です。感情・学習・回避成功の神経的実証ではありません。果汁接触の神経報酬入力は未実装です。\n'
+        'Cloud接続先はbuild-channel.jsonに記載。APIキーは同梱していません。\n\n'
+        'This is the key-free text-control edition; GPT Live voice and microphone control are not included.\n'
+        'Extract the entire folder, then launch FlylingualConversation.exe. Python and Brain are bundled.\n'
+        'No extra installation is needed. Initial Brain preparation can take time.\n'
+        'Start from the title and avoid danger to reach the goal. Use Settings to switch Japanese/English.\n'
+        'Enter short commands such as "forward", "right", "left", and "stop".\n'
+        'Cloud interpretation of free-form text needs internet access. Supported short basic commands use FastRule if Cloud fails.\n'
+        'Tested on Windows 11; other Windows environments are unverified. App exit closes services it started.\n'
+        'The neural model is experimental, not evidence of emotions, learning, or successful avoidance. Juice-contact neural reward input is not implemented.\n'
+        'The public Cloud endpoint is in build-channel.json. No API key is bundled.\n',
         encoding='utf-8')
     files = []
     for path in sorted(output.rglob('*')):
