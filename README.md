@@ -1,6 +1,22 @@
 # Flylingual
 
-Flylingual is a Unity prototype in which player language is translated into bounded neural stimulation, processed through a project-specific experimental LIF simulation built on the public MaleCNS connectome, decoded into movement, and returned to the player through game/environment observations and conversational feedback.
+## Project overview
+
+Flylingual is an AI-native Unity action game where the player guides a fruit fly with natural-language instructions while trying to avoid falling, getting stuck, and being hit by a fly swatter. Player intent is converted into a small, bounded set of neural stimulation commands, processed by a project-specific experimental leaky integrate-and-fire (LIF) simulation built on the public MaleCNS connectome, decoded into motor output, and used to drive a six-legged physical fly in Unity. Environmental events can also feed back into the neural simulation, and measured neural responses can be returned to the conversational layer so the fly can comment on what was actually observed.
+
+## Challenge track
+
+**Track 1: AI-Native Game Prototype**
+
+Flylingual treats AI as part of the game loop rather than as a content-generation add-on: language is the player's control interface, neural simulation mediates movement, and AI-driven conversation reflects measured game and neural state back to the player.
+
+## How we used OpenAI technology
+
+- **OpenAI GPT-Live** is used in the Dev/Demo conversational runtime as the fly's real-time voice and dialogue layer. It receives player speech, participates in intent interpretation, and turns validated game/neural observations into short in-character responses.
+- **Measured neural feedback is grounded before it reaches GPT-Live.** The Bridge sends bounded observations such as selected neural readouts and experimentally observed threat-response activity; GPT-Live is instructed to preserve uncertainty and not invent emotions, causality, or biological conclusions that were not measured.
+- **Player language does not directly set Unity motor values.** Movement requests are constrained to the existing action vocabulary and pass through the Brain simulation, neural readout, motor decoder, and Unity body-control path.
+- **OpenAI Codex and ChatGPT** were used throughout development for implementation, debugging, code review, scientific-boundary checks, test design, documentation, and submission preparation.
+- The shareable **Judge build does not embed an OpenAI API key**. The repository keeps the GPT-Live Dev/Demo path, while the packaged Judge build uses a credential-free text-control path so it can be distributed without exposing developer secrets.
 
 Current Windows handoff and build notes: [README_WINDOWS.md](README_WINDOWS.md).
 
