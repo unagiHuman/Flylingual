@@ -9,6 +9,8 @@ from collections import deque
 from copy import deepcopy
 import math
 
+from .neural_calibration import Calibration, axis_thresholds
+
 
 ACTIONS = ('STOP', 'FORWARD', 'TURN_R', 'TURN_L', 'FORWARD_R', 'FORWARD_L')
 IDENTITY_KEYS = ('instanceId', 'sessionId', 'backendId', 'datasetId', 'sourceHash', 'graphHash', 'configHash')
@@ -41,12 +43,8 @@ class NeuralResponseAnalyzer:
             raise ValueError('invalid_neural_stale_ms')
         self.threshold_version = text(config.get('thresholdVersion'))
         self.calibration_evidence = text(config.get('calibrationEvidence'))
-        self.thresholds = {}
-        for key in ('rawThresholdMv', 'filteredThresholdMv', 'motorThreshold', 'changeThresholdMv'):
-            value = config.get(key)
-            if value is not None and (number(value) is None or value <= 0):
-                raise ValueError('invalid_neural_threshold')
-            self.thresholds[key] = number(value) if self.threshold_version and self.calibration_evidence else None
+        self.thresholds = axis_thresholds(config)
+        self.calibration = Calibration(config, self.thresholds)
         self.body_threshold_version = text(config.get('bodyThresholdVersion'))
         self.body_calibration_evidence = text(config.get('bodyCalibrationEvidence'))
         self.body_thresholds = {}
@@ -92,7 +90,7 @@ class NeuralResponseAnalyzer:
                        'currentCurve': [], 'previousCurve': [], 'allowedClaims': ['observation_unavailable'],
                        'causalStatus': 'unknown', 'cause': 'unknown', 'residualLayer': 'unresolved',
                        'bodyMovementVerified': False, 'suppressionReason': reason,
-                       'priority': 0, 'expiresAt': None}
+                       'priority': 0, 'expiresAt': None, **self._readout_metadata()}
         if self._episode:
             self._episode['invalid'] = reason
             self._episode['presentMs'] = 0.
@@ -269,35 +267,48 @@ class NeuralResponseAnalyzer:
                        'residualLayer': residual, 'allowedClaims': claims,
                        'causalStatus': 'observed_difference_only' if comparison.get('eligible') else 'unknown',
                        'cause': 'stimulus_variability_not_excluded',
-                       'thresholdVersion': self.threshold_version, 'priority': 0,
+                       'thresholdVersion': self.threshold_version, 'priority': 0, **self._readout_metadata(),
                        'dedupKey': '%s:%s:%s:%s:%s' % (identity['sessionId'], epoch, generation, current_request, event_type),
                        'suppressionReason': 'output_inhibited' if inhibited else ('missing_raw' if not valid_raw else None)}
         return deepcopy(self._event)
 
+    @staticmethod
+    def _axes(action):
+        return (('forward', 'turn') if action in ('FORWARD_R', 'FORWARD_L') else
+                ('forward',) if action == 'FORWARD' else
+                ('turn',) if action in ('TURN_R', 'TURN_L') else ())
+
+    def _threshold(self, key, axis):
+        return self.thresholds[key][axis] if self.calibration.matches(self._identity or {}) else None
+
     def _present(self, values, key, action):
-        threshold = self.thresholds[key]
-        if threshold is None or any(value is None for value in values.values()) or action == 'STOP':
-            return False
-        if action == 'FORWARD':
-            return values['forward'] > threshold
-        sign = -1 if action in ('TURN_L', 'FORWARD_L') else 1
-        return sign * values['turn'] > threshold and (not action.startswith('FORWARD_') or values['forward'] > threshold)
+        axes = self._axes(action)
+        return bool(axes) and all(values.get(axis) is not None and self._threshold(key, axis) is not None
+            and values[axis] * (-1 if axis == 'turn' and action in ('TURN_L', 'FORWARD_L') else 1)
+                > self._threshold(key, axis) for axis in axes)
 
     def _residual(self, sample):
         keys = ('rawThresholdMv', 'filteredThresholdMv', 'motorThreshold')
-        if any(self.thresholds[key] is None for key in keys):
+        if any(self._threshold(key, axis) is None for key in keys for axis in ('forward', 'turn')):
             return 'unresolved'
         if any(value is None for group in ('raw', 'filteredRaw', 'motor') for value in sample[group].values()):
             return 'unresolved'
-        raw = any(abs(value) > self.thresholds['rawThresholdMv'] for value in sample['raw'].values())
-        decoder = (any(abs(value) > self.thresholds['filteredThresholdMv'] for value in sample['filteredRaw'].values())
-                   or any(abs(value) > self.thresholds['motorThreshold'] for value in sample['motor'].values()))
+        raw = any(abs(value) > self._threshold('rawThresholdMv', axis) for axis, value in sample['raw'].items())
+        decoder = (any(abs(value) > self._threshold('filteredThresholdMv', axis) for axis, value in sample['filteredRaw'].items())
+                   or any(abs(value) > self._threshold('motorThreshold', axis) for axis, value in sample['motor'].items()))
         return 'both' if raw and decoder else 'selected_neural_readout' if raw else 'decoder' if decoder else 'unresolved'
+
+    def _readout_metadata(self):
+        known = (self._identity or {}).get('backendId') == 'MALECNS_EXPERIMENTAL' and (self._identity or {}).get('datasetId') == 'male-cns:v1.0'
+        return {'selectedVncAggregation': {'version': 'v1', 'method': 'cell_type_equal_weight_mean_delta_v', 'unit': 'mV'} if known else None,
+                'readoutProvenance': {key: 'stimulated_input_neuron' if key.startswith('DNg100_') else 'non_stimulated_selected_readout'
+                                      for key in RATE_KEYS} if known else {},
+                'calibration': self.calibration.summary(self._identity or {})}
 
     def _comparison(self):
         episode = self._episode
         result = {'eligible': False, 'reason': 'application_unconfirmed', 'referenceId': None,
-                  'changed': False, 'deltaMeanMv': None, 'relativeChange': None,
+                  'changed': False, 'changedAxes': [], 'axes': {}, 'deltaMeanMv': None, 'relativeChange': None,
                   'causalStatus': 'observed_difference_only', 'intervalMs': 200,
                   'timeOrigin': 'end_of_excluded_application_frame',
                   'originBrainTimeMs': episode['start'] if episode else None}
@@ -307,7 +318,7 @@ class NeuralResponseAnalyzer:
         result['sequenceStart'] = episode['samples'][0]['sequence'] if episode['samples'] else None
         result['sequenceEnd'] = episode['samples'][-1]['sequence'] if episode['samples'] else None
         reference = episode['reference']
-        reason = (episode['invalid'] or ('continued_input' if episode['continued'] else None)
+        reason = ('stop_not_comparable' if episode['action'] == 'STOP' else episode['invalid'] or ('continued_input' if episode['continued'] else None)
                   or ('initial_action_unknown' if not episode['initialActionKnown'] else None)
                   or ('missing_identity' if not self._compatible_identity(episode['identity']) else None)
                   or ('insufficient_window' if not episode['complete'] else None)
@@ -320,22 +331,31 @@ class NeuralResponseAnalyzer:
         if reference:
             result['referenceId'] = reference['requestId']
             result['previousMeanMv'] = self._means(reference)
+        current = self._means(episode)
+        previous = self._means(reference) if reference else dict.fromkeys(('forward', 'turn'))
+        action = episode['action']
+        for axis in self._axes(action):
+            axis_reason = reason or ('missing_raw' if current[axis] is None or previous[axis] is None else None)
+            delta = current[axis] - previous[axis] if current[axis] is not None and previous[axis] is not None else None
+            sign = -1 if axis == 'turn' and action in ('TURN_L', 'FORWARD_L') else 1
+            threshold = self._threshold('changeThresholdMv', axis)
+            changed = (axis_reason is None and threshold is not None and sign * current[axis] > 0
+                       and sign * previous[axis] > 0 and abs(delta) > threshold)
+            result['axes'][axis] = {'eligible': axis_reason is None, 'reason': axis_reason,
+                'currentMeanMv': current[axis], 'previousMeanMv': previous[axis], 'deltaMeanMv': delta,
+                'directionalDeltaMv': sign * delta if delta is not None else None, 'changed': changed}
+            if changed:
+                result['changedAxes'].append(axis)
         if reason:
             return result
-        current, previous = self._means(episode), self._means(reference)
-        if any(value is None for value in (*current.values(), *previous.values())):
+        result['eligible'] = bool(result['axes']) and all(item['eligible'] for item in result['axes'].values())
+        if not result['eligible']:
             result['reason'] = 'missing_raw'
-            return result
-        result['eligible'] = True
-        result['deltaMeanMv'] = {axis: current[axis]-previous[axis] for axis in ('forward', 'turn')}
-        threshold = self.thresholds['changeThresholdMv']
-        action = episode['action']
-        axis = 'forward' if action == 'FORWARD' else 'turn'
-        sign = -1 if action in ('TURN_L', 'FORWARD_L') else 1
-        # Do not turn opposite-sign responses into expected-direction strength.
-        if action != 'STOP' and sign * current[axis] > 0 and sign * previous[axis] > 0 and threshold is not None:
-            result['changed'] = abs(result['deltaMeanMv'][axis]) > threshold
-            result['directionalDeltaMv'] = sign * result['deltaMeanMv'][axis]
+        result['changed'] = bool(result['changedAxes'])
+        result['deltaMeanMv'] = {axis: current[axis]-previous[axis] if current[axis] is not None and previous[axis] is not None else None
+                                 for axis in ('forward', 'turn')}
+        if len(result['axes']) == 1:
+            result['directionalDeltaMv'] = next(iter(result['axes'].values()))['directionalDeltaMv']
         return result
 
     @staticmethod

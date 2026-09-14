@@ -2,13 +2,47 @@
 
 更新: 2026-09-14。仕様書 `Flylingual_Brain_Feedback_Codex_Astra_Spec.md` の実装・検証記録。Windows実Brain→Playerの移動・STOP、観測配送、同一LIF列の非干渉を確認した。Phase Bは12主試行＋再現性対照を実行し、増分の履歴効果を支持せず、未校正のためINCONCLUSIVEで探索終了。**LiveDialogueGroundingはPARTIAL、実マイクとHUD目視は未確認**。`ready=false`／productReady=falseを維持し、身体因果もunknown。
 
+## 今回のレビュー修正と検証（2026-09-14）
+
+今回の修正はread-only analyzer・表示・会話還流に限定する。`forward`／`turn`別比較・閾値、集計方法と刺激入力readoutの由来、校正artifact検証、人格を維持する短文要約を実装した。**実装済みであることはproduction校正済み・実機受入れ済みを意味しない。** 既定の閾値とcalibrationは未設定で、ready=false／productReady=falseは維持する。
+
+最終統合では、`.venv-bridge/Scripts/python.exe -m unittest tools.test_neural_response tools.test_neural_calibration_config tools.test_neural_feedback tools.test_native_conversation tools.test_text_conversation tools.test_local_intent_config tools.test_intent_age_config -v` が **126件PASS（3.116秒）**。Unity 6000.5.9f1の再コンパイルはcompleted／failed=false／errors=[]、追加の `NeuralReadoutTests` は **4件PASS**。JSONの軸別差・欠測null・metadata・旧consumer互換を確認した。初回の子検証はBrain用venvにaiohttpがなくImportErrorとなったが、Bridge用venvで実行を完了した。
+
+`tools/neural_noninterference.py` を新しい出力先へ実行し、実LIFの観測OFF/ON各30frameでRNG、raw神経出力、motor、sequenceの一致が **PASS**。seed1701、実装済み100Hz確率刺激、Python3.10.12／NumPy1.24.3、解析p95=0.4046ms。`artifacts/neural-feedback/review-fix-noninterference.json` にidentity・source/data/config hashと各runを保存した。これはWindows Player動作の代替ではなく、別の非干渉試験である。
+
+Dev-Local Playerを既存ビルド入口で再ビルドした。CLI eval応答は5秒でtimeoutとなったが処理は継続し、Editor BuildReportでSucceededを確認した。BuildReportのerror1件はこのCLI応答timeoutであり、C#コンパイルエラーではない。既存Editor初期化が以前の1シーンUI設定をEditorBuildSettingsへ反映したが、その生成差分は本レビュー修正のコミット対象外とする。
+
+`tools/neural_player_trial.ps1 -Name review-fix-ja -Language ja -Question 0 -RenderScreenshot` による日本語1試行は **control_pass**。所有Player→Bridge→Windows実Brain `127.0.0.1:18766`、MALECNS_EXPERIMENTAL／LIVE、ready=false。約2.9842m移動後にSTOP適用、終了時fresh=true、Playerのresult.errorは空。probe全体では133一意BrainFrame／131神経観測／125身体相関を記録し、起動完了後の記録区間はsequence28→139。神経イベントは同一sequenceの配送も含め180件で、すべてOBSERVATION_MEASURED／calibration.not_configured、最大age約359ms。180件すべてで集計metadata、DNg100刺激入力とDNa02/DNp09非刺激観測のprovenance、strength/change claim抑止、bodyMovementVerified=falseを確認した。通常設定にproduction校正artifactや推測閾値は追加していない。
+
+今回の実入力は既存probeの合成テキストであり実マイク試験ではない。実GPT-Live回答は「今はSTOPの刺激が適用されたところで、効いたとか拒否したとかはまだ言えない」等だったが、11秒の窓では回答途中。日英persona維持は単体で確認し、実会話品質全体はPARTIALのまま。ScreenCaptureはFailed to capture screen shotでPNGを得られず、HUD目視は未確認。追加のPhase Bや高コスト探索は行っていない。
+
+証拠は `artifacts/neural-feedback/review-fix-unit-tests.log`、`review-fix-unity-tests.json`、`review-fix-noninterference.json`、`review-fix-ja.json`、`review-fix-ja.json.events.jsonl`、`review-fix-ja-contract-audit.json` と同名player/bridgeログ。contract auditは変更ソースのSHAも含む。`review-fix-ja-metrics.json` はPlayer frame p95=16.8693ms、sampled RSS等を記録する。今回の単独試行から遅延性能の統計的優位や履歴因果を主張しない。
+
+後半の「Phase B準備と受入gate」以降は**レビュー修正前の実測・制約の履歴**であり、今回の差分に対する再検証ではない。既存の数値、実行ラベル、HEAD参照、失敗、未確認項目を保持する。Phase Bは12主試行＋1再現性対照のINCONCLUSIVEを変更せず、今回のpresentation/schema変更を理由に再実行していない。
+
 ## 実装と境界
 
 `Runtime/Bridge/neural_response.py` の `NeuralResponseAnalyzer` が新規BrainFrameの少数readoutだけを解析する。`server.py` が適用requestとidentityを対応付け、`neural_feedback.py` の単一consumer・最新1件の待機枠を通じて既存ConversationAdapterへ最大380文字の事実を送る。神経readerでGPT応答を待たない。
 
 Unityは `ConversationSessionController` で任意購読し、`NeuralResponsePanel` を `PlayScreenView` の神経パネルへ追加する。`FlyTerrainRuntime` は既存センサー送信位置でThoraxの速度と角速度、既存odometerを読み取る。Brain/LIF/RNG/decoder/CPG/物理/Actionへ書き込まない。
 
-HUDは要求、刺激適用、selected VNC raw、motor、身体速度を分離する。raw曲線はmV可変軸、motor曲線は±1固定軸、横軸は**除外した適用frameの終端から0–200脳内ms**。薄い線は前回比較曲線。欠測・stale・相関不成立はunknownでありゼロに補完しない。body対応sequenceが最新神経sequenceより古い場合は、両sequenceと脳内時間差を明示する。
+HUDは通常表示を要求、刺激適用、selected VNC raw F/T、motor、backend・mode・ageに絞り、折りたたみの「測定と比較の詳細」にfiltered raw、左右population、身体速度・対応sequence、軸別の前回差と適格性、未校正・刺激系列不固定の説明を表示する。raw、decoder、motor、身体は別の測定層として扱う。raw曲線はmV可変軸、motor曲線は±1固定軸、横軸は**除外した適用frameの終端から0–200脳内ms**。薄い線は前回比較曲線。欠測・stale・相関不成立はunknownでありゼロに補完しない。body対応sequenceが最新神経sequenceより古い場合は、両sequenceと脳内時間差を明示する。
+
+## selected VNC aggregateとreadoutの由来
+
+`forward_raw`／`turn_raw`はMaleCNS全体の活動でも、ニューロン数で加重したpopulation平均でもない。各ニューロンのbaselineからの膜電位差をcell typeごとに平均し、各軸・各側でcell type平均を均等に平均する。軸a（F/T）、側s（L/R）に属するcell type集合をC[a,s]、型cのニューロン集合をN[c,a,s]、各ニューロンのbaseline差をΔV[i]とすると、既存計算は次のとおり。
+
+```text
+M[a,s] = (1 / |C[a,s]|) × Σ(c∈C[a,s]) [(1 / |N[c,a,s]|) × Σ(i∈N[c,a,s]) ΔV[i]]
+forward_raw = (M[F,R] + M[F,L]) / 2
+turn_raw = M[T,R] - M[T,L]
+```
+
+単位はmV。cell type数を均等に重み付けする **cell-type equal-weight aggregate** であり、集計そのもの、baseline、刺激、decoderの数値計算は今回変更しない。これはepisode内の200脳内msに対する時間加重平均とは別の集計段階である。
+
+既知の `backendId=MALECNS_EXPERIMENTAL` かつ `datasetId=male-cns:v1.0` に限り、Bridgeがイベント最上位へ `selectedVncAggregation={version: "v1", method: "cell_type_equal_weight_mean_delta_v", unit: "mV"}` を付加する。HUD名は「選択VNCの細胞型均等ΔV / Selected VNC class-balanced ΔV」。別backend/datasetの集計法を推定せず、metadataはnull／表示はunknownとする。
+
+同じ既知identityでは `readoutProvenance` が `DNg100_L_Hz`／`DNg100_R_Hz` を `stimulated_input_neuron`、DNa02／DNp09の左右Hzを `non_stimulated_selected_readout` と区別する。DNg100は直接刺激している入力ニューロン自身の活動を含み、独立した下流反応の根拠ではない。GPT-Liveのcompact summaryにはDNg100/readoutHzを根拠として入れず、HUD詳細にもこの入力由来を明示する。別identityではprovenanceを空にし、未知を既知にしない。
 
 ## 設定
 
@@ -19,10 +53,11 @@ HUDは要求、刺激適用、selected VNC raw、motor、身体速度を分離�
 | enabled | true | 読み取り解析と新capability。有効化しても運動経路を変更しない |
 | spontaneousEnabled | true | 適格eventの低優先度実況 |
 | cooldownMs | 4000 | 実時間。4000–60000の整数 |
-| rawThresholdMv / filteredThresholdMv | null | 選択raw／平滑化rawの検出閾値、mV |
-| motorThreshold | null | 無次元motorの検出閾値 |
-| changeThresholdMv | null | 前回差の最低mV閾値 |
-| thresholdVersion / calibrationEvidence | null | 校正の版と根拠参照 |
+| rawThresholdMv / filteredThresholdMv | {forward: null, turn: null} | 軸別の選択raw／平滑化raw検出閾値、mV |
+| motorThreshold | {forward: null, turn: null} | 軸別の無次元motor検出閾値 |
+| changeThresholdMv | {forward: null, turn: null} | 軸別の前回差の最低mV閾値 |
+| thresholdVersion / calibrationEvidence | null | 校正版／旧根拠参照。自由文字列だけでは校正成立にしない |
+| calibration | null | version、artifact、artifactSha256、sourceHash、graphHash、configHashの検証対象 |
 | bodyResponseGraceMs | null | 身体応答を待つ実時間ms |
 | bodySpeedThresholdMetersPerSecond | null | 前方身体速度の閾値、m/s |
 | bodyYawThresholdDegPerSec | null | 身体yaw速度の閾値、degree/s |
@@ -30,9 +65,23 @@ HUDは要求、刺激適用、selected VNC raw、motor、身体速度を分離�
 | bodyYawSign | null | 実機校正したyawとmotor turnの符号対応、±1 |
 | bodyThresholdVersion / bodyCalibrationEvidence | null | 身体判定の校正版と根拠参照 |
 
-閾値は正の有限数値のみ。版・校正根拠がない閾値は有効にしない。**既定は未校正なので、応答検出・強弱・残留を推測で実況しない。** 数値表示と質問用の事実要約は別に扱う。鮮度は既存control.staleMs（通常750ms）に従い、緩めて合格させない。
+軸閾値はnullまたは正の有限数値（上限1e6）。同じ4キーのdictでforward／turnを分け、未知軸を拒否する。旧scalarは読込互換として受理できても両軸nullへ扱い、production判定を有効にしない。版・根拠の自由文字列だけでは軸閾値を有効にしない。**既定は未校正なので、応答検出・強弱・残留を推測で実況しない。** 未校正時は有効な測定をOBSERVATION_MEASUREDとして数値表示できるが、strong／weak、RESPONSE_PRESENT、RESPONSE_CHANGEDの意味判定を行わない。数値表示と質問用の事実要約は別に扱う。鮮度は既存control.staleMs（通常750ms）に従い、緩めて合格させない。
+
+`calibration`は起動時にartifactを検証し、frameごとのファイルI/Oは行わない。相対artifactパスの基準はFlylingual repoルートで、JSONは最大64KiB。artifact実在、artifactSha256（SHA-256）の一致、`calibration.version == thresholdVersion == artifact.version`、artifactと設定のsourceHash／graphHash／configHash一致、artifactの`thresholds`と設定の4つの軸別閾値dictの一致を必要とする。各identity hashとartifactSha256は64桁16進。さらに現在受信したBrain identityのsourceHash／graphHash／configHashが校正情報と一致する場合だけ閾値を使う。
+
+artifact JSONは `version`、`sourceHash`、`graphHash`、`configHash` と、4キーそれぞれにforward／turnを持つ `thresholds` を含む。設定だけ閾値を書き換えてもartifactとの一致が崩れるため有効化しない。イベント最上位の `calibration` は `valid/status/version/artifactSha256` を返す。artifact不在・不一致・未設定はfail-closedとし、同梱できない配布環境もuncalibratedを優先する。今回production calibration artifactは追加しない。既存の身体判定用body*設定は別の校正経路であり、今回の軸別artifact gateによって身体校正済みへ昇格させない。
 
 解析バッファは脳内10秒かつ512frame以下。適用境界の最初のframeは比較窓から除外し、以後200msを時間加重で集計する。`comparison.timeOrigin=end_of_excluded_application_frame` は、その除外frameの**終端**が比較相対時刻0であることを示す。刺激送信時刻や実時間0ではない。同一Actionの維持更新は新刺激立ち上がりとしない。epoch・会話世代・Brain identity変更で参照を失効させる。
+
+## Action別比較とruntimeの解釈
+
+FORWARDはforward、TURN_R/Lはturn、FORWARD_R/Lはforwardとturnを**別々に**比較し、STOPはresponse-change比較対象外とする。期待符号はforwardが正、右turnが正、左turnが負。`RESPONSE_PRESENT`は対象となる全軸がそれぞれのraw閾値を期待方向で超える必要があり、複合Actionの片軸だけで完全な指示方向応答としない。継続時間等の既存gateも維持する。
+
+`comparison.axes.forward/turn` は各軸の `eligible/reason/currentMeanMv/previousMeanMv/deltaMeanMv/directionalDeltaMv/changed` を返す。符号付きdeltaと期待方向でのdeltaを分け、差を二軸平均で相殺しない。各軸のchangedは比較適格・校正済みchange閾値超過・前回と今回とも期待方向の条件から判定する。`changedAxes` は変化が成立した軸、最上位changedはそのOR。最上位eligibleは必要軸すべての観測比較適格性であり、校正済みの意味ではない。未校正でも比較可能な数値差は表示できるが、changed／RESPONSE_CHANGEDを成立させない。
+
+旧consumer向け `currentMeanMv/previousMeanMv/deltaMeanMv` のforward／turn辞書は維持し、新しい判定の正本はaxesとする。通常比較は、同一Action・適用相関・identity・観測窓等を満たす過去episodeとの観測比較であり、刺激cell/tick系列の固定比較ではない。刺激の確率的変動を除外できず、`comparison.causalStatus=observed_difference_only` を維持する。イベント最上位は比較適格時に同値、比較不能時はunknownで、`cause=stimulus_variability_not_excluded` を伝える。「同条件」やBrain state／historyが差の原因という表現は使わない。
+
+Phase Bだけが刺激cell/tick系列を固定して履歴依存性を分離する診断である。既存12主試行＋1対照ではD_incrementがほぼ0、未校正でINCONCLUSIVEであり、runtimeで観測できる試行間変動を履歴効果の実証へ読み替えない。rawが0でも全脳静止ではなく、STOP後の残留はselected_neural_readout／decoder／both／unresolvedを維持する。
 
 ## Control WebSocket追加契約 v1
 
@@ -56,7 +105,9 @@ HUDは要求、刺激適用、selected VNC raw、motor、身体速度を分離�
 | current.filteredRaw / motor | 前者mV、後者無次元。decoder残留と神経rawを分離 |
 | current.brainStartMs/brainEndMs/windowMs | 脳内時間。wall timeとは別の軸 |
 | current.readoutHz / stepWallTimeMs | 選択DNのHz／1計算窓の実時間ms |
-| comparison / currentCurve / previousCurve | 比較適格性・理由、最大32点の適用相対曲線 |
+| comparison / currentCurve / previousCurve | 比較適格性・理由、axesとchangedAxes、最大32点の適用相対曲線 |
+| selectedVncAggregation / readoutProvenance | 既知backend/datasetの集計法と刺激入力／非刺激readoutの区別 |
+| calibration / cause | artifact校正の検証状態／刺激変動を除外していない旨 |
 | body | 相関済み実測速度。brainSequence/currentSequence/brainTimeOffsetMsで遅れを明示 |
 | allowedClaims / causalStatus / residualLayer | 許される限定主張。通常比較の原因は未確定 |
 
@@ -74,18 +125,20 @@ ageMsは送信queue滞在時間を加算する。Bridge受信時の単調時計�
 
 ## 会話と判定の制限
 
-chat_onlyでは現在のBrain／身体観測を会話へ流さない。controlでも抑止、切断、古い世代、発話中、危険scene cue等の条件で低優先度実況を落とす。「実況を減らして」「皮肉なし」の希望は提示側で扱う。人格は事実の言い方だけを変える。
+chat_onlyでは現在のBrain／身体観測を会話へ流さない。controlでも抑止、切断、古い世代、発話中、危険scene cue等の条件で低優先度実況を落とす。「実況を減らして」「皮肉なし」の希望は提示側で扱う。人格は事実の言い方だけを変える。神経summaryは「設定中の人格・口調を維持して短く」と指示し、hiroyuki_likeの会話的なです・ます等を上書きしない。明示された「皮肉なし」は維持する。
 
 `MOTOR_BODY_DISCREPANCY` の判定経路は実装済み。ただし7つの身体校正設定が既定nullなので、**通常設定ではuncalibrated／unknownを維持**する。校正済みでも同一requestの相関、新しい身体sampleが2件以上・100ms以上、応答猶予、鮮度等を要求し、snapshot再送で成立させない。不一致は機構の原因を証明しない。速度を受信できたことだけでbodyMovementVerifiedをtrueにしない。rawゼロを全脳静止、motorゼロを身体停止と説明せず、弱い反応を疲労・拒否・気分として認定しない。
 
 新しいLive向け回答policyは機能enabled時だけ適用し、disabledでは従来経路を維持する。型付きテキスト質問の本文をLiveへ渡す経路を補い、`speak_non_action` は事実を `thinking` へ渡した後、`instructions` で最新質問へ短く直接回答するよう指示する。台本継続や移動催促に置き換えない。このchannelの責務に沿った接続は[公式Live delegation資料](https://developers.openai.com/api/docs/guides/live-delegation)を参照した。最終修正後の実回答品質はまだ検証途中で、実装済みと受入完了を分ける。
 
+`compact_summary`はallowedClaimsを主張gateとし、comparison.axes／changedAxesから適格かつchangedの正規軸だけを要約する。比較事実を先に置き、刺激変動・原因不明・身体未確認・人格保持の文を確保して、380文字（Pythonの文字数）へ収める。入らない副次事実と数値は文単位で省略し、文章やJSONの末尾を切断しない。raw／filtered raw／motorの任意数値は別ラベル。ConversationAdapter.appendも末尾の機械切断を廃止し、380文字超または非文字列を安定エラー `conversation_context_too_long_or_invalid` で拒否する。これは神経以外にも共用される境界なので、他callerも完全な内容を上限内で構築する必要がある。
+
 日英の要約作例（実APIの発言ではない）:
 
-- 「選択VNCの値は測れてる。身体の動作と原因はまだ確認できてない。」
-- “Selected VNC values are available. Body movement and the cause remain unverified.”
+- 「前回の比較可能なFORWARD_R観測と選択VNCの前進軸に差があります。刺激の確率的変動を含むため原因は未確定で、身体動作も未確認です。」
+- “Selected VNC response differs from a comparable previous FORWARD_R observation on the forward axis. Stimulus variability was not excluded; cause unknown. Body movement remains unverified.”
 
-## Phase B準備と受入gate
+## Phase B準備と受入gate（レビュー修正前の記録）
 
 `tools/neural_history_diagnostic.py` は本番から独立した準備済みrunner。Phase A成立後だけ実行する。100ms共通baseline、500msの無刺激またはTURN_R履歴、300msの固定FORWARDまたは無刺激、50ms集計。独立Generatorのcell/tick列とSHAを揃え、実LIFを初期から計算して全状態を持ち越す。主12試行＋A+再現性対照1件。D_totalとD_increment、decoder共通初期／持ち越しを分ける。未校正の既定は12主試行でINCONCLUSIVE。事前登録された校正根拠・方向・mean/integral/peak閾値があり主3seedと再現性対照を通過した場合だけ、未使用3seedを追加して主試行最大24とする。方法・seed・source/data・criteriaのhashを固定し、不一致をSTIMULUS_NOT_CONTROLLEDとして保存する。観測非干渉報告は別の受入参照としてmanifestに記録できる。
 

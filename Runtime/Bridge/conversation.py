@@ -478,10 +478,13 @@ class ConversationAdapter:
     async def append(self, channel, content, delegation_id=None):
         if self.mode != 'live' or self.ws is None or self.ws.closed:
             return
-        # Small factual messages only; comfortably below the 500-token event limit.
+        # Callers must budget complete context. Slicing could remove a negation,
+        # uncertainty qualifier, or the closing portion of a quoted question.
+        if not isinstance(content, str) or len(content) > 380:
+            raise ConversationError('conversation_context_too_long_or_invalid')
         await self._send_event({'type': 'session.' + channel + '.append',
                                  'event_id': str(uuid.uuid4()), 'delegation_id': delegation_id,
-                                 'content': content[:380]})
+                                 'content': content})
 
     async def input_audio(self, encoded, fixture_tag=None):
         if self.state != 'live':

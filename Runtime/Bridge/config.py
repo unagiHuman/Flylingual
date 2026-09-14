@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any, Mapping
 from urllib.parse import urlsplit
 
+from .neural_calibration import axis_thresholds
 from .conversation_settings import DEFAULT_SETTINGS, SettingsError, settings_from_config
 
 
@@ -37,7 +38,7 @@ _SOURCE_FILES = (
 )
 _TOP_LEVEL = {"profile", "bridge", "brain", "conversation", "control", "logPath", "neuralFeedback"}
 _CHILD_KEYS = {
-    "neuralFeedback": {"enabled", "spontaneousEnabled", "cooldownMs", "rawThresholdMv", "filteredThresholdMv", "motorThreshold", "changeThresholdMv", "thresholdVersion", "calibrationEvidence",
+    "neuralFeedback": {"enabled", "spontaneousEnabled", "cooldownMs", "rawThresholdMv", "filteredThresholdMv", "motorThreshold", "changeThresholdMv", "thresholdVersion", "calibrationEvidence", "calibration",
                        "bodyResponseGraceMs", "bodySpeedThresholdMetersPerSecond", "bodyYawThresholdDegPerSec", "bodyMotorThreshold", "bodyCalibrationEvidence", "bodyYawSign", "bodyThresholdVersion"},
     "bridge": {"host", "tcpPort", "controlPort"},
     "brain": {
@@ -51,8 +52,8 @@ _CHILD_KEYS = {
 
 _DEFAULT: dict[str, Any] = {
     "neuralFeedback": {"enabled": True, "spontaneousEnabled": True, "cooldownMs": 4000,
-                       "rawThresholdMv": None, "filteredThresholdMv": None, "motorThreshold": None,
-                       "changeThresholdMv": None, "thresholdVersion": None, "calibrationEvidence": None,
+                       "rawThresholdMv": {"forward": None, "turn": None}, "filteredThresholdMv": {"forward": None, "turn": None}, "motorThreshold": {"forward": None, "turn": None},
+                       "changeThresholdMv": {"forward": None, "turn": None}, "thresholdVersion": None, "calibrationEvidence": None, "calibration": None,
                        "bodyResponseGraceMs": None, "bodySpeedThresholdMetersPerSecond": None,
                        "bodyYawThresholdDegPerSec": None, "bodyMotorThreshold": None,
                        "bodyCalibrationEvidence": None, "bodyYawSign": None, "bodyThresholdVersion": None},
@@ -199,8 +200,14 @@ def _validate(config: dict[str, Any]) -> None:
             raise ConfigError('neuralFeedback.' + key + ' must be boolean')
     if type(feedback['cooldownMs']) is not int or not 4000 <= feedback['cooldownMs'] <= 60000:
         raise ConfigError('neuralFeedback.cooldownMs must be an integer from 4000 through 60000')
-    for key in ('rawThresholdMv', 'filteredThresholdMv', 'motorThreshold', 'changeThresholdMv',
-                'bodyResponseGraceMs', 'bodySpeedThresholdMetersPerSecond', 'bodyYawThresholdDegPerSec', 'bodyMotorThreshold'):
+    try:
+        axis_thresholds(feedback)
+    except ValueError as error:
+        raise ConfigError('neuralFeedback: ' + str(error)) from error
+    calibration = feedback.get('calibration')
+    if calibration is not None and (type(calibration) is not dict or set(calibration) - {'version', 'artifact', 'artifactSha256', 'sourceHash', 'graphHash', 'configHash'}):
+        raise ConfigError('neuralFeedback.calibration must be null or a calibration object')
+    for key in ('bodyResponseGraceMs', 'bodySpeedThresholdMetersPerSecond', 'bodyYawThresholdDegPerSec', 'bodyMotorThreshold'):
         value = feedback[key]
         if value is not None and (not _is_number(value) or not math.isfinite(value) or not 0 < value <= 1e6):
             raise ConfigError('neuralFeedback.' + key + ' must be null or a positive finite number')

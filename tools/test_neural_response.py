@@ -2,6 +2,10 @@
 import copy
 import json
 import unittest
+import hashlib
+import tempfile
+from pathlib import Path
+from unittest.mock import patch
 
 from Runtime.Bridge.neural_response import NeuralResponseAnalyzer
 
@@ -9,7 +13,8 @@ from Runtime.Bridge.neural_response import NeuralResponseAnalyzer
 IDENTITY = {'instanceId': 'brain-1', 'sessionId': 'session-1', 'backendId': 'MALECNS_EXPERIMENTAL',
             'datasetId': 'male-cns:v1.0', 'sourceHash': 'a'*64, 'graphHash': 'b'*64, 'configHash': 'c'*64}
 CALIBRATED = {'thresholdVersion': 'fixture-only-v1', 'calibrationEvidence': 'unit-fixture-not-production',
-              'rawThresholdMv': .1, 'filteredThresholdMv': .1, 'motorThreshold': .1, 'changeThresholdMv': .2}
+              **{key: {'forward': value, 'turn': value} for key, value in
+                 [('rawThresholdMv', .1), ('filteredThresholdMv', .1), ('motorThreshold', .1), ('changeThresholdMv', .2)]}}
 BODY_CALIBRATED = {'bodyThresholdVersion': 'fixture-only-v1', 'bodyCalibrationEvidence': 'unit-only-not-production',
                    'bodyResponseGraceMs': 100, 'bodySpeedThresholdMetersPerSecond': .05,
                    'bodyYawThresholdDegPerSec': 1, 'bodyMotorThreshold': .1, 'bodyYawSign': 1}
@@ -34,6 +39,133 @@ def observe(analyzer, value, **kwargs):
 
 
 class NeuralAnalyzerTests(unittest.TestCase):
+    def calibrated(self, thresholds=None, artifact_changes=None):
+        config = copy.deepcopy(CALIBRATED)
+        if thresholds:
+            config.update(thresholds)
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        path = Path(directory.name) / 'calibration.json'
+        data = {'version': config['thresholdVersion'],
+                **{key: IDENTITY[key] for key in ('sourceHash', 'graphHash', 'configHash')},
+                'thresholds': {key: config[key] for key in ('rawThresholdMv', 'filteredThresholdMv', 'motorThreshold', 'changeThresholdMv')}}
+        data.update(artifact_changes or {})
+        raw = json.dumps(data).encode()
+        path.write_bytes(raw)
+        config['calibration'] = {'version': config['thresholdVersion'], 'artifact': str(path),
+                                'artifactSha256': hashlib.sha256(raw).hexdigest(),
+                                **{key: IDENTITY[key] for key in ('sourceHash', 'graphHash', 'configHash')}}
+        return config
+
+    def comparison_trial(self, action, previous, current, config=None):
+        analyzer = NeuralResponseAnalyzer(self.calibrated() if config is None else config)
+        observe(analyzer, frame(0, 'STOP', applied=1))
+        for n in range(1, 6):
+            observe(analyzer, frame(n, action, applied=2 if n == 1 else None, raw=previous))
+        observe(analyzer, frame(6, 'STOP', applied=3))
+        for n in range(7, 12):
+            result = observe(analyzer, frame(n, action, applied=4 if n == 7 else None, raw=current))
+        return result
+
+    def test_composite_axes_independent_and_directional(self):
+        for action, sign in [('FORWARD_R', 1), ('FORWARD_L', -1)]:
+            for current, changed in [((.1, .5), ['forward']), ((.5, .1), ['turn']),
+                                     ((.1, .1), ['forward', 'turn']), ((.4, .4), [])]:
+                result = self.comparison_trial(action, (.5, sign*.5), (current[0], sign*current[1]))
+                self.assertEqual(result['comparison']['changedAxes'], changed)
+                self.assertEqual(result['comparison']['changed'], bool(changed))
+                self.assertEqual(set(result['comparison']['axes']), {'forward', 'turn'})
+            reverse = self.comparison_trial(action, (.5, sign*.5), (.5, -sign*.5))
+            self.assertFalse(reverse['comparison']['axes']['turn']['changed'])
+            self.assertNotEqual(reverse['comparison']['axes']['turn']['deltaMeanMv'], 0)
+
+    def test_distinct_axis_thresholds_and_composite_response(self):
+        config = self.calibrated({'rawThresholdMv': {'forward': .1, 'turn': .4},
+                                  'changeThresholdMv': {'forward': .1, 'turn': .4}})
+        for action, present in [('FORWARD', True), ('TURN_R', False), ('FORWARD_R', False)]:
+            analyzer = NeuralResponseAnalyzer(config)
+            for n in range(4):
+                result = observe(analyzer, frame(n, action, applied=1 if n == 0 else None, raw=(.3, .3)))
+            self.assertEqual('selected_direction_response' in result['allowedClaims'], present)
+        result = self.comparison_trial('FORWARD_R', (.5, .5), (.3, .3), config)
+        self.assertEqual(result['comparison']['changedAxes'], ['forward'])
+
+    def test_calibration_fail_closed(self):
+        configs = [CALIBRATED, self.calibrated(artifact_changes={'version': 'wrong'}),
+                   self.calibrated(artifact_changes={'sourceHash': 'd'*64}),
+                   self.calibrated(artifact_changes={'thresholds': {}})]
+        for key, value in [('artifact', 'missing-calibration.json'), ('artifactSha256', '0'*64),
+                           ('version', 'wrong'), ('graphHash', 'e'*64)]:
+            config = self.calibrated()
+            config['calibration'][key] = value
+            configs.append(config)
+        config = self.calibrated()
+        config['rawThresholdMv']['forward'] = .001
+        configs.append(config)
+        config = self.calibrated()
+        config['rawThresholdMv'] = .1
+        configs.append(config)
+        for config in configs:
+            result = self.comparison_trial('FORWARD_R', (.5, .5), (.1, .1), config)
+            self.assertFalse(result['calibration']['valid'])
+            self.assertEqual(result['eventType'], 'OBSERVATION_MEASURED')
+            self.assertFalse(result['comparison']['changed'])
+
+    def test_identity_mismatch_and_no_per_frame_artifact_io(self):
+        config = self.calibrated()
+        analyzer = NeuralResponseAnalyzer(config)
+        with patch.object(Path, 'open', side_effect=AssertionError('per-frame IO')):
+            for n in range(4):
+                result = observe(analyzer, frame(n, applied=1 if n == 0 else None))
+            self.assertTrue(result['calibration']['valid'])
+            analyzer.reset()
+            result = observe(analyzer, frame(0), identity={**IDENTITY, 'configHash': 'd'*64})
+            self.assertFalse(result['calibration']['valid'])
+
+    def test_readout_metadata_scoped_to_known_backend(self):
+        result = observe(NeuralResponseAnalyzer(), frame(0))
+        self.assertEqual(result['selectedVncAggregation']['method'], 'cell_type_equal_weight_mean_delta_v')
+        self.assertEqual(result['readoutProvenance']['DNg100_L_Hz'], 'stimulated_input_neuron')
+        self.assertEqual(result['readoutProvenance']['DNa02_R_Hz'], 'non_stimulated_selected_readout')
+        value = frame(0)
+        value['metadata']['backendId'] = 'OTHER'
+        result = observe(NeuralResponseAnalyzer(), value, identity={**IDENTITY, 'backendId': 'OTHER'})
+        self.assertIsNone(result['selectedVncAggregation'])
+        self.assertEqual(result['readoutProvenance'], {})
+
+    def test_missing_null_threshold_and_stop_stay_fail_closed(self):
+        config = self.calibrated({'rawThresholdMv': {'forward': None, 'turn': .1},
+                                  'changeThresholdMv': {'forward': None, 'turn': None}})
+        result = self.comparison_trial('FORWARD_R', (.5, .5), (.1, .1), config)
+        self.assertEqual(result['eventType'], 'OBSERVATION_MEASURED')
+        self.assertFalse(result['comparison']['changed'])
+        result = self.comparison_trial('STOP', (.5, .5), (.1, .1))
+        self.assertFalse(result['comparison']['eligible'])
+        self.assertEqual(result['comparison']['axes'], {})
+
+    def test_artifact_bounded_and_strict_numbers(self):
+        for contents in (b'{' , b'x'*65537):
+            config = self.calibrated()
+            Path(config['calibration']['artifact']).write_bytes(contents)
+            config['calibration']['artifactSha256'] = hashlib.sha256(contents).hexdigest()
+            self.assertFalse(observe(NeuralResponseAnalyzer(config), frame(0))['calibration']['valid'])
+        config = self.calibrated({'rawThresholdMv': {'forward': 1, 'turn': 1}})
+        path = Path(config['calibration']['artifact'])
+        data = json.loads(path.read_bytes())
+        data['thresholds']['rawThresholdMv']['forward'] = True
+        raw = json.dumps(data).encode()
+        path.write_bytes(raw)
+        config['calibration']['artifactSha256'] = hashlib.sha256(raw).hexdigest()
+        self.assertFalse(observe(NeuralResponseAnalyzer(config), frame(0))['calibration']['valid'])
+
+    def test_relative_artifact_uses_project_root(self):
+        config = self.calibrated()
+        path = Path(config['calibration']['artifact'])
+        config['calibration']['artifact'] = path.name
+        with patch('Runtime.Bridge.neural_calibration.ROOT', path.parent):
+            result = observe(NeuralResponseAnalyzer(config), frame(0))
+        self.assertTrue(result['calibration']['valid'])
+
     def test_determinism_input_unchanged_and_no_arrays_retained(self):
         inputs = [frame(n, applied=1 if n == 0 else None) for n in range(8)]
         originals = copy.deepcopy(inputs)
@@ -72,7 +204,7 @@ class NeuralAnalyzerTests(unittest.TestCase):
 
     def test_missing_invalid_raw_and_filtered_shape_stay_unknown(self):
         for value in (None, float('nan'), float('inf'), True, '1', [], 10**400):
-            analyzer = NeuralResponseAnalyzer(CALIBRATED)
+            analyzer = NeuralResponseAnalyzer(self.calibrated())
             source = frame(0, applied=1, raw=(value, .3))
             source['raw']['filteredRaw'] = [1]
             result = observe(analyzer, source)
@@ -89,7 +221,7 @@ class NeuralAnalyzerTests(unittest.TestCase):
         self.assertNotIn('selected_direction_response', result['allowedClaims'])
 
     def test_direction_sign_and_stability(self):
-        analyzer = NeuralResponseAnalyzer(CALIBRATED)
+        analyzer = NeuralResponseAnalyzer(self.calibrated())
         for n in range(4):
             result = observe(analyzer, frame(n, 'TURN_L', applied=1 if n == 0 else None, raw=(0, .5)))
         self.assertNotIn('selected_direction_response', result['allowedClaims'])
@@ -136,7 +268,7 @@ class NeuralAnalyzerTests(unittest.TestCase):
     def test_stop_residual_layers_are_separate(self):
         for raw, filtered, motor, layer in ((.2, .2, .2, 'both'), (.2, 0, 0, 'selected_neural_readout'),
                                            (0, .2, .2, 'decoder')):
-            analyzer = NeuralResponseAnalyzer(CALIBRATED)
+            analyzer = NeuralResponseAnalyzer(self.calibrated())
             for n in range(3):
                 source = frame(n, 'STOP', applied=1 if n == 0 else None, raw=(raw, raw))
                 source['raw']['filteredRaw'] = [filtered, filtered]
@@ -147,7 +279,7 @@ class NeuralAnalyzerTests(unittest.TestCase):
             self.assertFalse(result['bodyMovementVerified'])
 
     def test_motor_without_body_and_inhibit_do_not_claim_motion(self):
-        analyzer = NeuralResponseAnalyzer(CALIBRATED)
+        analyzer = NeuralResponseAnalyzer(self.calibrated())
         result = observe(analyzer, frame(0, applied=1), inhibited=True)
         self.assertFalse(result['bodyMovementVerified'])
         self.assertEqual(result['allowedClaims'], [])
@@ -199,7 +331,7 @@ class NeuralAnalyzerTests(unittest.TestCase):
         self.assertEqual(result['current']['brainEndMs'], 300)
 
     def test_zero_reference_does_not_create_percentage_or_strength_claim(self):
-        analyzer = NeuralResponseAnalyzer(CALIBRATED)
+        analyzer = NeuralResponseAnalyzer(self.calibrated())
         observe(analyzer, frame(0, 'STOP', applied=1))
         for n in range(1, 6):
             observe(analyzer, frame(n, applied=2 if n == 1 else None, raw=(0, 0)))

@@ -6,62 +6,80 @@ SPONTANEOUS = {'RESPONSE_PRESENT', 'RESPONSE_CHANGED', 'POST_STOP_RESIDUAL', 'MO
 
 
 def compact_summary(event, language='ja', *, question=False, no_sarcasm=False):
-    """Whole sentences, Python character count, identical evidence across personas."""
+    """Budget whole sentences; facts never specify or replace the configured persona."""
     ja = language == 'ja'
-    lead = ('最新の質問に答える。一般質問には普通に答える。' if ja else
-            'Answer the latest question; answer general topics normally. ') if question else ''
+    lead = ('最新の質問に普通に答える。' if ja else 'Answer the latest question normally. ') if question else ''
+    style = '設定中の人格・口調を維持して短く。' if ja else 'Keep the configured persona and tone; be brief. '
+    if no_sarcasm:
+        style += '皮肉なし。' if ja else 'No sarcasm. '
     if not event or not event.get('fresh') or event.get('outputInhibited'):
         facts = ('現在の有効な神経観測は不明。身体動作も未確認。感情や拒否を測定したとは言わない。' if ja else
                  'Current usable neural observation is unavailable. Body movement is unverified. Emotions or refusal were not measured. ')
-        return lead + facts
+        return lead + facts + style
     current = event.get('current') or {}
     claims = set(event.get('allowedClaims') or [])
+    changed = 'response_changed_observed_only' in claims
     facts = []
+    if changed:
+        # Axis facts are authoritative when present. Legacy summaries remain usable
+        # without fabricating an axis from their old scalar comparison fields.
+        comparison = event.get('comparison') or {}
+        axes = comparison.get('axes') or {}
+        changed_axes = comparison.get('changedAxes') or []
+        action = current.get('observedAction')
+        relevant = {'FORWARD': ('forward',), 'TURN_R': ('turn',), 'TURN_L': ('turn',),
+                    'FORWARD_R': ('forward', 'turn'), 'FORWARD_L': ('forward', 'turn')}.get(action, ())
+        selected = [axis for axis in relevant if axis in changed_axes
+                    and isinstance(axes.get(axis), dict) and axes[axis].get('eligible') is True
+                    and axes[axis].get('changed') is True]
+        axis_text = ('（' + '・'.join('前進軸' if a == 'forward' else '旋回軸' for a in selected) + '）' if ja else
+                     ' (' + ', '.join(selected) + ')') if selected else ''
+        action_text = action if relevant else ('同一Action' if ja else 'same-Action')
+        facts.append(('前回の比較可能な' + action_text + '観測と選択VNC応答に差' + axis_text + 'があります。') if ja else
+                     ('Selected VNC response differs from a comparable previous ' + action_text + ' observation' + axis_text + '. '))
     if 'motor_body_discrepancy' in claims:
-        facts.append('猶予後も対応motorと身体速度の差を観測。' if ja else 'After the calibrated grace period, matched motor and body velocity disagree. ')
+        facts.append('校正された猶予後も対応motorと身体速度の差を観測。' if ja else
+                     'After calibrated grace, matched motor and body velocity disagree. ')
+    layer = event.get('residualLayer')
+    if 'post_stop_' + str(layer) in claims:
+        names = {'decoder': ('デコーダ', 'decoder'), 'selected_neural_readout': ('選択VNC読み出し', 'selected VNC readout'),
+                 'both': ('選択VNC読み出しとデコーダ', 'selected VNC readout and decoder')}
+        if layer in names:
+            facts.append(('STOP後も' + names[layer][0] + 'に残留出力。') if ja else ('Post-STOP residual in ' + names[layer][1] + '. '))
+    if not changed and 'selected_direction_response' in claims:
+        facts.append('選択VNCに指示方向の応答を検出。' if ja else 'Selected VNC response detected in the requested direction. ')
     if 'stimulus_applied' in claims:
         action = current.get('observedAction')
         if action in ('STOP', 'FORWARD', 'TURN_R', 'TURN_L', 'FORWARD_R', 'FORWARD_L'):
             facts.append((action + 'の刺激適用を確認。') if ja else (action + ' stimulation application confirmed. '))
-    if 'response_changed_observed_only' in claims:
-        facts.append('同条件の前回と選択VNC応答の差を観測。' if ja else 'Selected VNC response differs from an eligible previous window. ')
-    elif 'selected_direction_response' in claims:
-        facts.append('選択VNCに指示方向の応答を検出。' if ja else 'Selected VNC response detected in the requested direction. ')
-    layer = event.get('residualLayer')
-    if 'post_stop_' + str(layer) in claims:
-        names = {'decoder': ('デコーダ', 'decoder'), 'selected_neural_readout': ('選択神経読み出し', 'selected neural readout'), 'both': ('選択神経読み出しとデコーダ', 'selected neural readout and decoder')}
-        if layer in names:
-            facts.append(('STOP後も' + names[layer][0] + 'に残留出力。') if ja else ('Post-STOP residual in ' + names[layer][1] + '. '))
-    # Numeric body observations do not establish causation or settled stopping.
+    # Reserve the limits of interpretation before adding optional measurements.
+    # DNg100/readoutHz is deliberately never used as downstream response evidence.
+    cause = ('刺激の確率的変動を含むため原因は未確定。' if ja else
+             'Cause unknown; stimulus variability was not excluded. ') if changed else ('原因は未確定。' if ja else 'Cause unknown. ')
     body = event.get('body') or {}
     measured = body.get('fresh') and body.get('correlated')
-    facts.append(('身体は相関した速度の測定のみ。停止・操作の成功は未確定。' if measured else '身体の動作・停止は未確認。') if ja else
-                 ('Body velocity sampled with frame correlation; stopping/action success unverified. ' if measured else 'Body movement/stopping unverified. '))
-    facts.append('原因は未確定。感情・拒否・神経全体の静止を示す測定ではない。' if ja else
-                 'Cause unknown; no measurement of emotion, refusal, or whole-brain silence. ')
-    suffix = ('敬語なしで短く。' if ja else 'Keep it brief. ')
-    if no_sarcasm:
-        suffix += '皮肉なし。' if ja else 'No sarcasm. '
-    value = lead + ''.join(facts) + suffix
-    extras = []
-    raw = current.get('raw') or {}
-    motor = current.get('motor') or {}
+    verification = (('身体は相関した速度の測定のみ。停止・操作の成功は未確定。' if measured else '身体の動作・停止は未確認。') if ja else
+                    ('Correlated body velocity only; action success unverified. ' if measured else 'Body movement/stopping unverified. '))
+    limits = '感情・拒否・全脳の静止を示す測定ではない。' if ja else 'No emotion, refusal or whole-brain silence measured. '
+    required = cause + verification + limits + style
+    value = lead
+    for fact in facts:
+        if len(value + fact + required) <= 380:
+            value += fact
+    value += required
     def numeric(group):
         vals = [group.get(axis) for axis in ('forward', 'turn')]
         return ','.join(format(v, '.3g') for v in vals) if all(type(v) in (int, float) and math.isfinite(v) for v in vals) else None
-    for label, group in (('VNC raw mV f,t=', raw), ('motor f,t=', motor)):
+    # Each detail is independent; omission never merges raw, decoder and motor layers.
+    for label, group in (('VNC raw mV f,t=', current.get('raw') or {}),
+                         ('filtered raw mV f,t=', current.get('filteredRaw') or {}),
+                         ('motor f,t=', current.get('motor') or {})):
         nums = numeric(group)
-        if nums is not None:
-            extras.append(label + nums + '. ')
-    for extra in extras:
+        extra = label + nums + '. ' if nums is not None else ''
         if len(value + extra) <= 380:
             value += extra
-    # All fixed core sentence combinations are checked by tests; no slicing.
-    if len(value) > 380:
-        value = lead + facts[-2] + facts[-1] + suffix
     assert len(value) <= 380
     return value
-
 
 class NeuralFeedbackScheduler:
     """One replaceable pending observation; the Bridge owns the single consumer."""

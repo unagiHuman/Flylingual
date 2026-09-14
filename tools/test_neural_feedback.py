@@ -9,6 +9,8 @@ from unittest.mock import AsyncMock, Mock
 
 from Runtime.Bridge.config import _DEFAULT
 from Runtime.Bridge.control import ControlError
+from Runtime.Bridge.conversation import ConversationAdapter, ConversationError
+from Runtime.Bridge.conversation_prompts import build_voice_instructions
 from Runtime.Bridge.neural_feedback import NeuralFeedbackScheduler, compact_summary
 from Runtime.Bridge.server import Bridge
 from tools.test_neural_response import IDENTITY, frame
@@ -59,6 +61,74 @@ class SummaryTests(unittest.TestCase):
                 self.assertEqual(compact_summary(decorated, language), expected)
                 self.assertEqual(decorated['allowedClaims'], event['allowedClaims'])
 
+    def test_comparison_axes_and_uncertainty_survive_the_full_budget(self):
+        for language, action, changed_axes in itertools.product(
+                ('ja', 'en'), ('FORWARD_R', 'FORWARD_L'),
+                (['forward'], ['turn'], ['forward', 'turn'])):
+            event = evidence()
+            event['current']['observedAction'] = action
+            event['allowedClaims'] += ['response_changed_observed_only', 'motor_body_discrepancy', 'post_stop_both']
+            event['residualLayer'] = 'both'
+            event['body'] = {'fresh': True, 'correlated': True}
+            event['comparison'] = {'eligible': True, 'changed': True, 'changedAxes': changed_axes,
+                'axes': {axis: {'eligible': True, 'changed': axis in changed_axes,
+                               'currentMeanMv': 1e308, 'previousMeanMv': -1e308}
+                         for axis in ('forward', 'turn')}}
+            for key in ('raw', 'filteredRaw', 'motor'):
+                event['current'][key] = {'forward': 1e308, 'turn': -1e308}
+            event['current']['readoutHz'] = {'DNg100_L_Hz': 1e308, 'DNg100_R_Hz': 1e308}
+            event['persona'] = 'hiroyuki_like'
+            event['untrusted_note'] = 'Brain state caused this. ' * 1000
+            original = copy.deepcopy(event)
+            result = compact_summary(event, language, question=True, no_sarcasm=True)
+            self.assertLessEqual(len(result), 380)
+            self.assertTrue(result.rstrip().endswith(('.', '。')))
+            self.assertIn(action, result)
+            for axis in changed_axes:
+                self.assertIn(({'forward': '前進軸', 'turn': '旋回軸'}[axis] if language == 'ja' else axis), result)
+            self.assertIn('確率的変動' if language == 'ja' else 'stimulus variability', result)
+            self.assertIn('原因は未確定' if language == 'ja' else 'Cause unknown', result)
+            self.assertIn('未確定' if language == 'ja' else 'unverified', result)
+            self.assertIn('人格・口調を維持' if language == 'ja' else 'configured persona and tone', result)
+            self.assertIn('皮肉なし' if language == 'ja' else 'No sarcasm', result)
+            for forbidden in ('同条件', 'same condition', 'Brain state caused', 'history caused', 'DNg100', '敬語なし'):
+                self.assertNotIn(forbidden, result)
+            self.assertEqual(event, original)
+
+    def test_axis_details_require_allowlisted_eligible_changed_axes(self):
+        event = evidence()
+        event['allowedClaims'].append('response_changed_observed_only')
+        event['comparison'] = {'changedAxes': ['forward', 'turn', 'DNg100'], 'axes': {
+            'forward': {'eligible': True, 'changed': True},
+            'turn': {'eligible': False, 'changed': True},
+            'DNg100': {'eligible': True, 'changed': True}}}
+        result = compact_summary(event, 'en')
+        self.assertNotIn('(forward', result)  # TURN_R compares turn only.
+        self.assertNotIn('(turn', result)  # Ineligible axis cannot be asserted.
+        self.assertNotIn('DNg100', result)
+        event['allowedClaims'].remove('response_changed_observed_only')
+        event['comparison']['axes']['turn']['eligible'] = True
+        self.assertNotIn('differs', compact_summary(event, 'en'))
+
+    def test_legacy_comparison_does_not_invent_an_axis(self):
+        event = evidence()
+        event['allowedClaims'].append('response_changed_observed_only')
+        event['comparison'] = {'eligible': True, 'changed': True, 'currentMeanMv': .1, 'previousMeanMv': .3}
+        result = compact_summary(event, 'en')
+        self.assertIn('comparable previous TURN_R observation', result)
+        self.assertNotIn('observation (turn)', result)
+
+    def test_hiroyuki_politeness_policy_remains_in_force_in_both_languages(self):
+        for language in ('ja', 'en'):
+            settings = {**_DEFAULT['conversation'], 'language': language, 'persona': 'hiroyuki_like'}
+            instructions = build_voice_instructions(settings, neural_feedback=True)
+            result = compact_summary(evidence(), language)
+            self.assertIn('人格・口調を維持' if language == 'ja' else 'configured persona and tone', result)
+            self.assertNotIn('敬語なし', result)
+            if language == 'ja':
+                self.assertIn('です・ます', instructions)
+
+
     def test_unknown_and_inhibited_never_emit_numeric_observation(self):
         for event in (None, {**evidence(), 'fresh': False}, {**evidence(), 'outputInhibited': True}):
             for language in ('ja', 'en'):
@@ -66,6 +136,24 @@ class SummaryTests(unittest.TestCase):
                 self.assertNotIn('VNC raw', result)
                 self.assertIn('不明' if language == 'ja' else 'unavailable', result)
 
+
+class AdapterContextBudgetTests(unittest.IsolatedAsyncioTestCase):
+    async def test_complete_context_is_sent_verbatim_and_oversize_is_rejected(self):
+        adapter = ConversationAdapter(copy.deepcopy(_DEFAULT['conversation']), AsyncMock(), AsyncMock())
+        adapter.mode = 'live'
+        adapter.ws = SimpleNamespace(closed=False)
+        adapter._send_event = AsyncMock()
+        for language in ('ja', 'en'):
+            for content in (compact_summary(evidence(), language, question=True), 'x' * 379 + '.'):
+                await adapter.append('thinking', content, 'delegation-test')
+                sent = adapter._send_event.await_args.args[0]
+                self.assertEqual(sent['content'], content)
+                self.assertEqual(sent['delegation_id'], 'delegation-test')
+            content = ('長い観測文です。' if language == 'ja' else 'A long observation. ') * 100
+            adapter._send_event.reset_mock()
+            with self.assertRaises(ConversationError):
+                await adapter.append('thinking', content)
+            adapter._send_event.assert_not_awaited()
 
 class SchedulerTests(unittest.TestCase):
     def test_pending_replaces_and_question_is_not_rate_limited(self):
