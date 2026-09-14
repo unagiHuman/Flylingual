@@ -57,6 +57,16 @@ class ContextReceiptTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.receipts()[-1]['stage'], 'accepted')
         self.assertEqual(self.receipts()[-1]['correlationField'], 'event_id')
 
+    async def test_instructions_trace_acceptance_and_unknown_channel_rejection(self):
+        a = self.adapter
+        rid = await a.append('instructions', 'Answer the question.', trace=self.trace)
+        await a._context_appended(dict(type='session.instructions.appended', client_event_id=rid))
+        self.assertEqual(self.receipts()[-1]['stage'], 'accepted')
+        self.assertEqual(self.receipts()[-1]['channel'], 'instructions')
+        for channel in ('instruction', 'unknown', 'input_audio', '', None):
+            with self.assertRaisesRegex(ConversationError, 'invalid_context_channel'):
+                await a.append(channel, 'text')
+
     async def test_no_id_wrong_id_wrong_channel_duplicates_are_unmatched(self):
         a = self.adapter
         rid = await a.append('commentary', 'text', trace=self.trace)

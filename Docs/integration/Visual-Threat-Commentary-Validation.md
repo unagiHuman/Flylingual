@@ -60,3 +60,7 @@ Brain入力・重み・decoder・physics・ゲーム性能は変更していな�
 関連純粋テスト74件PASS（2.098秒）。現行Unity CLIで編集モードからコンパイル完了、errors=[]、compilationFailed=false。最終Dev-Localビルド11:43:58→11:44:21 UTC、Succeeded。BuildReportの1 errorはCLI応答5秒timeoutだけであり、ビルドの失敗とは分けて確認した。
 
 Brainのgraph/config/sourceは [前段の実測](Visual-Threat-Game-Integration.md) と同じ。全CNS 166,700細胞、19,670,694格納edge、window50ms、dt0.1ms、seed20270101。Python3.10.12、NumPy1.24.3、Numba0.61.2、llvmlite0.44.0。今回の最終source hashは `artifacts/neural-feedback/visual-commentary-short-source-hashes.json` に保存（conversation `c062b7ffadf7a6a27186b57f49ed63f72b8f0048b93ba69f54ff23f7fa14d281`、visual feedback `1de433d75301287462590618532b4abe0c1947453f6180fb1d57fbe014ee8ff2`、server `24f4e55d2da9713a30d2fda71961c7eee409e18ede52555760b508600033fcdb`）。RSSはsample最大であり生涯ピークやBrain単体値の保証ではない。
+
+## 後続の原因調査（2026-09-14）
+
+上記の質問直後のTCP切断は、既存の `instructions` チャネルを前回の検査追加で拒否していた回帰と特定し、許可を復元した。強化した日英Player試験ではこの例外は消え、質問後の再移動は成功したが、別のBrain窓計算遅延で安全停止し、連続安定性は未合格。旧試験の結果は変更しない。詳細は [質問後の接続検証](Question-Connection-Validation.md) を参照。

@@ -13,7 +13,9 @@ namespace Flylingual.Conversation
     public sealed class NeuralFeedbackProbe : MonoBehaviour
     {
         string output, originalLanguage;
-        bool english, environmentProbe, visualThreatProbe;
+        bool english, environmentProbe, visualThreatProbe, connectionStabilityProbe;
+        bool monitorControl, controlWasAvailable;
+        int monitoredEpoch;
         int questionIndex;
         ConversationSessionController controller;
         readonly HashSet<long> frames = new HashSet<long>();
@@ -29,6 +31,9 @@ namespace Flylingual.Conversation
             public int visualThreatFrames, visualThreatInputFrames, visualThreatOffFrames;
             public int dnp01RightSpikes, dnp01LeftSpikes;
             public bool visualThreatProbe;
+            public bool connectionStabilityProbe, movedAfterQuestion;
+            public int controlLossEpisodes, controlEpochChanges;
+            public float postQuestionDisplacement;
             public bool environmentProbe, repositionedForContact;
             public long firstSequence, lastSequence;
             public float displacement, unityFrameP95Ms;
@@ -50,6 +55,8 @@ namespace Flylingual.Conversation
             probe.english = Array.IndexOf(args, "-neuralFeedbackEnglish") >= 0;
             probe.environmentProbe = Array.IndexOf(args, "-environmentFeedbackProbe") >= 0;
             probe.visualThreatProbe = Array.IndexOf(args, "-visualThreatProbe") >= 0;
+            probe.connectionStabilityProbe = Array.IndexOf(args, "-connectionStabilityProbe") >= 0;
+            probe.visualThreatProbe |= probe.connectionStabilityProbe;
             probe.environmentProbe |= probe.visualThreatProbe;
             int q = Array.IndexOf(args, "-neuralFeedbackQuestion");
             if (q >= 0 && q + 1 < args.Length && int.TryParse(args[q + 1], out int selected))
@@ -60,6 +67,17 @@ namespace Flylingual.Conversation
 
         void Update()
         {
+            if (monitorControl && controller != null)
+            {
+                bool available = controller.HasFreshBrain && controller.BodyControlActive;
+                if (!available && controlWasAvailable) result.controlLossEpisodes++;
+                controlWasAvailable = available;
+                if (monitoredEpoch != controller.ControlEpoch)
+                {
+                    result.controlEpochChanges++;
+                    monitoredEpoch = controller.ControlEpoch;
+                }
+            }
             if (controller == null || !controller.HasFreshBrain) return;
             frames.Add(controller.Sequence); frameMs.Add(Time.unscaledDeltaTime * 1000);
             var observation = controller.NeuralResponse;
@@ -135,6 +153,10 @@ namespace Flylingual.Conversation
                 result.live = controller.ConversationLive; result.backend = controller.Backend;
                 result.brainReady = controller.BrainReady; result.language = controller.Settings.language;
                 result.firstSequence = controller.Sequence;
+                result.connectionStabilityProbe = connectionStabilityProbe;
+                monitoredEpoch = controller.ControlEpoch;
+                controlWasAvailable = true;
+                monitorControl = connectionStabilityProbe;
                 controller.SendPlayerText(english ? "Stop" : "止まって");
                 yield return new WaitForSecondsRealtime(2);
                 result.environmentProbe = environmentProbe;
@@ -185,6 +207,19 @@ namespace Flylingual.Conversation
                     replies.Add(after.StartsWith(before) ? after.Substring(before.Length) : after);
                 }
                 result.questionReplies = replies.ToArray();
+                if (connectionStabilityProbe)
+                {
+                    Vector3 beforeResume = stage.fly.Position;
+                    long beforeSequence = controller.Sequence;
+                    controller.SendPlayerText(english ? "Move forward" : "前に進んで");
+                    yield return new WaitForSecondsRealtime(3);
+                    result.postQuestionDisplacement = Vector3.Distance(beforeResume, stage.fly.Position);
+                    result.movedAfterQuestion = controller.LastAppliedAction == "FORWARD"
+                        && controller.Sequence > beforeSequence && result.postQuestionDisplacement > .05f;
+                    controller.SendPlayerText(english ? "Stop" : "止まって");
+                    yield return new WaitForSecondsRealtime(2);
+                    result.stopped = controller.LastAppliedAction == "STOP";
+                }
                 result.frames = frames.Count; result.neuralFrames = observations.Count;
                 result.lastSequence = controller.Sequence; result.fresh = controller.HasFreshBrain;
                 result.neuralAvailable = controller.NeuralResponseAvailable;
@@ -197,6 +232,10 @@ namespace Flylingual.Conversation
                 if (visualThreatProbe) result.result = result.result == "environment_pass"
                     && result.visualThreatInputFrames > 0 && result.visualThreatOffFrames > 0
                     && result.dnp01RightSpikes > 0 && result.dnp01LeftSpikes > 0 ? "visual_threat_pass" : "visual_threat_failed";
+                if (connectionStabilityProbe) result.result = result.result == "visual_threat_pass"
+                    && result.movedAfterQuestion && result.controlLossEpisodes == 0 && result.controlEpochChanges == 0
+                    ? "connection_stability_pass" : "connection_stability_failed";
+                monitorControl = false;
                 controller.ControlEventReceived -= Capture;
             }
             else if (controller != null) result.error = controller.Error;

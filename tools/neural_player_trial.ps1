@@ -5,7 +5,8 @@ param(
     [switch]$ObservationOff,
     [switch]$RenderScreenshot,
     [switch]$EnvironmentFeedback,
-    [switch]$VisualThreat
+    [switch]$VisualThreat,
+    [switch]$ConnectionStability
 )
 $ErrorActionPreference = 'Stop'
 $trialRoot = Split-Path $PSScriptRoot -Parent
@@ -33,6 +34,7 @@ try {
     if ($Language -eq 'en') { $launchArguments += '-neuralFeedbackEnglish' }
     if ($EnvironmentFeedback) { $launchArguments += '-environmentFeedbackProbe' }
     if ($VisualThreat) { $launchArguments += '-visualThreatProbe' }
+    if ($ConnectionStability) { $launchArguments += '-connectionStabilityProbe' }
     $trialProcess = Start-Process -FilePath $trialExe -WorkingDirectory (Split-Path $trialExe) -WindowStyle Hidden -ArgumentList $launchArguments -PassThru
     $trialProcess | Select-Object Id,StartTime,Path | ConvertTo-Json | Set-Content (Join-Path $trialOutput ($Name + '-process.json'))
     $deadline = [DateTime]::UtcNow.AddSeconds(180)

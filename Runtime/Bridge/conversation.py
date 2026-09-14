@@ -238,7 +238,7 @@ class ConversationAdapter:
                     self.started.set()
                 elif kind == 'session.closed':
                     break
-                elif kind in ('session.thinking.appended', 'session.commentary.appended'):
+                elif kind in ('session.thinking.appended', 'session.commentary.appended', 'session.instructions.appended'):
                     await self._context_appended(event)
                     if self.voice_test_observation:
                         await self.on_event({'type': 'voice_test_diagnostic',
@@ -517,7 +517,8 @@ class ConversationAdapter:
 
     async def _context_appended(self, event):
         channel = {'session.thinking.appended': 'thinking',
-                   'session.commentary.appended': 'commentary'}.get(event.get('type'))
+                   'session.commentary.appended': 'commentary',
+                   'session.instructions.appended': 'instructions'}.get(event.get('type'))
         correlation_field = 'client_event_id' if 'client_event_id' in event else 'event_id'
         event_id = event.get(correlation_field)
         record = self.context_receipts.get(event_id) if type(event_id) is str else None
@@ -544,7 +545,7 @@ class ConversationAdapter:
     async def append(self, channel, content, delegation_id=None, *, trace=None):
         if self.mode != 'live' or self.ws is None or self.ws.closed or self.closing:
             return None
-        if channel not in ('thinking', 'commentary'):
+        if channel not in ('thinking', 'commentary', 'instructions'):
             raise ConversationError('invalid_context_channel')
         # Budget complete sentences before entry; never trim away uncertainty.
         if not isinstance(content, str) or len(content) > 380:
