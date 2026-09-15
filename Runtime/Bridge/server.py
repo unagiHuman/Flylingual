@@ -933,10 +933,6 @@ class Bridge(VisualThreatFeedbackMixin):
                 return
             self.log('transcript_candidate_result', inputId=candidate['inputId'], kind=proposal['kind'])
             route_fallback = False
-            if candidate.get('finalized') is True and proposal['kind'] == 'clarify':
-                fallback = self.goal_route_proposal(proposal)
-                if fallback is not None:
-                    proposal, route_fallback = fallback, True
             if proposal['kind'] not in ('action', 'plan', 'update'):
                 # Reply through Live directly: start_intent would invalidate
                 # pending control work even though this utterance has no Action.
@@ -1120,10 +1116,6 @@ class Bridge(VisualThreatFeedbackMixin):
             if any(k in proposal for k in ('operation', 'executionMode', 'distanceMeters')):
                 validate_intent(proposal, self.config['control']['maxActionMs'])
             route_fallback = bool(prepared and prepared.get('routeFallback'))
-            if prepared is None and proposal['kind'] == 'clarify':
-                fallback = self.goal_route_proposal(proposal)
-                if fallback is not None:
-                    proposal, route_fallback = fallback, True
             interpretation_ms = (time.monotonic()-started)*1000
             self.log('intent_classified', commandId=command_id,
                      source='voice' if voice else 'text',

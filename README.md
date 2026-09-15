@@ -106,7 +106,7 @@ A separately packaged text-only edition can be created for environments where vo
 
 Current Windows handoff and build notes: [README_WINDOWS.md](README_WINDOWS.md).
 
-The current game interface and fly replies are English-only. Wait on the title screen while connections are prepared, then start the game. Questions can be answered while the fly keeps walking. If a finalized movement request is unclear, fresh Unity course guidance can support a short, bounded steering attempt; it does not guarantee arrival or avoidance. The fly speaks in everyday language, with any apparent feelings treated as character expressions. See [implementation and validation limits](Docs/windows/English-Only-Route-Guidance.md).
+The current game interface and fly replies are English-only. Wait on the title screen while connections are prepared, then start the game. Questions can be answered while the fly keeps walking. If a movement request is unclear, the fly asks for clarification instead of substituting a direction from course guidance. The fly speaks in everyday language, with any apparent feelings treated as character expressions. See [implementation and validation limits](Docs/windows/English-Only-Route-Guidance.md).
 
 The submission scene also enables optional [Unity-side goal assistance](Docs/windows/Demo-Safety-Assist.md): a wider finish boundary and bounded steering corrections during active forward requests. This is gameplay assistance, not a measured neural response, sensory-input model, or evidence of learning.
 

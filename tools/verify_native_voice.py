@@ -123,20 +123,20 @@ def evaluate_status(report, *, timeout, remaining, ports_free, exit_code, except
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--fixtures", required=True, type=Path, help="manifest.json")
-    ap.add_argument("--suite", choices=("smoke", "full", "duration", "plans", "soak", "persistent", "handoff", "script_interrupt", "english-demo", "english-chat-demo"), default="smoke")
+    ap.add_argument("--suite", choices=("smoke", "full", "duration", "plans", "soak", "persistent", "handoff", "script_interrupt", "english-demo", "english-chat-demo", "english-movement-demo", "english-movement-chat-demo"), default="smoke")
     ap.add_argument("--capture-test-transcript", action="store_true",
                     help="opt-in recognized text for synthetic fixtures only; never enables the microphone")
     ap.add_argument("--monitor-fixtures", action="store_true",
                     help="play the injected fixture PCM through Unity speakers for an opt-in Game Bar capture; microphone remains disabled")
     ap.add_argument("--seconds", type=int, default=None)
-    ap.add_argument("--recording-gate", type=Path, help="opt-in english-demo: wait for a start file before a 60-second recording presentation")
+    ap.add_argument("--recording-gate", type=Path, help="opt-in English demo: wait for a start file before a 60-second recording presentation")
     ap.add_argument("--output", required=True, type=Path)
     ap.add_argument("--exe", type=Path,
                     default=ROOT / "artifacts/windows-native-conversation/unity/FlylingualConversation.exe")
     ap.add_argument("--stack", type=Path, default=ROOT / "Runtime/Config/windows-stack.local.json",
                     help="must be the Player's default windows-stack.local.json")
     args = ap.parse_args()
-    if args.recording_gate is not None and args.suite not in ("english-demo", "english-chat-demo"):
+    if args.recording_gate is not None and args.suite not in ("english-demo", "english-chat-demo", "english-movement-demo", "english-movement-chat-demo"):
         ap.error("--recording-gate requires an English demo suite")
     if args.recording_gate is not None and args.recording_gate.exists():
         ap.error("recording gate already exists; choose a fresh file")
@@ -186,7 +186,7 @@ def main() -> int:
         event("launch", suite=args.suite)
         started = time.monotonic()
         stdout_path = output / "player-stdout.log"
-        deadline_seconds = args.seconds if args.seconds is not None else {"smoke": 240, "full": 900, "duration": 180, "plans": 240, "soak": 300, "persistent": 180, "handoff": 120, "script_interrupt": 120, "english-demo": 120, "english-chat-demo": 120}[args.suite]
+        deadline_seconds = args.seconds if args.seconds is not None else {"smoke": 240, "full": 900, "duration": 180, "plans": 240, "soak": 300, "persistent": 180, "handoff": 120, "script_interrupt": 120, "english-demo": 120, "english-chat-demo": 120, "english-movement-demo": 120, "english-movement-chat-demo": 120}[args.suite]
         timeout = False; process = None; owned = None; peak_rss = 0; runner_exception = None
         try:
             with stdout_path.open("w", encoding="utf-8", newline="\n") as player_output:

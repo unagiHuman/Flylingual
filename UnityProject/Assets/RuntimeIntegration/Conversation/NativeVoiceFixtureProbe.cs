@@ -122,6 +122,8 @@ namespace Flylingual.Conversation
             public int ttlReacceptChecks, physicsResetCount;
             public long sentFixtureAudioChunks, sentPcmSamples;
             public double startedAt, endedAt, requestedSeconds, minSendIntervalMs, maxSendIntervalMs;
+            public double gameplayStartedAt = -1, movementDemoCompletedSeconds = -1;
+            public double movementChatActionsCompletedSeconds = -1, movementChatCompletedSeconds = -1;
             public double persistentObservationSeconds;
             public bool monitorFixtures;
             public string timing = "Unity realtime clock; Bridge monotonic clock recorded separately";
@@ -214,7 +216,7 @@ namespace Flylingual.Conversation
                 startupDeadline = Now + 80;
                 Log("recording_gate_opened", null);
             }
-            if (report.suite == "english-demo" || report.suite == "english-chat-demo")
+            if (report.suite == "english-demo" || report.suite == "english-chat-demo" || report.suite == "english-movement-demo" || report.suite == "english-movement-chat-demo")
             {
                 bool titleStarted = false;
                 yield return EnterEnglishDemoGameplay(value => titleStarted = value);
@@ -245,6 +247,8 @@ namespace Flylingual.Conversation
             else if (report.suite == "handoff") yield return RunPersistent(3);
             else if (report.suite == "english-demo") yield return RunEnglishDemo();
             else if (report.suite == "english-chat-demo") yield return RunEnglishChatDemo();
+            else if (report.suite == "english-movement-demo") yield return RunEnglishMovementDemo();
+            else if (report.suite == "english-movement-chat-demo") yield return RunEnglishMovementChatDemo();
             else
             {
                 yield return RunSmoke();
@@ -306,10 +310,10 @@ namespace Flylingual.Conversation
                 Directory.CreateDirectory(outputDirectory);
                 if (File.Exists(Path.Combine(outputDirectory, "report.json"))) throw new ArgumentException("output_already_contains_report");
                 string suite = Argument("-flyVoiceFixtureSuite") ?? "smoke";
-                if (suite != "smoke" && suite != "full" && suite != "soak" && suite != "plans" && suite != "duration" && suite != "persistent" && suite != "handoff" && suite != "script_interrupt" && suite != "english-demo" && suite != "english-chat-demo") throw new ArgumentException("invalid_suite");
-                if (!string.IsNullOrEmpty(recordingGatePath) && suite != "english-demo" && suite != "english-chat-demo") throw new ArgumentException("recording_gate_requires_english_suite");
+                if (suite != "smoke" && suite != "full" && suite != "soak" && suite != "plans" && suite != "duration" && suite != "persistent" && suite != "handoff" && suite != "script_interrupt" && suite != "english-demo" && suite != "english-chat-demo" && suite != "english-movement-demo" && suite != "english-movement-chat-demo") throw new ArgumentException("invalid_suite");
+                if (!string.IsNullOrEmpty(recordingGatePath) && suite != "english-demo" && suite != "english-chat-demo" && suite != "english-movement-demo" && suite != "english-movement-chat-demo") throw new ArgumentException("recording_gate_requires_english_suite");
                 if (!string.IsNullOrEmpty(recordingGatePath)) recordingGatePath = Path.GetFullPath(recordingGatePath);
-                double seconds = suite == "full" ? 900 : suite == "soak" ? 300 : suite == "duration" ? 180 : suite == "persistent" ? 180 : (suite == "handoff" || suite == "script_interrupt" || suite == "english-demo" || suite == "english-chat-demo") ? 120 : 240;
+                double seconds = suite == "full" ? 900 : suite == "soak" ? 300 : suite == "duration" ? 180 : suite == "persistent" ? 180 : (suite == "handoff" || suite == "script_interrupt" || suite == "english-demo" || suite == "english-chat-demo" || suite == "english-movement-demo" || suite == "english-movement-chat-demo") ? 120 : 240;
                 string duration = Argument("-flyVoiceFixtureSeconds");
                 if (duration != null && (!double.TryParse(duration, NumberStyles.Float, CultureInfo.InvariantCulture, out seconds)
                     || double.IsNaN(seconds) || double.IsInfinity(seconds) || seconds < 1 || seconds > 3600)) throw new ArgumentException("invalid_duration");
@@ -317,6 +321,8 @@ namespace Flylingual.Conversation
                 report = new Report { suite = suite, manifest = path, startedAt = Now, requestedSeconds = seconds, monitorFixtures = monitorFixtures };
                 if (suite == "handoff") report.limitation += " Short audio handoff diagnostic with a 3-second initial hold; not evidence for the 60-second persistent gate.";
                 if (suite == "english-demo") report.limitation += " English demo verifies four bounded action/STOP fixtures; the optional nudge plan remains outside this initial action smoke.";
+                if (suite == "english-movement-chat-demo") report.limitation += " Five movement actions must be observed within 60 seconds of title dismissal; replies and final STOP may finish afterwards. Questions prove temporal reply playback, not semantic answer quality. Optional fly-life question is omitted if time is short.";
+                if (suite == "english-movement-demo") report.limitation += " Six real voice commands must complete within 60 seconds of title dismissal. Explicit STOP is correlated and settled; deceleration causality is not claimed after timed action expiry.";
                 if (suite == "english-chat-demo") report.limitation += " Question cases prove transcript candidate timing and reply playback, not a provider response ID or semantic answer quality.";
                 using (var sha = SHA256.Create()) report.manifestSha256 = BitConverter.ToString(sha.ComputeHash(File.ReadAllBytes(path))).Replace("-", "").ToLowerInvariant();
                 deadline = Now + seconds;
@@ -343,7 +349,9 @@ namespace Flylingual.Conversation
                 }
                 string[] required = suite == "script_interrupt" ? new[] { "stop" } : suite == "plans" ? Array.Empty<string>() : (suite == "persistent" || suite == "handoff")
                     ? new[] { "persistent_forward", "persistent_continue", "persistent_conditions", "stop", "forward8" } : suite == "duration"
-                    ? new[] { "forward_default", "right_default", "left_default" } : suite == "english-chat-demo"
+                    ? new[] { "forward_default", "right_default", "left_default" } : suite == "english-movement-chat-demo"
+                    ? new[] { "02_continue", "turn_right", "turn_left", "move_stop", "10_mood", "11_hungry" } : suite == "english-movement-demo"
+                    ? new[] { "move_forward", "turn_right", "turn_left", "move_stop" } : suite == "english-chat-demo"
                     ? new[] { "02_continue", "10_mood", "11_hungry", "07_stop", "12_fly_life", "05_resume" } : suite == "english-demo"
                     ? new[] { "02_continue", "07_stop", "05_resume" } : suite == "full"
                     ? new[] { "stop", "forward8", "right8", "ambiguous_forward", "ambiguous_right", "left8", "forward_right8", "forward_left8" }
@@ -387,7 +395,15 @@ namespace Flylingual.Conversation
                 }
                 yield return null;
             }
-            done(!Flylingual.PlayScreen.TitleScreen.BlocksGameplay);
+            bool entered = !Flylingual.PlayScreen.TitleScreen.BlocksGameplay;
+            if (entered)
+            {
+                report.gameplayStartedAt = Now;
+                Log("gameplay_started", null);
+                if (report.suite == "english-movement-demo") deadline = Math.Min(deadline, Now + 60);
+                if (report.suite == "english-movement-chat-demo") deadline = Math.Min(deadline, Now + 90);
+            }
+            done(entered);
         }
 
         IEnumerator HoldRecordingMinimum()
@@ -543,6 +559,105 @@ namespace Flylingual.Conversation
             if (!finalStop.settled) Fail(finalStop, "voice_stop_not_settled");
             EndCase(finalStop, finalStop.settled && finalStop.voiceStopBeforeExpiry);
             if (finalStop.status != "pass") SetRunError(finalStop);
+        }
+
+        IEnumerator RunEnglishMovementDemo()
+        {
+            // Eight-second nominal cadence leaves latency headroom while retaining measured
+            // action -> real Brain frame -> body movement evidence for every command.
+            string[] order = { "move_forward", "turn_right", "move_forward", "turn_left", "move_forward", "move_stop" };
+            double firstCueAt = Now;
+            foreach (string id in order)
+            {
+                Case item = Begin(id);
+                if (item == null) yield break;
+                yield return AwaitApplied(item, 10);
+                if (!item.applied || !string.IsNullOrEmpty(item.error)) { SetRunError(item); yield break; }
+                if (item.expectedAction == "STOP")
+                {
+                    bool settled = false;
+                    yield return WaitStopped(6, value => settled = value, item.appliedSequence, item.requestId);
+                    item.settled = settled;
+                    if (!settled) Fail(item, "voice_stop_not_settled");
+                    // Timed movement may already have expired. This verifies a correlated
+                    // explicit STOP and settled body, without claiming it caused deceleration.
+                    EndCase(item, settled);
+                }
+                else
+                {
+                    double observeUntil = Math.Min(deadline, item.appliedAt + 3);
+                    while (Now < observeUntil && Healthy(item)) yield return null;
+                    if (!item.bodyStarted) Fail(item, "movement_demo_body_not_started");
+                    EndCase(item, item.bodyStarted);
+                }
+                if (item.status != "pass") { SetRunError(item); yield break; }
+                if (id != "move_stop")
+                {
+                    double nextCue = Math.Min(deadline, firstCueAt + report.cases.Count * 8);
+                    while (Now < nextCue && CanObserve()) yield return null;
+                }
+            }
+            report.movementDemoCompletedSeconds = Now - report.gameplayStartedAt;
+            if (report.movementDemoCompletedSeconds > 60) report.error = "movement_demo_exceeded_first_minute";
+            Save();
+        }
+
+        IEnumerator RunEnglishMovementChatDemo()
+        {
+            string[] order = { "02_continue", "turn_right", "02_continue", "turn_left", "02_continue" };
+            for (int index = 0; index < order.Length; index++)
+            {
+                Case item = Begin(order[index]);
+                if (item == null) yield break;
+                yield return AwaitApplied(item, 10);
+                if (!item.applied || !string.IsNullOrEmpty(item.error)) { SetRunError(item); yield break; }
+                double bodyDeadline = Math.Min(deadline, item.appliedAt + 5);
+                while (Now < bodyDeadline && Healthy(item)
+                    && (!item.bodyStarted || Now < item.appliedAt + 1)) yield return null;
+                if (!item.bodyStarted) Fail(item, "movement_chat_body_not_started");
+                EndCase(item, item.bodyStarted);
+                if (item.status != "pass") { SetRunError(item); yield break; }
+                if (index == order.Length - 1)
+                {
+                    report.movementChatActionsCompletedSeconds = Now - report.gameplayStartedAt;
+                    if (report.movementChatActionsCompletedSeconds > 60)
+                        report.error = "movement_chat_actions_exceeded_first_minute";
+                }
+                // Persistent forward remains in force while a non-action question is
+                // spoken and answered. The real safety system can still stop the fly.
+                if (index == 0 || index == 2)
+                {
+                    yield return RunEnglishQuestion(index == 0 ? "10_mood" : "11_hungry");
+                    if (current == null || current.status != "pass") yield break;
+                }
+            }
+            if (fixtures.ContainsKey("12_fly_life") && Now - report.gameplayStartedAt < 45)
+            {
+                yield return RunEnglishQuestion("12_fly_life");
+                if (current == null || current.status != "pass") yield break;
+            }
+            // Keep the final walk visible, then speak STOP near the minute's end.
+            // Do not cut off an actual reply merely to reach an exact video duration.
+            double stopCueAt = Math.Min(deadline, Math.Min(Now + 3, report.gameplayStartedAt + 52));
+            while (Now < stopCueAt && CanObserve()) yield return null;
+            double quietUntil = Math.Min(deadline, Now + 12);
+            while (controller.ReplyPlaying && Now < quietUntil && CanObserve()) yield return null;
+            if (controller.ReplyPlaying) { report.error = "movement_chat_final_reply_not_quiet"; yield break; }
+            Case stop = Begin("move_stop");
+            if (stop == null) yield break;
+            yield return AwaitApplied(stop, 10);
+            if (!stop.applied || !string.IsNullOrEmpty(stop.error)) { SetRunError(stop); yield break; }
+            bool settled = false;
+            yield return WaitStopped(6, value => settled = value, stop.appliedSequence, stop.requestId);
+            stop.settled = settled;
+            if (!settled) Fail(stop, "voice_stop_not_settled");
+            EndCase(stop, settled);
+            if (stop.status != "pass") SetRunError(stop);
+            quietUntil = Math.Min(deadline, Now + 12);
+            while (controller.ReplyPlaying && Now < quietUntil && CanObserve()) yield return null;
+            if (controller.ReplyPlaying && string.IsNullOrEmpty(report.error)) report.error = "movement_chat_stop_reply_not_quiet";
+            report.movementChatCompletedSeconds = Now - report.gameplayStartedAt;
+            Save();
         }
 
         IEnumerator RunEnglishChatDemo()
@@ -1457,11 +1572,17 @@ namespace Flylingual.Conversation
                 && report.scriptDiscardReceivedAt >= report.cases[0].firstAudioAt;
             bool englishDemoPass = report.suite == "english-demo" && report.cases.Count == 4;
             bool englishChatPass = report.suite == "english-chat-demo" && report.cases.Count == 7;
-            bool standardPass = report.suite != "duration" && report.suite != "persistent" && report.suite != "handoff" && report.suite != "script_interrupt" && report.suite != "english-demo" && report.suite != "english-chat-demo"
+            bool englishMovementPass = report.suite == "english-movement-demo" && report.cases.Count == 6
+                && report.movementDemoCompletedSeconds >= 0 && report.movementDemoCompletedSeconds <= 60;
+            bool englishMovementChatPass = report.suite == "english-movement-chat-demo"
+                && (report.cases.Count == 8 || report.cases.Count == 9)
+                && report.movementChatActionsCompletedSeconds >= 0 && report.movementChatActionsCompletedSeconds <= 60
+                && report.movementChatCompletedSeconds >= 0;
+            bool standardPass = report.suite != "duration" && report.suite != "persistent" && report.suite != "handoff" && report.suite != "script_interrupt" && report.suite != "english-demo" && report.suite != "english-chat-demo" && report.suite != "english-movement-demo" && report.suite != "english-movement-chat-demo"
                 && report.ttlReacceptChecks >= 3 && report.overlapVerified;
             report.pass = string.IsNullOrEmpty(error) && report.cases.Count > 0 && report.cases.TrueForAll(x => x.status == "pass")
-                && (durationPass || persistentPass || handoffPass || scriptPass || englishDemoPass || englishChatPass || standardPass);
-            if (report.suite != "duration" && report.suite != "persistent" && report.suite != "handoff" && report.suite != "english-demo" && report.suite != "english-chat-demo" && string.IsNullOrEmpty(report.error) && !report.overlapVerified) report.error = "reply_overlap_not_observed";
+                && (durationPass || persistentPass || handoffPass || scriptPass || englishDemoPass || englishChatPass || englishMovementPass || englishMovementChatPass || standardPass);
+            if (report.suite != "duration" && report.suite != "persistent" && report.suite != "handoff" && report.suite != "english-demo" && report.suite != "english-chat-demo" && report.suite != "english-movement-demo" && report.suite != "english-movement-chat-demo" && string.IsNullOrEmpty(report.error) && !report.overlapVerified) report.error = "reply_overlap_not_observed";
             report.status = report.pass ? "pass" : report.cases.Exists(x => x.status == "blocked") ? "blocked" : "incomplete";
             report.result = report.pass ? "native_voice_fixture_pass" : report.status;
             if (monitorSource != null) monitorSource.Stop();

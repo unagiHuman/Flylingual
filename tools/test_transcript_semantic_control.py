@@ -409,6 +409,41 @@ class TranscriptSemanticControlTests(unittest.IsolatedAsyncioTestCase):
     async def test_plan_cancel_wait_rechecks_prepared_transcript(self):
         await self.check_cancel_wait_revision('plan')
 
+    def supply_fresh_turn_hint(self):
+        self.b.goal_route.accept({'type': 'goal_route_hint',
+            'controlEpoch': self.b.arbiter.epoch,
+            'conversationGeneration': self.b.conversation_generation,
+            'sequence': 1, 'ageMs': 0, 'action': 'TURN_L'},
+            self.b.arbiter.epoch, self.b.conversation_generation)
+        self.b.local_observation.summary = Mock(return_value={
+            'fresh': True, 'facts': {'groundPresent': True, 'bodyUnsafe': False}})
+        self.b.local_observation.concern = Mock(return_value=False)
+        # Establish the available route that previously replaced clarification.
+        # This is an admission-only test, not a simulated Brain gameplay run.
+        self.assertEqual(self.b.goal_route_proposal(non_action('clarify'))['action'], 'TURN_L')
+
+    async def test_finalized_clarification_does_not_execute_available_route_hint(self):
+        self.supply_fresh_turn_hint()
+        self.a.interpret.return_value = non_action('clarify')
+        candidate = {'inputId': 'unclear-forward', 'finalized': True}
+        with patch.object(self.a, 'transcript_is_current', return_value=True), \
+                patch.object(self.a, 'claim_transcript', return_value=True):
+            await self.b.transcript_utterance('Okay. Keep moving again', candidate)
+        await self.finish_semantic()
+        self.b.adapter.send_action.assert_not_awaited()
+        self.assertIsNone(self.b.active_execution)
+        self.assertEqual(self.b.intent_revision, 0)
+        self.a.append.assert_awaited()
+
+    async def test_direct_clarification_does_not_execute_available_route_hint(self):
+        self.supply_fresh_turn_hint()
+        self.a.interpret.return_value = non_action('clarify')
+        await self.b.player_intent('Okay. Keep moving again', 'unclear-direct',
+                                  self.b.arbiter.epoch, self.b.intent_revision, None)
+        self.b.adapter.send_action.assert_not_awaited()
+        self.assertIsNone(self.b.active_execution)
+        self.a.append.assert_awaited()
+
     async def test_finalized_non_action_claims_once_and_replies(self):
         for kind in ('question', 'clarify'):
             self.a.interpret.return_value = non_action(kind)

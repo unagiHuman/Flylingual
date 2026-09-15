@@ -158,7 +158,7 @@ def assemble(output, python_root, endpoint, voice_access=None):
         'Read the first-run instructions. The swatter timer runs only after gameplay starts.\n'
         'Guide the fly toward the goal and watch for danger. Try "forward", "right", "left", or "stop".\n'
         'You can ask questions while the fly walks; a question does not cancel its current movement.\n'
-        'If a movement request is unclear, fresh course guidance may allow a short steering attempt.\n'
+        'If a movement request is unclear, the fly asks for clarification instead of choosing another direction.\n'
         'This is bounded assistance, not a promise of reaching the goal or avoiding every hazard.\n'
         'The expanded finish area and course assistance are game features, not evidence of neural learning.\n'
         'The neural model is experimental. Fly-like feelings are character expressions, not measured emotions.\n'

@@ -114,6 +114,10 @@ def fast_intent(text, context, default_ms, max_ms):
             or not math.isfinite(default_ms) or int(default_ms) != default_ms):
         return None
     normalized = text.strip().lower().replace('\u2019', "'")
+    # ASR may punctuate an introductory acknowledgement as its own sentence.
+    # Remove only that closed prefix; the entire remaining request must still
+    # match our grammar. Never strip arbitrary punctuation or extract a direction.
+    normalized = re.sub(r'^(?:okay|ok|alright|all right)[.,!]\s+', '', normalized, count=1)
     question_text = normalized[:-1].rstrip() if normalized.endswith(('?', '.', '!', '？')) else normalized
     if question_text in _EN_CASUAL_QUESTIONS:
         return validate_intent({'kind': 'question', 'action': None, 'plan': None,
@@ -156,9 +160,9 @@ def fast_intent(text, context, default_ms, max_ms):
 
     if normalized in _EN_DEMO_PERSISTENT_FORWARD:
         return proposal(action='FORWARD', execution_mode='until_next_command')
-    if normalized in _EN_DEMO_FORWARD:
+    if normalized in _EN_DEMO_FORWARD or normalized == 'keep moving forward again':
         return proposal(action='FORWARD')
-    if normalized in _EN_DEMO_STOP:
+    if normalized in _EN_DEMO_STOP or normalized == 'stop here':
         return proposal(action='STOP')
     if normalized in _EN_DEMO_CONTINUE:
         return continue_active()

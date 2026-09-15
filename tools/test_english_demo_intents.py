@@ -40,6 +40,19 @@ class EnglishDemoIntentTests(unittest.TestCase):
         self.assertEqual(result['executionMode'], 'inherit')
         self.assertEqual(result['targetExecutionId'], 'observed-forward-1')
 
+    def test_asr_acknowledgement_punctuation_keeps_complete_direction(self):
+        for prefix in ('Okay. ', 'Okay, ', 'OK! ', 'Alright. ', 'All right, '):
+            for sentence, action in (('Keep moving forward again', 'FORWARD'),
+                                     ('Turn right.', 'TURN_R'), ('Turn left.', 'TURN_L'),
+                                     ('Stop.', 'STOP')):
+                with self.subTest(text=prefix + sentence):
+                    self.assertEqual(self.parse(prefix + sentence)['action'], action)
+        for sentence in ("Okay. Don't turn right.", 'Okay. Turn right if it is safe.',
+                         'Okay. Turn right. Turn left.', 'Okay. Keep moving again.',
+                         'Okay? Turn right.', 'Okay. Please repeat: turn right.'):
+            with self.subTest(text=sentence):
+                self.assertIsNone(self.parse(sentence))
+
     def test_casual_questions_never_propose_movement(self):
         for sentence in ('How are you feeling?', 'Are you hungry?', "What's it like being a fly?", 'How are you',
                          'Hey, how are you feeling today?', 'Are you feeling hungry right now?',
