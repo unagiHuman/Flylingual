@@ -18,6 +18,92 @@ Flylingual treats AI as part of the game loop rather than as a content-generatio
 - **OpenAI Codex and ChatGPT** were used throughout development for implementation, debugging, code review, scientific-boundary checks, test design, documentation, and submission preparation.
 - The shareable **Judge build does not embed an OpenAI API key**. The default package supports GPT-Live voice through a Vercel-authenticated WebRTC session; the OpenAI key stays on the server. A limited review access pass is bundled, with new session access available through September 18, 2026 (Japan time). A text-only edition requires the explicit `--text-only` packaging option. See [packaging instructions](Docs/windows/Package-Submission.md).
 
+## Getting started and how to play
+
+### Requirements
+
+The submitted Judge build is a **Windows 64-bit voice build**. It has been tested on Windows 11.
+
+You need:
+
+- a Windows PC,
+- a microphone,
+- headphones or speakers (headphones are recommended), and
+- an internet connection for GPT-Live voice conversation and free-form language interpretation.
+
+Python, the experimental Brain runtime, and the required voice libraries are bundled with the submission. You do **not** need to install Python or enter an OpenAI API key.
+
+### Launching the game
+
+1. **Extract the entire submitted ZIP file.** Do not run the executable directly from inside the ZIP.
+2. Open the extracted `Flylingual-Judge` folder.
+3. Launch **`FlylingualConversation.exe`**.
+4. The title screen may initially show that connections are being prepared. The bundled Brain and Bridge start automatically, and the initial Brain preparation can take some time.
+5. Wait until **Start** becomes available, then start the game.
+6. The current game interface and fly replies use English.
+7. Read the first-run instructions before moving the fly.
+
+If Windows asks for microphone permission, allow microphone access so the voice-control mode can receive your instructions.
+
+### Objective
+
+Guide the fly safely through the course and reach the goal.
+
+The main hazards are:
+
+- **falling off the course,**
+- **getting stuck or failing to make progress,** and
+- **the fly swatter.**
+
+The swatter timer begins after gameplay starts. If the fly remains inactive for too long, a warning appears and the swatter approaches. Move the fly far enough before impact to escape.
+
+### Controlling the fly
+
+Speak naturally to the fly. Simple instructions are the most reliable starting point, for example:
+
+- **“Move forward.”**
+- **“Turn right.”**
+- **“Turn left.”**
+- **“Stop.”**
+
+You can also use broader natural-language instructions. The system interprets the request, constrains it to the game's supported action vocabulary, sends the corresponding stimulation through the experimental neural simulation, decodes the resulting motor output, and applies that output to the physical fly in Unity.
+
+In other words, language does not directly teleport or directly set the fly's velocity: the intended control path is:
+
+```text
+Player speech
+  -> language / intent interpretation
+  -> bounded neural stimulation
+  -> MaleCNS-based experimental LIF simulation
+  -> neural motor readout
+  -> motor decoder
+  -> six-legged Unity physics body
+```
+
+During play, the fly may also comment on measured game or neural observations. These comments are intentionally limited to what the system actually observed; they are not claims that subjective fly emotions have been measured.
+
+### Failure, retry, and goal
+
+- If the fly **falls** or is **hit by the swatter**, the run ends with **Game Over**.
+- Choose **Retry** to return to the starting point and begin a new attempt. The game re-establishes the stopped control state before resuming movement.
+- Reach the **goal area** to complete the course.
+
+The submission scene includes an expanded finish boundary and bounded game-side steering assistance to make completion practical during judging. These assists are gameplay mechanics; they are **not** neural learning, measured neural responses, or evidence that the Brain model learned the course.
+
+### If voice control is not responding
+
+- Confirm that the title screen finished preparing the connection before starting.
+- Check that Windows microphone access is enabled for the application.
+- Check your internet connection.
+- Try a short command such as **“forward”**, **“right”**, **“left”**, or **“stop.”**
+- If a run ends, use the in-game **Retry** flow rather than relaunching during an active attempt.
+
+Closing the game also shuts down the local Bridge and Brain processes that the application started.
+
+> **Review-access note:** the submitted voice build uses a scoped review-access credential rather than an OpenAI API key. New voice-session access is configured to remain available through **September 18, 2026 (Japan time)**. The review-access package should not be publicly redistributed.
+
+A separately packaged text-only edition can be created for environments where voice access is unavailable; that edition accepts typed instructions instead of GPT-Live microphone control.
+
 Current Windows handoff and build notes: [README_WINDOWS.md](README_WINDOWS.md).
 
 The current game interface and fly replies are English-only. Wait on the title screen while connections are prepared, then start the game. Questions can be answered while the fly keeps walking. If a finalized movement request is unclear, fresh Unity course guidance can support a short, bounded steering attempt; it does not guarantee arrival or avoidance. The fly speaks in everyday language, with any apparent feelings treated as character expressions. See [implementation and validation limits](Docs/windows/English-Only-Route-Guidance.md).
