@@ -20,6 +20,9 @@ namespace Flylingual.BlindSugarRun
         [Min(0)] public float hardEmergencyTime = 75f;
         [Range(0, 1)] public float maxTotalAssist = .65f;
         [Min(.01f)] public float assistChangeSpeed = .2f;
+        [Range(0, 1)] public float laneAssist = .3f;
+        [Range(0, 1)] public float matchingTurnAssist = .5f;
+        [Range(10, 90)] public float alignBeforeWalkingAngle = 35f;
         public bool AssistanceEnabled => isActiveAndEnabled && enableDemoSafetyAssist;
         public float CurrentAssist { get; private set; }
         public float NoProgressSeconds { get; private set; }
@@ -76,9 +79,11 @@ namespace Flylingual.BlindSugarRun
         public FlyMotorCommand ApplyAssist(FlyMotorCommand raw, FlyMotorSource source, float dt)
         {
             RawMotor = AssistedMotor = raw;
-            if (!AssistanceEnabled || !Playing() || !ForwardRequested || source != demo.live || !demo.live.HasFreshFrame
+            string action = conversation == null ? null : conversation.ActiveExecution?.action;
+            bool turning = action == "TURN_R" || action == "TURN_L";
+            if (!AssistanceEnabled || !Playing() || (!ForwardRequested && !turning) || source != demo.live || !demo.live.HasFreshFrame
                 || goal == null || goal.GoalVolume == null || !goal.GoalVolume.enabled
-                || !goal.GoalVolume.gameObject.activeInHierarchy || raw.forward <= .01f)
+                || !goal.GoalVolume.gameObject.activeInHierarchy || Mathf.Max(Mathf.Abs(raw.forward), Mathf.Abs(raw.turn)) <= .01f)
             { CurrentAssist = 0; return raw; }
             if (sensor == null) sensor = stage.fly.GetComponent<FlyTerrainSensor>();
             var observation = sensor == null ? null : sensor.Observation;
@@ -89,11 +94,16 @@ namespace Flylingual.BlindSugarRun
             Vector3 toGoal = goal.GoalVolume.bounds.center - stage.fly.Position;
             toGoal.y = 0;
             float distance = toGoal.magnitude;
-            Vector3 heading = Vector3.ProjectOnPlane(stage.fly.Thorax.transform.forward, Vector3.up).normalized;
-            float desiredTurn = Mathf.Clamp(Vector3.SignedAngle(heading, toGoal, Vector3.up) / 90f, -1f, 1f);
-            // Existing local edge observations veto steering toward an unsafe side.
-            if ((desiredTurn > .05f && observation.rightEdge != "safe")
-                || (desiredTurn < -.05f && observation.leftEdge != "safe"))
+            var route = GetComponent<BlindSugarRunRouteHint>();
+            if (route == null || !route.TryGetWaypoint(out var waypoint) || !route.CanTurnSafely)
+            { CurrentAssist = 0; return raw; }
+            toGoal = Vector3.ProjectOnPlane(waypoint - stage.fly.Position, Vector3.up);
+            float angle = Vector3.SignedAngle(sensor.Forward, toGoal, Vector3.up);
+            float desiredTurn = Mathf.Clamp(angle / 60f, -1f, 1f);
+            // Explicit left/right always wins: never steer against its requested side.
+            int requestedSide = action == "TURN_R" || action == "FORWARD_R" ? 1
+                : action == "TURN_L" || action == "FORWARD_L" ? -1 : 0;
+            if (requestedSide != 0 && (angle * requestedSide < 0 || raw.turn * requestedSide < 0))
             { CurrentAssist = 0; return raw; }
             float ratio = distance / Mathf.Max(.1f, nearGoalRadius);
             float near = ratio < 1f / 3f ? nearGoalMaxAssist
@@ -104,11 +114,18 @@ namespace Flylingual.BlindSugarRun
                 : NoProgressSeconds >= noProgressStartTime ? stuckMaxAssist * (10f / 35f) : 0;
             float emergency = ElapsedSeconds >= Mathf.Max(emergencyStartTime, hardEmergencyTime) ? .45f
                 : ElapsedSeconds >= emergencyStartTime ? .2f : 0;
-            float target = Mathf.Clamp(near + stuck + emergency, 0, Mathf.Clamp01(maxTotalAssist));
+            float target = Mathf.Clamp(Mathf.Max(turning ? matchingTurnAssist : laneAssist, near + stuck + emergency),
+                0, Mathf.Clamp01(maxTotalAssist));
             CurrentAssist = Mathf.MoveTowards(CurrentAssist, target, Mathf.Max(.01f, assistChangeSpeed) * Mathf.Max(0, dt));
-            // Keep the brain's forward speed and scale steering by its existing activity.
-            float activity = Mathf.Max(raw.forward, Mathf.Abs(raw.turn));
-            AssistedMotor = new FlyMotorCommand(raw.forward, Mathf.Lerp(raw.turn, desiredTurn * activity, CurrentAssist));
+            // Correction scales existing neural-driven activity; it cannot start a silent Brain.
+            float activity = Mathf.Max(Mathf.Abs(raw.forward), Mathf.Abs(raw.turn));
+            float turn = Mathf.Lerp(raw.turn, desiredTurn * activity, CurrentAssist);
+            if (requestedSide != 0) turn = requestedSide * Mathf.Max(0, turn * requestedSide);
+            // Ease translation while aligning at an entrance. No backward motion or pose writes.
+            float alignment = Mathf.InverseLerp(alignBeforeWalkingAngle, 80f, Mathf.Abs(angle));
+            float slowdown = turning ? CurrentAssist : alignment * CurrentAssist;
+            if (!route.ForwardPathSupported) slowdown = Mathf.Max(slowdown, CurrentAssist);
+            AssistedMotor = new FlyMotorCommand(raw.forward * (1f - slowdown), turn);
             return AssistedMotor;
         }
 

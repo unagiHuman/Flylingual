@@ -200,7 +200,7 @@ class TranscriptSemanticControlTests(unittest.IsolatedAsyncioTestCase):
         self.a.interpret = ConversationAdapter.interpret.__get__(self.a)
         self.a.http = object()
         self.a.last_voice_end_ms = 500
-        self.a.sent_audio_samples = 19200  # 800 ms; the last 300 ms are quiet.
+        self.a.sent_audio_samples = 28800  # 1200 ms; the last 700 ms are quiet.
         with patch('Runtime.Bridge.conversation.interpret_intent', new=AsyncMock()) as model:
             await self.socket.feed(transcript(0, 500, '前に進んで'))
             await self.finish_semantic()
@@ -210,6 +210,26 @@ class TranscriptSemanticControlTests(unittest.IsolatedAsyncioTestCase):
         self.a.http = None
         self.b.adapter.send_action.assert_awaited_once_with('FORWARD', 1)
         self.assertEqual(self.a.last_interpret_route, 'rules')
+
+    async def test_quiet_hold_keeps_late_final_word_in_one_candidate(self):
+        observed = AsyncMock()
+        self.a.on_transcript = observed
+        self.a.last_voice_end_ms = 15200
+        self.a.sent_audio_samples = 16700 * 24  # audio is already quiet; ASR still lags
+        await self.socket.feed(transcript(14600, 15200, 'All right '))
+        await asyncio.sleep(.6)
+        observed.assert_not_awaited()
+
+        # The next ASR fragment arrives before the 700 ms hold expires.
+        await self.socket.feed(transcript(15800, 16000, 'Stop here'))
+        self.a.sent_audio_samples = 16700 * 24
+        await self.finish_semantic()
+
+        observed.assert_awaited_once()
+        text, candidate = observed.await_args.args
+        self.assertEqual(text, 'All right Stop here')
+        self.assertTrue(candidate['finalized'])
+        self.assertEqual(candidate['inputId'], 'utterance-0-14600')
 
     async def test_speech_still_in_progress_does_not_execute_a_short_prefix(self):
         self.a.last_voice_end_ms = 500

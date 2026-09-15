@@ -3,6 +3,7 @@ import asyncio
 import json
 import os
 import unittest
+import aiohttp
 from unittest.mock import patch
 
 from Runtime.Bridge.intent_contract import INTENT_SCHEMA
@@ -132,6 +133,16 @@ class IntentInterpreterTests(unittest.IsolatedAsyncioTestCase):
         task.cancel()
         with self.assertRaises(asyncio.CancelledError):
             await task
+
+    async def test_missing_service_has_safe_distinct_error(self):
+        http = Http()
+        with patch.object(http, 'post', side_effect=aiohttp.ClientConnectionError('private connection details')):
+            with self.assertRaisesRegex(IntentInterpreterError, '^intent_service_unavailable$'):
+                await self.call(http)
+
+    async def test_timeout_has_safe_distinct_error(self):
+        with self.assertRaisesRegex(IntentInterpreterError, '^intent_translation_timeout$'):
+            await self.call(Http(local_body(), delay=.2), {'intentProvider': 'ollama', 'intentTimeoutMs': 10})
 
     async def test_inherited_credentials_and_proxy_rejected(self):
         for attribute, value in [('headers', {'Authorization': 'placeholder'}), ('_default_auth', object()), ('trust_env', True)]:

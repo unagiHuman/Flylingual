@@ -117,6 +117,69 @@ class PersistentExecutionTests(unittest.IsolatedAsyncioTestCase):
         self.b.adapter.send_action.assert_awaited_once_with('FORWARD', 1)
         self.assertIsNone(self.b.intent_context()['activeCommand']['remainingMs'])
 
+    def route_hint(self, action='FORWARD', sequence=1):
+        b = self.b
+        b.goal_route.accept({'type': 'goal_route_hint', 'controlEpoch': b.arbiter.epoch,
+            'conversationGeneration': b.conversation_generation, 'sequence': sequence,
+            'ageMs': 0, 'action': action}, b.arbiter.epoch, b.conversation_generation)
+
+    async def test_unclear_route_fallback_is_bounded_and_null_hint_stops_it(self):
+        self.route_hint()
+        proposal = action(duration=4000)
+        proposal.update(kind='clarify', action=None)
+        await self.propose(proposal)
+        execution = self.b.active_execution
+        self.assertTrue(execution['goalRouteFallback'])
+        self.assertTrue(execution['monitorHazards'])
+        self.assertEqual(execution['action'], 'FORWARD')
+        self.assertLessEqual(execution['deadline'] - self.now, 6)
+        self.route_hint(None, 2)
+        await self.b.check_control_safety()
+        self.assertTrue(self.b.arbiter.inhibited)
+
+    async def test_question_preserves_active_movement_even_with_route_hint(self):
+        execution = await self.start()
+        self.route_hint('TURN_R')
+        for kind in ('question', 'clarify'):
+            proposal = action(duration=4000)
+            proposal.update(kind=kind, action=None)
+            await self.propose(proposal)
+            self.assertIs(self.b.active_execution, execution)
+        self.b.adapter.send_action.assert_awaited_once_with('FORWARD', 1)
+
+    async def test_route_turn_then_forward_keeps_deadline_and_stop_wins(self):
+        self.route_hint('TURN_R')
+        self.observation(leftEdge='near')
+        proposal = action(duration=4000)
+        proposal.update(kind='clarify', action=None)
+        await self.propose(proposal)
+        execution = self.b.active_execution
+        self.assertEqual(execution['action'], 'TURN_R')
+        deadline = execution['deadline']
+        self.b.requests[execution['requestId']]['applied'] = True
+        self.now += .5
+        self.observation()
+        self.route_hint('FORWARD', 2)
+        await self.b.check_control_safety()
+        self.assertIs(self.b.active_execution, execution)
+        self.assertEqual(execution['action'], 'FORWARD')
+        self.assertEqual(execution['deadline'], deadline)
+        self.assertEqual(self.b.arbiter.deadline, deadline)
+        await self.propose(action('STOP', duration=1000))
+        self.assertIsNone(self.b.active_execution)
+        count = self.b.adapter.send_action.await_count
+        await self.b.check_control_safety()
+        self.assertEqual(self.b.adapter.send_action.await_count, count)
+
+    async def test_route_fallback_requires_safe_ground_and_current_brain(self):
+        self.route_hint()
+        for changes in ({'groundPresent': False}, {'bodyUnsafe': True}):
+            self.observation(**changes)
+            self.assertIsNone(self.b.goal_route_proposal({'kind': 'clarify'}))
+            self.observation()
+        self.b.summary.return_value = {'stale': True}
+        self.assertIsNone(self.b.goal_route_proposal({'kind': 'clarify'}))
+
     async def test_question_and_clarify_do_not_replace_or_resend(self):
         execution = await self.start()
         for kind in ('question', 'clarify'):

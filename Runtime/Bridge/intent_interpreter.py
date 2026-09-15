@@ -270,6 +270,10 @@ async def _interpret_once(http, config, text, context, language, default_ms, max
         raise
     except IntentInterpreterError:
         raise
+    except (aiohttp.ClientConnectionError, aiohttp.ClientPayloadError):
+        raise IntentInterpreterError('intent_service_unavailable') from None
+    except asyncio.TimeoutError:
+        raise IntentInterpreterError('intent_translation_timeout') from None
     except Exception:
         raise IntentInterpreterError('intent_translation_failed') from None
     finally:

@@ -39,6 +39,7 @@ namespace Flylingual.BlindSugarRun
         {
             if (GetComponent<BlindSugarRunNarrator>() == null) gameObject.AddComponent<BlindSugarRunNarrator>();
             if (GetComponent<BlindSugarRunGoal>() == null) gameObject.AddComponent<BlindSugarRunGoal>();
+            if (GetComponent<BlindSugarRunRouteHint>() == null) gameObject.AddComponent<BlindSugarRunRouteHint>();
             if (GetComponent<FlyDemoSafetyAssist>() == null) gameObject.AddComponent<FlyDemoSafetyAssist>();
             if (GetComponent<BlindSugarRunIdleSwatter>() == null) gameObject.AddComponent<BlindSugarRunIdleSwatter>();
             view = gameObject.AddComponent<BlindSugarRunGameOverView>();

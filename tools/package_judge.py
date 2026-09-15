@@ -54,7 +54,7 @@ def configurations(endpoint, voice=False):
                   'visualizationAtlas': 'UnityProject/Assets/BrainVisualization/Resources/BrainVisualization/malecns-atlas.json'},
         'conversation': {'mode': 'text', 'intentProvider': 'vercel', 'cloudIntentUrl': endpoint,
                          'intentTimeoutMs': 5000, 'localIntentResponsesFallback': False,
-                         'language': 'ja', 'voice': 'stone'},
+                         'language': 'en', 'voice': 'stone'},
         'control': {'owner': 'gpt'}, 'logPath': 'artifacts/bridge/events.jsonl'}
     native = {'bridgePython': 'runtime/python/python.exe',
               'bridgeLocalConfig': 'Runtime/Config/judge.json', 'runRoot': 'artifacts/judge-runs',
@@ -82,7 +82,7 @@ def package_selection(selection, endpoint):
 
 def runtime_sources(bridge):
     """Explicit application allowlist shared by packaging and dependency tests."""
-    sources = [Path('tools') / name for name in ('dev.py', 'windows_native.py', 'windows_native_job.py')]
+    sources = [Path('tools') / name for name in ('dev.py', 'windows_native.py', 'windows_native_job.py', 'native_local_intent.py')]
     sources += [p.relative_to(ROOT) for p in (ROOT / 'Runtime/Bridge').glob('*.py')]
     sources += [Path('Runtime/Bridge/blind_run_script.json'), Path('Runtime/Bridge/player.html')]
     sources += [Path('Runtime/Config/profiles/windows-local.json')]
@@ -149,56 +149,38 @@ def assemble(output, python_root, endpoint, voice_access=None):
     for name, config in [('judge.json', bridge), ('judge-native.json', native)]:
         (output / 'Runtime/Config' / name).write_text(json.dumps(config, indent=2) + '\n', encoding='utf-8')
     selection_path.write_text(json.dumps(selection, indent=2) + '\n', encoding='utf-8')
-    (output / 'README.txt').write_text(
+    readme = (
         'Flylingual Judge — Windows 64-bit\n\n'
-        'キー不要のテキスト操作版です。GPT Live音声・マイク操作は含みません。\n'
-        'フォルダ全体を展開し、FlylingualConversation.exeを起動してください。\n'
-        'Python・Brainを同梱。追加インストールは不要です。初回はBrain準備に時間がかかります。\n'
-        'タイトルから開始し、危険を避けてゴールを目指します。設定ボタンで日本語・英語を切り替えられます。\n'
-        '「前進」「右」「左」「停止」など短い指示を入力してください。\n'
-        '自由な文のCloud解釈にはインターネット接続が必要です。Cloud失敗時も対応する短い基本指示はFastRuleで処理します。\n'
-        'Windows 11で動作確認。他のWindows環境は未検証です。終了時はアプリが起動した同居サービスも終了します。\n'
-        '神経モデルは実験的です。感情・学習・回避成功の神経的実証ではありません。果汁接触の神経報酬入力は未実装です。\n'
-        'Cloud接続先はbuild-channel.jsonに記載。APIキーは同梱していません。\n\n'
-        'This is the key-free text-control edition; GPT Live voice and microphone control are not included.\n'
-        'Extract the entire folder, then launch FlylingualConversation.exe. Python and Brain are bundled.\n'
-        'No extra installation is needed. Initial Brain preparation can take time.\n'
-        'Start from the title and avoid danger to reach the goal. Use Settings to switch Japanese/English.\n'
-        'Enter short commands such as "forward", "right", "left", and "stop".\n'
-        'Cloud interpretation of free-form text needs internet access. Supported short basic commands use FastRule if Cloud fails.\n'
-        'Tested on Windows 11; other Windows environments are unverified. App exit closes services it started.\n'
-        'The neural model is experimental, not evidence of emotions, learning, or successful avoidance. Juice-contact neural reward input is not implemented.\n'
-        'The public Cloud endpoint is in build-channel.json. No API key is bundled.\n',
-        encoding='utf-8')
+        'Extract the entire folder, then launch FlylingualConversation.exe.\n'
+        'Python and Brain are bundled. Initial preparation can take time.\n'
+        'The game interface and fly replies are in English.\n'
+        'Wait on the title screen while connections are prepared. Start becomes available when ready.\n'
+        'Read the first-run instructions. The swatter timer runs only after gameplay starts.\n'
+        'Guide the fly toward the goal and watch for danger. Try "forward", "right", "left", or "stop".\n'
+        'You can ask questions while the fly walks; a question does not cancel its current movement.\n'
+        'If a movement request is unclear, fresh course guidance may allow a short steering attempt.\n'
+        'This is bounded assistance, not a promise of reaching the goal or avoiding every hazard.\n'
+        'The expanded finish area and course assistance are game features, not evidence of neural learning.\n'
+        'The neural model is experimental. Fly-like feelings are character expressions, not measured emotions.\n'
+        'App exit closes the local services it started. No OpenAI API key is bundled.\n'
+    )
     if access:
         (output / 'Runtime/Config/voice-access.txt').write_text(access + '\n', encoding='utf-8')
-        (output / 'README.txt').write_text(
-            'Flylingual Judge — Voice / Windows 64-bit\n\n'
-            'フォルダ全体を展開し、FlylingualConversation.exeを起動してください。\n'
-            'マイクとスピーカーまたはヘッドセット、インターネット接続が必要です。\n'
-            'GPT Live音声会話に対応。OpenAI APIキーの入力・インストールは不要です。\n'
-            'タイトルから開始し、危険を避けてゴールへ。設定で日本語・英語を切り替えられます。\n'
-            'Python・実Brain・音声通信ライブラリ同梱。初回はBrain準備に時間がかかります。\n'
-            '提出用音声アクセスはサーバーで期限管理されます。期限後は発行者へ連絡してください。\n'
-            '同梱のvoice-access.txtは提出用の限定アクセス資格です。公開再配布しないでください。\n'
-            '神経モデルは実験的で、主観的感情を測定しているわけではありません。\n\n'
-            'Extract all files and launch FlylingualConversation.exe. A microphone, headphones/speakers,\n'
-            'and internet access are required. GPT Live voice conversation is enabled.\n'
-            'No OpenAI API key entry is required. Python, Brain and voice dependencies are bundled.\n'
-            'Start from the title; avoid danger and reach the goal. Settings switches Japanese/English.\n'
-            'Review voice access expires on the server. Do not publicly redistribute the review access pass.\n',
-            encoding='utf-8')
+        readme += (
+            '\nVoice edition: use a microphone and headphones or speakers, with internet access.\n'
+            'GPT Live voice conversation is enabled; no OpenAI API key entry is required.\n'
+            'Voice dependencies are bundled. Review access expires on the server.\n'
+            'Do not publicly redistribute the review access pass. Contact the issuer if access expires.\n'
+        )
+    else:
+        readme += (
+            '\nText edition: GPT Live voice and microphone control are not included.\n'
+            'Cloud interpretation of free-form text needs internet access.\n'
+            'Supported short basic commands remain available through FastRule if Cloud fails.\n'
+            'The public Cloud endpoint is recorded in build-channel.json.\n'
+        )
+    (output / 'README.txt').write_text(readme, encoding='utf-8')
     files = []
-    with (output / 'README.txt').open('a', encoding='utf-8') as instructions:
-        instructions.write(
-            '\n起動後はタイトルに「接続中」と表示されます。必要な接続が完了すると開始できます。\n'
-            '初回は操作説明を確認してください。ハエたたきのカウントはゲーム開始後に進みます。\n'
-            '危険を避けてゴールを目指してください。ゴール判定の拡大と方向補助があります。\n'
-            '方向補助はゲーム側の処理で、神経反応や学習の測定結果ではありません。\n'
-            '\nWait on the title screen while connections are being prepared; Start becomes available when ready.\n'
-            'Read the first-run instructions. The swatter timer runs after gameplay starts.\n'
-            'Avoid danger and reach the goal. An expanded goal area and steering assistance aid completion.\n'
-            'These are game-side assists, not measured neural responses or learning.\n')
     for path in sorted(output.rglob('*')):
         if path.is_file():
             digest = hashlib.sha256()

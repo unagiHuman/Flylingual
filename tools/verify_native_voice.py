@@ -41,7 +41,7 @@ def collect_hashes(manifest: Path, config: dict | None = None, exe: Path | None 
                    "Runtime/Bridge/action_plans.py", "Runtime/Bridge/control.py",
                    "Runtime/Bridge/conversation_prompts.py", "Runtime/Bridge/fast_intents.py",
                    "Runtime/Bridge/intent_contract.py", "Runtime/Bridge/intent_interpreter.py",
-                   "tools/verify_native_voice.py", "tools/windows_native.py"],
+                   "tools/verify_native_voice.py", "tools/windows_native.py", "tools/native_local_intent.py"],
         "config": ["Runtime/Config/local.json", "Runtime/Config/windows-stack.local.json",
                    "Runtime/Config/profiles/windows-local.json", "Brain/MaleCNS/requirements-runtime.txt"],
         "data": [],
@@ -123,16 +123,23 @@ def evaluate_status(report, *, timeout, remaining, ports_free, exit_code, except
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--fixtures", required=True, type=Path, help="manifest.json")
-    ap.add_argument("--suite", choices=("smoke", "full", "duration", "plans", "soak", "persistent", "handoff", "script_interrupt"), default="smoke")
+    ap.add_argument("--suite", choices=("smoke", "full", "duration", "plans", "soak", "persistent", "handoff", "script_interrupt", "english-demo", "english-chat-demo"), default="smoke")
     ap.add_argument("--capture-test-transcript", action="store_true",
                     help="opt-in recognized text for synthetic fixtures only; never enables the microphone")
+    ap.add_argument("--monitor-fixtures", action="store_true",
+                    help="play the injected fixture PCM through Unity speakers for an opt-in Game Bar capture; microphone remains disabled")
     ap.add_argument("--seconds", type=int, default=None)
+    ap.add_argument("--recording-gate", type=Path, help="opt-in english-demo: wait for a start file before a 60-second recording presentation")
     ap.add_argument("--output", required=True, type=Path)
     ap.add_argument("--exe", type=Path,
                     default=ROOT / "artifacts/windows-native-conversation/unity/FlylingualConversation.exe")
     ap.add_argument("--stack", type=Path, default=ROOT / "Runtime/Config/windows-stack.local.json",
                     help="must be the Player's default windows-stack.local.json")
     args = ap.parse_args()
+    if args.recording_gate is not None and args.suite not in ("english-demo", "english-chat-demo"):
+        ap.error("--recording-gate requires an English demo suite")
+    if args.recording_gate is not None and args.recording_gate.exists():
+        ap.error("recording gate already exists; choose a fresh file")
     manifest = (ROOT / args.fixtures if not args.fixtures.is_absolute() else args.fixtures).resolve()
     output = (ROOT / args.output if not args.output.is_absolute() else args.output).resolve()
     exe = (ROOT / args.exe if not args.exe.is_absolute() else args.exe).resolve()
@@ -172,10 +179,14 @@ def main() -> int:
             command.extend(("-flyVoiceFixtureSeconds", str(args.seconds)))
         if args.capture_test_transcript:
             command.append("-flyVoiceFixtureTextDiagnostics")
+        if args.monitor_fixtures:
+            command.append("-flyVoiceFixtureMonitor")
+        if args.recording_gate is not None:
+            command.extend(("-flyVoiceRecordingGate", str(args.recording_gate.resolve())))
         event("launch", suite=args.suite)
         started = time.monotonic()
         stdout_path = output / "player-stdout.log"
-        deadline_seconds = args.seconds if args.seconds is not None else {"smoke": 240, "full": 900, "duration": 180, "plans": 240, "soak": 300, "persistent": 180, "handoff": 120, "script_interrupt": 120}[args.suite]
+        deadline_seconds = args.seconds if args.seconds is not None else {"smoke": 240, "full": 900, "duration": 180, "plans": 240, "soak": 300, "persistent": 180, "handoff": 120, "script_interrupt": 120, "english-demo": 120, "english-chat-demo": 120}[args.suite]
         timeout = False; process = None; owned = None; peak_rss = 0; runner_exception = None
         try:
             with stdout_path.open("w", encoding="utf-8", newline="\n") as player_output:
@@ -183,7 +194,7 @@ def main() -> int:
                                            stdout=player_output, stderr=subprocess.STDOUT, text=True,
                                            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
                 owned = Owned(process)
-                deadline = time.monotonic() + max(60, deadline_seconds + 45)
+                deadline = time.monotonic() + max(60, deadline_seconds + 45) + (300 if args.recording_gate is not None else 0)
                 while process.poll() is None and time.monotonic() < deadline:
                     owned.refresh()
                     rss = 0

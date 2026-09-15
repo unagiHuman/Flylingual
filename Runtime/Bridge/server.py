@@ -21,6 +21,7 @@ from .action_plans import (BoundedPlanRunner, LocalSafetyObservation, PLAN_REPLY
                            DISTANCE_ACTIONS, valid_distance, validate_intent)
 from .blind_run_script import BlindRunScript
 from .local_visual_observation import LocalVisualObservation
+from .goal_route import GoalRouteHint
 from .config import load_config
 from .control import ControlArbiter, ControlError
 from .conversation import ConversationAdapter, ConversationError
@@ -63,7 +64,7 @@ def command_error_message(exc, event, current_epoch):
     result = {'type': 'error', 'error': code}
     if code == 'old_epoch' and isinstance(event, dict):
         kind, submitted = event.get('type'), event.get('controlEpoch')
-        if (kind in ('local_safety_observation', 'local_visual_observation', 'blind_run_cue', 'resume', 'conversation_start',
+        if (kind in ('goal_route_hint', 'local_safety_observation', 'local_visual_observation', 'blind_run_cue', 'resume', 'conversation_start',
                      'set_action', 'player_text', 'configure_conversation')
                 and type(submitted) is int and type(current_epoch) is int
                 and 0 <= submitted <= 2**31 - 1 and 0 <= current_epoch <= 2**31 - 1):
@@ -88,6 +89,7 @@ class Bridge(VisualThreatFeedbackMixin):
         self.init_visual_threat()
         self.local_observation = LocalSafetyObservation()
         self.local_visual = LocalVisualObservation()
+        self.goal_route = GoalRouteHint()
         self.local_visual_commentary_count = 0
         self.edge_warning_scope = None
         self.edge_warning_sent = False
@@ -588,6 +590,7 @@ class Bridge(VisualThreatFeedbackMixin):
         self.plans.cancel()
         self.local_observation.clear()
         self.local_visual.clear()
+        self.goal_route = GoalRouteHint()
         self.blind_script.last_fact = None
         self.intent_revision += 1
         for task in tuple(self.intent_tasks):
@@ -929,6 +932,11 @@ class Bridge(VisualThreatFeedbackMixin):
                     or self.arbiter.owner != 'gpt' or not self.conversation.transcript_is_current(candidate)):
                 return
             self.log('transcript_candidate_result', inputId=candidate['inputId'], kind=proposal['kind'])
+            route_fallback = False
+            if candidate.get('finalized') is True and proposal['kind'] == 'clarify':
+                fallback = self.goal_route_proposal(proposal)
+                if fallback is not None:
+                    proposal, route_fallback = fallback, True
             if proposal['kind'] not in ('action', 'plan', 'update'):
                 # Reply through Live directly: start_intent would invalidate
                 # pending control work even though this utterance has no Action.
@@ -946,6 +954,7 @@ class Bridge(VisualThreatFeedbackMixin):
             command_id = candidate['inputId']
             self.start_intent(text, command_id, epoch, candidate.get('delegationId'), prepared={
                 'proposal': proposal, 'context': context, 'started': started, 'voice': True,
+                'routeFallback': route_fallback,
                 'interpretRoute': self.conversation.last_interpret_route,
                 'transcriptRevision': self.conversation.transcript_revision,
                 'contextGeneration': self.conversation.context_generation})
@@ -1066,6 +1075,28 @@ class Bridge(VisualThreatFeedbackMixin):
             raise ControlError('expired_intent')
         return age_ms
 
+    def goal_route_proposal(self, original, *, allow_active=False):
+        # Only the current Unity-authored course may supply a direction. A
+        # question never changes movement; an existing explicit request wins.
+        if (self.conversation_interaction != 'control' or not self.conversation_accepting
+                or self.arbiter.inhibited or self.arbiter.owner != 'gpt'
+                or self.switching or self.release_unknown or self.summary()['stale']
+                or (self.active_execution is not None and not allow_active)):
+            return None
+        local = self.local_observation.summary()
+        facts = local['facts']
+        if not local['fresh'] or not facts.get('groundPresent') or facts.get('bodyUnsafe'):
+            return None
+        proposal = self.goal_route.proposal(original, self.arbiter.epoch, self.conversation_generation,
+                                             self.config['control']['maxActionMs'])
+        if proposal is None or self.local_observation.concern(action=proposal['action']):
+            return None
+        # TURN hints already include Unity's swept-footprint support check;
+        # forward-looking edge rays must not prohibit an in-place recovery.
+        # Forward hints likewise carry a sampled body-width corridor check;
+        # the broader edge-warning rays do not replace that local support proof.
+        return proposal
+
     async def player_intent(self, text, command_id, epoch, revision, delegation_id, *, prepared=None):
         started = time.monotonic() if prepared is None else prepared['started']
         voice = delegation_id is not None or (prepared is not None and prepared.get('voice', False))
@@ -1088,6 +1119,11 @@ class Bridge(VisualThreatFeedbackMixin):
                 if prepared is None else prepared['proposal'])
             if any(k in proposal for k in ('operation', 'executionMode', 'distanceMeters')):
                 validate_intent(proposal, self.config['control']['maxActionMs'])
+            route_fallback = bool(prepared and prepared.get('routeFallback'))
+            if prepared is None and proposal['kind'] == 'clarify':
+                fallback = self.goal_route_proposal(proposal)
+                if fallback is not None:
+                    proposal, route_fallback = fallback, True
             interpretation_ms = (time.monotonic()-started)*1000
             self.log('intent_classified', commandId=command_id,
                      source='voice' if voice else 'text',
@@ -1122,6 +1158,10 @@ class Bridge(VisualThreatFeedbackMixin):
                 if voice and self.voice_control_epoch != epoch:
                     raise ControlError('voice_session_restart_required')
                 self.require_fresh()
+                if route_fallback:
+                    latest_route = self.goal_route_proposal({'kind': 'clarify'})
+                    if latest_route is None or latest_route['action'] != proposal['action']:
+                        raise ControlError('goal_route_unavailable')
                 mode = proposal.get('executionMode', 'timed')
                 if mode == 'distance':
                     self.distance_state(proposal.get('distanceMeters'), proposal['action'], None)
@@ -1132,6 +1172,10 @@ class Bridge(VisualThreatFeedbackMixin):
                 intent_age_ms = self.require_current_intent(started, epoch, revision)
                 check_transcript()
                 self.require_fresh()
+                if route_fallback:
+                    latest_route = self.goal_route_proposal({'kind': 'clarify'})
+                    if latest_route is None or latest_route['action'] != proposal['action']:
+                        raise ControlError('goal_route_unavailable')
                 # Interpretation/cancellation latency consumes the admission age
                 # limit, never the accepted movement's execution duration.
                 duration_ms = (self.config['control']['maxActionMs'] if proposal['action'] == 'STOP'
@@ -1142,7 +1186,11 @@ class Bridge(VisualThreatFeedbackMixin):
                                     execution_mode=mode)
                 if proposal['action'] != 'STOP':
                     self.activate_execution(command_id, proposal['action'], mode, self.arbiter.deadline,
+                        monitor_hazards=route_fallback,
                         **({'target_distance_meters': proposal['distanceMeters']} if mode == 'distance' else {}))
+                    if route_fallback:
+                        self.active_execution['goalRouteFallback'] = True
+                        self.log('goal_route_fallback_started', commandId=command_id, action=proposal['action'])
                 await self.submit(proposal['action'], 'gpt', command_id,
                                   intent_age_ms=intent_age_ms,
                                   execution_duration_ms=0 if proposal['action'] == 'STOP' else duration_ms,
@@ -1485,7 +1533,11 @@ class Bridge(VisualThreatFeedbackMixin):
         if not isinstance(event, dict):
             raise ControlError('invalid_message')
         kind = event.get('type')
-        if kind == 'environment_event':
+        if kind == 'goal_route_hint':
+            if self.conversation_interaction != 'control':
+                raise ControlError('goal_route_control_required')
+            self.goal_route.accept(event, self.arbiter.epoch, self.conversation_generation)
+        elif kind == 'environment_event':
             self.accept_environment_event(event)
         elif kind == 'neural_observation_subscribe':
             if set(event) != {'type', 'controlEpoch', 'conversationGeneration', 'enabled'} or type(event.get('enabled')) is not bool:
@@ -1597,6 +1649,7 @@ class Bridge(VisualThreatFeedbackMixin):
             self.conversation_generation += 1
             self.local_observation.clear()
             self.local_visual.clear()
+            self.goal_route = GoalRouteHint()
             self.conversation_accepting = True
             self.emit(self.state())
             self.conversation_operation = self.task(self.conversation.start())
@@ -1641,6 +1694,7 @@ class Bridge(VisualThreatFeedbackMixin):
         self.clear_execution('conversation_stopped')
         self.local_observation.clear()
         self.local_visual.clear()
+        self.goal_route = GoalRouteHint()
         if had_plan or had_execution:
             self.task(self.inhibit('plan_conversation_stopped'))
         self.blind_script.reset()
@@ -1810,6 +1864,11 @@ class Bridge(VisualThreatFeedbackMixin):
             return
         execution = self.active_execution
         if execution is not None:
+            if execution.get('goalRouteFallback'):
+                route = self.goal_route_proposal({'kind': 'clarify'}, allow_active=True)
+                if route is None:
+                    await self.inhibit('goal_route_unavailable')
+                    return
             if (execution['epoch'] != self.arbiter.epoch
                     or execution['generation'] != self.conversation_generation
                     or self.arbiter.owner != 'gpt' or not self.conversation_accepting
@@ -1829,6 +1888,21 @@ class Bridge(VisualThreatFeedbackMixin):
             if item and not item['applied'] and time.monotonic() - item['sent'] >= self.config['control']['stopTimeoutMs'] / 1000:
                 await self.inhibit('execution_apply_timeout')
                 return
+            if (execution.get('goalRouteFallback') and item and item['applied']
+                    and not self.arbiter.expired() and route['action'] != execution['action']
+                    and time.monotonic() - item['sent'] >= .4):
+                # One bounded recovery: turn onto the supported lane, then walk.
+                # New player commands replace this execution; the deadline never extends.
+                remaining_ms = (execution['deadline'] - time.monotonic()) * 1000
+                if remaining_ms > 0:
+                    command_id = execution['executionId'] + '-route-' + str(self.request_counter + 1)
+                    deadline = execution['deadline']
+                    self.arbiter.accept('gpt', route['action'], command_id, execution['epoch'], remaining_ms)
+                    self.arbiter.deadline = deadline
+                    execution['action'] = route['action']
+                    await self.submit(route['action'], 'gpt', command_id)
+                    self.emit(self.state())
+                    return
             if execution['executionMode'] == 'distance':
                 try:
                     reason = self.distance_reason(execution, time.monotonic())

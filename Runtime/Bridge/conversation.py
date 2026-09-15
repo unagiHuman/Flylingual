@@ -46,6 +46,12 @@ class ConversationError(RuntimeError):
 
 
 class ConversationAdapter:
+    # Live transcript deltas can pause between words.  A 300 ms boundary
+    # allows a short continuation such as "All right ... Stop here" to be
+    # finalized and executed as two separate utterances.
+    TRANSCRIPT_QUIET_HOLD_MS = 700
+    TRANSCRIPT_STABLE_HOLD_SECONDS = .7
+
     def __init__(self, config, on_event, on_utterance, on_transcript=None):
         self.config = config
         self.settings = settings_from_config({'conversation': config})
@@ -444,9 +450,16 @@ class ConversationAdapter:
                 if not text or len(text) > 2000 or self.transcript_overflow:
                     return
                 # Live has transcript deltas, not Realtime's committed-turn
-                # event. Require 300 ms of observed quiet for the fast route.
+                # event. Require a bounded quiet hold before treating the
+                # current transcript as a finalized utterance.  This keeps a
+                # delayed final word in the same candidate without waiting
+                # indefinitely for an acoustic end marker.
                 # Legacy/no-audio callers retain semantic LLM validation.
-                quiet = self.last_voice_end_ms >= 0 and self.sent_audio_samples / 24 - self.last_voice_end_ms >= 300
+                audio_quiet = (self.last_voice_end_ms >= 0
+                               and self.sent_audio_samples / 24 - self.last_voice_end_ms >= self.TRANSCRIPT_QUIET_HOLD_MS)
+                transcript_stable = (asyncio.get_running_loop().time() - self.transcript_changed_at
+                                     >= self.TRANSCRIPT_STABLE_HOLD_SECONDS)
+                quiet = audio_quiet and transcript_stable
                 # A noisy microphone must not lock out all commands. If the
                 # acoustic boundary is unavailable, keep the original semantic
                 # path after one second of stable text, with fast rules off.

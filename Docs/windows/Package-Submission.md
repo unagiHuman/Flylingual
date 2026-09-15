@@ -14,6 +14,8 @@ batはPlayerの参照先・ビルド時刻の目安・音声版／テキスト�
 
 自動実行で最後のキー待ちを省く場合だけ、環境変数 `FLYLINGUAL_PACKAGE_NO_PAUSE=1` を設定する。ダブルクリック時は従来どおり結果を表示して待機する。
 
+Unityがビルド後に更新するEditor専用の `ProjectAuditorSettings.asset` は、Player更新漏れの時刻検査から除外する。
+
 初回のみ、portable Pythonがなければ、リポジトリ直下で次を実行する（uvが必要、Pythonと依存ライブラリをダウンロードする）。
 
 ```powershell

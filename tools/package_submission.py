@@ -31,7 +31,8 @@ def check_player_freshness(player, project):
     newer = [path.relative_to(project).as_posix()
              for folder in ('Assets', 'Packages', 'ProjectSettings')
              for path in (project / folder).rglob('*')
-             if path.is_file() and path.stat().st_mtime_ns > built]
+             if path.is_file() and path.relative_to(project).as_posix() != 'ProjectSettings/ProjectAuditorSettings.asset'
+             and path.stat().st_mtime_ns > built]
     if newer:
         raise ValueError('Unity inputs are newer than the Player; rebuild Judge / Cloud first: '
                          + ', '.join(sorted(newer)[:8]))

@@ -21,6 +21,7 @@ namespace Flylingual.PlayScreen
         ConversationSessionController conversation;
         GameObject ownedNeural;
         Material ownedMaterial;
+        Flylingual.Audio.FlyFootstepAudio footstepAudio;
         bool configured;
         public static bool Active { get; private set; }
 
@@ -56,6 +57,7 @@ namespace Flylingual.PlayScreen
             neural.SetEmbedded(true);
             view = GetComponent<PlayScreenView>() ?? gameObject.AddComponent<PlayScreenView>();
             view.Configure(gameTexture, neural);
+            footstepAudio = gameObject.AddComponent<Flylingual.Audio.FlyFootstepAudio>();
             bool blindStage = FindAnyObjectByType<Flylingual.BlindSugarRun.BlindSugarRunSession>() != null;
             bool developerView = System.Array.IndexOf(System.Environment.GetCommandLineArgs(), "-blindSugarDeveloperView") >= 0;
             view.SetBlindMode(blindStage && !developerView);
@@ -103,6 +105,7 @@ namespace Flylingual.PlayScreen
             if (gameCamera != null) { gameCamera.targetTexture = previousTexture; gameCamera.rect = previousRect; gameCamera.aspect = previousAspect; }
             if (neural != null) neural.SetEmbedded(false);
             if (view != null) Destroy(view);
+            if (footstepAudio != null) Destroy(footstepAudio);
             if (ownedNeural != null) Destroy(ownedNeural);
             if (ownedMaterial != null) Destroy(ownedMaterial);
             if (gameTexture != null) { gameTexture.Release(); Destroy(gameTexture); }

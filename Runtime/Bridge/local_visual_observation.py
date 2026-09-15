@@ -124,6 +124,18 @@ class LocalVisualObservation:
                 edge = ('端が非常に近い。' if s['edge']=='very_near' else '端が近い。' if s['edge']=='near' else '')
                 if language == 'en': edge = 'Edge very close. ' if s['edge']=='very_near' else 'Edge nearby. ' if s['edge']=='near' else ''
                 return edge + bridge_guidance(s, language) + slope
+            if language == 'en':
+                bits = []
+                if s['surface'] != 'unknown': bits.append(s['surface'])
+                if s['distance'] != -1: bits.append(distance(s['distance']) + ' away')
+                if s['edge'] in ('near', 'very_near'):
+                    bits.append('the edge is very close' if s['edge'] == 'very_near' else 'the edge is close')
+                    if s['edgeDistance'] != -1: bits.append('edge ' + distance(s['edgeDistance']) + ' away')
+                elif s['edge'] == 'clear': bits.append('no edge seen nearby')
+                if s['alignment'] != 'unknown': bits.append({'left': 'extends slightly left', 'right': 'extends slightly right', 'center': 'lines up with me'}[s['alignment']])
+                if s['trend'] in ('closer', 'farther'): bits.append('the edge is getting ' + s['trend'])
+                if s['slope'] in ('up', 'down'): bits.append('uphill' if s['slope'] == 'up' else 'downhill')
+                return s['direction'].replace('-', ' ') + ': ' + (', '.join(bits) if bits else "I can't tell what's there")
             bits = []
             if s['surface'] != 'unknown': bits.append(_KIND_LABELS[s['surface']])
             if s['distance'] != -1: bits.append(distance(s['distance']))
@@ -147,12 +159,18 @@ class LocalVisualObservation:
         if len(sentences) < 2:
             body = 'まだ身体が動いている' if facts['moving'] else '身体は安定している' if facts['stable'] else '安定は未確認'
             sentences.append('足元は' + _KIND_LABELS[facts['ground']] + ('、' + body if include_body else ''))
-        if facts['revisited'] and len(sentences) < 2: sentences.append('以前通った場所に戻った')
+            if language == 'en':
+                ground = "I can't tell what's underfoot" if facts['ground'] == 'unknown' else 'Underfoot: ' + facts['ground']
+                body = "I'm moving" if facts['moving'] else "I'm steady" if facts['stable'] else "I can't tell if I'm steady"
+                sentences[-1] = ground + (', ' + body if include_body else '')
+        if facts['revisited'] and len(sentences) < 2: sentences.append("I've been here before" if language == 'en' else '以前通った場所に戻った')
         # Keep whole facts rather than cutting a sentence halfway through a qualification.
         text = ''
         for sentence in sentences:
-            if len(text) + len(sentence) + 1 <= 240: text += sentence + '。'
-        return text or '見える範囲の周囲は未確認。'
+            ending = '. ' if language == 'en' else '。'
+            sentence = sentence.rstrip('. ') + ending if language == 'en' else sentence + ending
+            if len(text) + len(sentence) <= 240: text += sentence
+        return text or ("I can't tell what's nearby." if language == 'en' else '見える範囲の周囲は未確認。')
 
     def summary(self, now=None):
         now = time.monotonic() if now is None else now
@@ -190,9 +208,10 @@ class LocalVisualObservation:
         if hazards:
             closest = min((s for s in facts['directions'] if s['edge'] in ('near', 'very_near')),
                           key=lambda s:(s['edge'] != 'very_near', s['edgeDistance'] if s['edgeDistance'] >= 0 else 4))
-            return {'kind': 'hazard', 'facts': {'text': self.describe(closest['direction'], now=now)}}
+            return {'kind': 'hazard', 'facts': {'text': self.describe(closest['direction'], language, now=now)}}
         if facts['revisited']:
-            return {'kind': 'memory', 'facts': {'text': '以前通った場所に戻った。今見える範囲: ' + self.describe('all', now=now, include_body=False)}}
+            prefix = "I've been here before. Nearby: " if language == 'en' else '以前通った場所に戻った。今見える範囲: '
+            return {'kind': 'memory', 'facts': {'text': prefix + self.describe('all', language, now=now, include_body=False)}}
         if objects or facts['ground'] != 'unknown':
-            return {'kind': 'discovery', 'facts': {'text': self.describe('all', now=now, include_body=False)}}
+            return {'kind': 'discovery', 'facts': {'text': self.describe('all', language, now=now, include_body=False)}}
         return None

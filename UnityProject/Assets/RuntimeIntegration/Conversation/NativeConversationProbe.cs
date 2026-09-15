@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using UnityEngine;
+using UnityEngine.UIElements;
 
 namespace Flylingual.Conversation
 {
@@ -57,7 +58,9 @@ namespace Flylingual.Conversation
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         static void Bootstrap()
         {
-            if (Array.IndexOf(Environment.GetCommandLineArgs(), "-flyConversationProbe") < 0) return;
+            if (Array.IndexOf(Environment.GetCommandLineArgs(), "-flyConversationProbe") < 0
+                && Array.IndexOf(Environment.GetCommandLineArgs(), "-flyEnglishRouteProbe") < 0
+                && Array.IndexOf(Environment.GetCommandLineArgs(), "-flyFullCourseProbe") < 0) return;
             new GameObject("Native conversation development probe").AddComponent<NativeConversationProbe>();
         }
         IEnumerator Start()
@@ -65,7 +68,16 @@ namespace Flylingual.Conversation
             string path = FlyVisualDemo.WindowsReplayDemo.Argument("-flyConversationProbeOutput");
             if (string.IsNullOrEmpty(path)) { Debug.LogError("NATIVE_PROBE_OUTPUT_REQUIRED"); yield break; }
             Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path)));
-            var report = new Report { result = "startup_timeout", microphoneTested = false, bridge = "127.0.0.1" };
+            if (Array.IndexOf(Environment.GetCommandLineArgs(), "-flyFullCourseProbe") >= 0)
+            {
+                yield return RunFullCourseProbe(path);
+                yield break;
+            }
+            if (Array.IndexOf(Environment.GetCommandLineArgs(), "-flyEnglishRouteProbe") >= 0)
+            {
+                yield return RunEnglishRouteProbe(path);
+                yield break;
+            }            var report = new Report { result = "startup_timeout", microphoneTested = false, bridge = "127.0.0.1" };
             // Exercise the normal title/tutorial buttons before waiting for auto-start.
             yield return null;
             var title = FindAnyObjectByType<Flylingual.PlayScreen.TitleScreen>();
@@ -162,6 +174,349 @@ namespace Flylingual.Conversation
             if (Array.IndexOf(Environment.GetCommandLineArgs(), "-flyConversationProbeQuit") >= 0) Application.Quit();
         }
 
+        [Serializable] sealed class FullCourseRequest
+        {
+            public string text, action;
+            public float requestedAt, appliedAt;
+            public int appliedRequestId;
+            public long appliedSequence;
+            public bool applied;
+        }
+        [Serializable] sealed class FullCourseSample
+        {
+            public float elapsed, frameAgeMs;
+            public Vector3 position, waypoint;
+            public string stage, recommendation, appliedAction, error, protocolError, executionId;
+            public long sequence;
+            public bool waypointValid, ready, rawBrainReady, freshBrain, liveSource;
+        }
+        [Serializable] sealed class FullCourseReport
+        {
+            public string result = "incomplete", error, backend, finalStage;
+            public string brainEndpoint = "127.0.0.1:18766";
+            public string method = "Scripted normal player text following authored route; not evidence that arbitrary human instructions clear the course";
+            public bool titleStarted, microphoneDisabled, goalConfirmed, revealComplete, finalStopped;
+            public bool liveSourceMaintained = true, freshBrainMaintained = true;
+            public int attempt, deaths;
+            public float elapsed, travelledMeters;
+            public Vector3 initialPosition, finalPosition;
+            public List<FullCourseRequest> requests = new List<FullCourseRequest>();
+            public List<FullCourseSample> samples = new List<FullCourseSample>();
+        }
+
+        IEnumerator RunFullCourseProbe(string path)
+        {
+            var r = new FullCourseReport();
+            float began = Time.realtimeSinceStartup, finish = began + 600;
+            float until = began + 90;
+            ConversationSessionController c = null;
+            Flylingual.PlayScreen.TitleScreen title = null;
+            while (Time.realtimeSinceStartup < until)
+            {
+                c = FindAnyObjectByType<ConversationSessionController>();
+                title = FindAnyObjectByType<Flylingual.PlayScreen.TitleScreen>();
+                if (title != null && title.CanStart && c != null) break;
+                yield return null;
+            }
+            var demo = FindAnyObjectByType<FlyVisualDemo.WindowsReplayDemo>();
+            var stage = FindAnyObjectByType<Flylingual.BlindSugarRun.BlindSugarRunSession>();
+            var route = stage == null ? null : stage.GetComponent<Flylingual.BlindSugarRun.BlindSugarRunRouteHint>();
+            var body = c == null ? null : c.GetComponent<NativeConversationBody>();
+            r.initialPosition = demo == null || demo.body == null ? Vector3.zero : demo.body.Position;
+            if (title != null && title.CanStart)
+            {
+                title.StartGame(); yield return null;
+                if (Flylingual.PlayScreen.TitleScreen.BlocksGameplay) { title.StartGame(); yield return null; }
+            }
+            r.titleStarted = !Flylingual.PlayScreen.TitleScreen.BlocksGameplay;
+            r.microphoneDisabled = c != null && c.MicrophoneCaptureDisabled;
+            if (!r.titleStarted || !r.microphoneDisabled || c == null || !c.BodyControlActive
+                || stage == null || route == null || body == null || demo == null || demo.body == null
+                || demo.controller == null || demo.live == null)
+                r.error = "full_course_requires_ready_real_body_route_and_no_microphone";
+            else
+            {
+                FullCourseRequest pending = null;
+                int appliedBefore = c.AppliedActions;
+                float nextSample = 0, unavailableSince = -1, nextRequestAt = Time.realtimeSinceStartup + 1;
+                Vector3 previousPosition = demo.body.Position;
+                Action<string> request = action =>
+                {
+                    string text = action == "FORWARD" ? "Move forward for 6 seconds"
+                        : action == "TURN_R" ? "Turn right for 1 second"
+                        : action == "TURN_L" ? "Turn left for 1 second" : "Stop";
+                    pending = new FullCourseRequest { action = action, text = text, requestedAt = Time.realtimeSinceStartup - began };
+                    r.requests.Add(pending); appliedBefore = c.AppliedActions;
+                    c.SendPlayerText(text); nextRequestAt = Time.realtimeSinceStartup + .3f;
+                    File.WriteAllText(path, JsonUtility.ToJson(r, true));
+                };
+                while (Time.realtimeSinceStartup < finish)
+                {
+                    float now = Time.realtimeSinceStartup;
+                    var state = stage.State;
+                    var reveal = stage.GetComponent<Flylingual.BlindSugarRun.BlindSugarRunReveal>();
+                    r.goalConfirmed |= state == Flylingual.BlindSugarRun.BlindSugarRunSession.StageState.Goal
+                        || state == Flylingual.BlindSugarRun.BlindSugarRunSession.StageState.Reveal;
+                    r.revealComplete |= r.goalConfirmed && reveal != null && reveal.Complete;
+                    bool playing = state == Flylingual.BlindSugarRun.BlindSugarRunSession.StageState.Playing;
+                    bool liveSource = demo.controller.MotorSource == demo.live;
+                    if (playing)
+                    {
+                        r.liveSourceMaintained &= liveSource;
+                        r.freshBrainMaintained &= c.HasFreshBrain;
+                    }
+                    Vector3 point;
+                    bool valid = route.TryGetWaypoint(out point);
+                    string desired = route.RecommendedAction;
+                    Vector3 position = demo.body.Position;
+                    r.travelledMeters += Vector3.ProjectOnPlane(position - previousPosition, Vector3.up).magnitude;
+                    previousPosition = position;
+                    if (now >= nextSample)
+                    {
+                        r.samples.Add(new FullCourseSample { elapsed = now - began, position = position, waypoint = point,
+                            waypointValid = valid, recommendation = desired, stage = state.ToString(), sequence = c.Sequence,
+                            appliedAction = c.LastAppliedAction, executionId = c.ActiveExecution?.executionId,
+                            ready = c.Ready, rawBrainReady = c.BrainReady, freshBrain = c.HasFreshBrain,
+                            frameAgeMs = c.FrameAgeMs, liveSource = liveSource, error = c.Error, protocolError = c.SchemaError });
+                        r.elapsed = now - began; r.finalPosition = position; r.finalStage = state.ToString();
+                        File.WriteAllText(path, JsonUtility.ToJson(r, true)); nextSample = now + 1;
+                    }
+                    if (r.revealComplete) break;
+                    if (r.goalConfirmed) { yield return null; continue; }
+                    if (!playing) { r.error = "stage_" + state; break; }
+                    if (!c.HasFreshBrain || !liveSource || !c.BodyControlActive || !body.BodyActive
+                        || !string.IsNullOrEmpty(c.SchemaError) || !string.IsNullOrEmpty(body.Fault))
+                    { r.error = c.SchemaError ?? body.Fault ?? c.Error ?? "live_body_or_freshness_lost"; break; }
+                    if (pending != null && !pending.applied)
+                    {
+                        pending.applied = c.AppliedActions > appliedBefore && c.LastAppliedAction == pending.action
+                            && c.LastAppliedSequence > 0 && body.TcpSequence >= c.LastAppliedSequence;
+                        if (pending.applied)
+                        {
+                            pending.appliedAt = now - began; pending.appliedRequestId = c.LastAppliedRequestId;
+                            pending.appliedSequence = c.LastAppliedSequence;
+                        }
+                        else if (now - began - pending.requestedAt > 15)
+                        { r.error = "action_apply_timeout_" + pending.action; break; }
+                    }
+                    if (!valid || desired == null)
+                    {
+                        if (unavailableSince < 0) unavailableSince = now;
+                        if (now - unavailableSince > 20) { r.error = "route_hint_unavailable"; break; }
+                        desired = "STOP";
+                    }
+                    else unavailableSince = -1;
+                    if (pending != null && pending.applied)
+                    {
+                        // Stop takes priority when the observed route changes or becomes unsafe.
+                        if (pending.action != "STOP" && desired != pending.action && now >= nextRequestAt)
+                            request("STOP");
+                        else if (c.ActiveExecution == null && now - began - pending.appliedAt >= .5f)
+                            pending = null;
+                    }
+                    if (pending == null && now >= nextRequestAt)
+                    {
+                        if (desired == "STOP" && c.LastAppliedAction == "STOP") nextRequestAt = now + .3f;
+                        else request(desired);
+                    }
+                    yield return null;
+                }
+                if (!r.revealComplete && string.IsNullOrEmpty(r.error)) r.error = "full_course_timeout_600s";
+                r.backend = c.Backend; r.finalStage = stage.State.ToString(); r.attempt = stage.Attempt; r.deaths = stage.Deaths;
+                r.finalPosition = demo.body.Position;
+            }
+            if (c != null)
+            {
+                c.EmergencyStop();
+                until = Time.realtimeSinceStartup + 3;
+                while (Time.realtimeSinceStartup < until && (c.BodyControlActive || c.ConversationActive)) yield return null;
+                r.finalStopped = !c.BodyControlActive && (body == null || !body.BodyActive);
+            }
+            r.elapsed = Time.realtimeSinceStartup - began;
+            r.result = r.goalConfirmed && r.revealComplete && r.finalStopped && r.liveSourceMaintained
+                && r.freshBrainMaintained && string.IsNullOrEmpty(r.error) ? "full_course_live_brain_clear" : "incomplete";
+            File.WriteAllText(path, JsonUtility.ToJson(r, true));
+            Debug.Log("FULL_COURSE_PROBE " + r.result);
+            if (Array.IndexOf(Environment.GetCommandLineArgs(), "-flyConversationProbeQuit") >= 0) Application.Quit();
+        }
+        [Serializable] sealed class EnglishRouteSample
+        {
+            public string phase, action, executionId, source, error, protocolError;
+            public float elapsed, frameAgeMs, horizontalDistance;
+            public long sequence, appliedSequence;
+            public int requestId, epoch, generation;
+            public bool ready, rawBrainReady, freshBrain, bodyActive;
+        }
+        [Serializable] sealed class EnglishRouteReport
+        {
+            public string result = "incomplete", error, backend, language, questionCaption;
+            public string brainEndpoint = "127.0.0.1:18766";
+            public string ambiguousText = "Take me to the finish, please";
+            public string questionText = "Why do flies have six legs?";
+            public string fallbackAttribution = "Requires Bridge goal_route_fallback_started action/commandId log correlation with this probe time and applied request";
+            public bool titleStarted, englishUi, legacyJapaneseRequestIgnored, noLanguageToggle, microphoneDisabled, rawBrainReady;
+            public bool ambiguousApplied, ambiguousMoved, stopApplied, forwardApplied, questionKeptExecution, responseObserved, finalStopped;
+            public bool liveSourceMaintained = true, freshBrainMaintained = true;
+            public float elapsed, ambiguousDistance, questionDistance;
+            public long questionTranscriptDeltas;
+            public List<string> uiLabels = new List<string>();
+            public List<EnglishRouteSample> samples = new List<EnglishRouteSample>();
+        }
+
+        IEnumerator RunEnglishRouteProbe(string path)
+        {
+            var r = new EnglishRouteReport();
+            float began = Time.realtimeSinceStartup, finish = began + 90;
+            var title = FindAnyObjectByType<Flylingual.PlayScreen.TitleScreen>();
+            ConversationSessionController c = null;
+            float until = Mathf.Min(finish, began + 40);
+            while (Time.realtimeSinceStartup < until)
+            {
+                c = FindAnyObjectByType<ConversationSessionController>();
+                if (title == null) title = FindAnyObjectByType<Flylingual.PlayScreen.TitleScreen>();
+                if (title != null && title.CanStart && c != null) break;
+                yield return null;
+            }
+            var demo = FindAnyObjectByType<FlyVisualDemo.WindowsReplayDemo>();
+            var body = c == null ? null : c.GetComponent<NativeConversationBody>();
+            if (title != null && title.CanStart)
+            {
+                title.StartGame(); yield return null;
+                if (Flylingual.PlayScreen.TitleScreen.BlocksGameplay) { title.StartGame(); yield return null; }
+            }
+            r.titleStarted = !Flylingual.PlayScreen.TitleScreen.BlocksGameplay;
+            Flylingual.PlayScreen.GameLanguage.SetLanguage("ja");
+            r.legacyJapaneseRequestIgnored = Flylingual.PlayScreen.GameLanguage.Code == "en";
+            r.language = c == null ? null : c.Settings.language;
+            r.englishUi = Flylingual.PlayScreen.GameLanguage.Code == "en" && r.language == "en";
+            r.noLanguageToggle = true;
+            int documents = 0;
+            foreach (var doc in FindObjectsByType<UIDocument>(FindObjectsSortMode.None))
+            {
+                documents++;
+                var root = doc.rootVisualElement;
+                r.noLanguageToggle &= root.Q("language-ja") == null && root.Q("language-en") == null;
+                foreach (var field in root.Query<DropdownField>().ToList())
+                    r.noLanguageToggle &= field.label != "Language" && field.label != "言語";
+                foreach (var label in root.Query<TextElement>().ToList())
+                {
+                    if (string.IsNullOrEmpty(label.text)) continue;
+                    r.uiLabels.Add(label.text);
+                    r.englishUi &= !System.Text.RegularExpressions.Regex.IsMatch(label.text, "[ぁ-んァ-ヶ一-龯]");
+                }
+            }
+            r.noLanguageToggle &= documents > 0;
+            r.microphoneDisabled = c != null && c.MicrophoneCaptureDisabled;
+            if (!r.titleStarted || c == null || !r.microphoneDisabled || demo == null || demo.body == null
+                || demo.controller == null || demo.live == null || body == null || !c.BodyControlActive)
+                r.error = "requires_ready_title_no_microphone_and_real_body";
+            else
+            {
+                Vector3 origin = demo.body.Position;
+                Action<string> sample = phase =>
+                {
+                    bool live = demo.controller.MotorSource == demo.live;
+                    r.liveSourceMaintained &= live;
+                    r.freshBrainMaintained &= c.HasFreshBrain;
+                    r.samples.Add(new EnglishRouteSample { phase = phase, elapsed = Time.realtimeSinceStartup - began,
+                        action = c.LastAppliedAction, executionId = c.ActiveExecution?.executionId,
+                        source = live ? "LiveTcp" : "other", sequence = c.Sequence, appliedSequence = c.LastAppliedSequence,
+                        requestId = c.LastAppliedRequestId, epoch = c.ControlEpoch, generation = c.ConversationGeneration,
+                        ready = c.Ready, rawBrainReady = c.BrainReady, freshBrain = c.HasFreshBrain,
+                        bodyActive = c.BodyControlActive && body.BodyActive, frameAgeMs = c.FrameAgeMs,
+                        error = c.Error, protocolError = c.SchemaError,
+                        horizontalDistance = Vector3.ProjectOnPlane(demo.body.Position - origin, Vector3.up).magnitude });
+                    File.WriteAllText(path, JsonUtility.ToJson(r, true));
+                };
+                sample("ready");
+                // Let the normal route sensor publish; no route, pose or motor is injected.
+                yield return new WaitForSecondsRealtime(1);
+                int applied = c.AppliedActions;
+                c.SendPlayerText(r.ambiguousText);
+                until = Mathf.Min(finish - 5, Time.realtimeSinceStartup + 18);
+                float nextSample = 0;
+                while (Time.realtimeSinceStartup < until && c.BodyControlActive)
+                {
+                    r.ambiguousApplied |= c.AppliedActions > applied && c.LastAppliedAction != "STOP"
+                        && c.LastAppliedSequence > 0 && body.TcpSequence >= c.LastAppliedSequence;
+                    r.ambiguousDistance = Vector3.ProjectOnPlane(demo.body.Position - origin, Vector3.up).magnitude;
+                    r.ambiguousMoved = r.ambiguousApplied && r.ambiguousDistance > .001f;
+                    if (Time.realtimeSinceStartup >= nextSample) { sample("ambiguous"); nextSample = Time.realtimeSinceStartup + .25f; }
+                    if (r.ambiguousMoved) break;
+                    yield return null;
+                }
+                sample("ambiguous_end");
+                applied = c.AppliedActions;
+                c.SendPlayerText("Stop");
+                until = Mathf.Min(finish - 5, Time.realtimeSinceStartup + 8);
+                while (Time.realtimeSinceStartup < until && c.BodyControlActive)
+                {
+                    r.stopApplied = c.AppliedActions > applied && c.LastAppliedAction == "STOP"
+                        && c.LastAppliedSequence > 0 && body.TcpSequence >= c.LastAppliedSequence;
+                    if (r.stopApplied) break;
+                    yield return null;
+                }
+                sample("stop");
+                if (r.stopApplied && Time.realtimeSinceStartup < finish - 15)
+                {
+                    applied = c.AppliedActions;
+                    c.SendPlayerText("Move forward for 8 seconds");
+                    until = Mathf.Min(finish - 8, Time.realtimeSinceStartup + 10);
+                    while (Time.realtimeSinceStartup < until && c.BodyControlActive)
+                    {
+                        r.forwardApplied = c.AppliedActions > applied && c.LastAppliedAction == "FORWARD"
+                            && c.LastAppliedSequence > 0 && body.TcpSequence >= c.LastAppliedSequence
+                            && c.ActiveExecution != null && c.ActiveExecution.action == "FORWARD";
+                        if (r.forwardApplied) break;
+                        yield return null;
+                    }
+                    sample("forward");
+                    if (r.forwardApplied)
+                    {
+                        string execution = c.ActiveExecution.executionId;
+                        int epoch = c.ControlEpoch, generation = c.ConversationGeneration;
+                        long deltas = c.ReceivedAssistantTranscriptDeltas;
+                        Vector3 questionOrigin = demo.body.Position;
+                        c.SendPlayerText(r.questionText);
+                        r.questionKeptExecution = true;
+                        until = Mathf.Min(finish - 3, Time.realtimeSinceStartup + 3);
+                        nextSample = 0;
+                        while (Time.realtimeSinceStartup < until)
+                        {
+                            r.questionKeptExecution &= c.BodyControlActive && c.ControlEpoch == epoch
+                                && c.ConversationGeneration == generation && c.ActiveExecution != null
+                                && c.ActiveExecution.executionId == execution && c.ActiveExecution.action == "FORWARD";
+                            if (Time.realtimeSinceStartup >= nextSample) { sample("question"); nextSample = Time.realtimeSinceStartup + .25f; }
+                            yield return null;
+                        }
+                        r.questionDistance = Vector3.ProjectOnPlane(demo.body.Position - questionOrigin, Vector3.up).magnitude;
+                        until = Mathf.Min(finish - 3, Time.realtimeSinceStartup + 5);
+                        while (Time.realtimeSinceStartup < until && c.ReceivedAssistantTranscriptDeltas <= deltas) yield return null;
+                        r.questionTranscriptDeltas = c.ReceivedAssistantTranscriptDeltas - deltas;
+                        r.questionCaption = c.Caption;
+                        r.responseObserved = r.questionTranscriptDeltas > 0;
+                        sample("question_end");
+                    }
+                }
+                r.backend = c.Backend; r.rawBrainReady = c.BrainReady;
+                if (string.IsNullOrEmpty(r.error)) r.error = c.Error ?? c.SchemaError;
+            }
+            if (c != null)
+            {
+                c.EmergencyStop();
+                until = Mathf.Min(finish, Time.realtimeSinceStartup + 3);
+                while (Time.realtimeSinceStartup < until && (c.BodyControlActive || c.ConversationActive)) yield return null;
+                r.finalStopped = !c.BodyControlActive && (body == null || !body.BodyActive);
+            }
+            r.elapsed = Time.realtimeSinceStartup - began;
+            r.result = r.titleStarted && r.englishUi && r.legacyJapaneseRequestIgnored && r.noLanguageToggle && r.ambiguousMoved && r.stopApplied
+                && r.forwardApplied && r.questionKeptExecution && r.questionDistance > .001f && r.responseObserved
+                && r.finalStopped && r.liveSourceMaintained && r.freshBrainMaintained && string.IsNullOrEmpty(r.error)
+                ? "english_route_behavior_pass_pending_bridge_attribution" : "incomplete";
+            File.WriteAllText(path, JsonUtility.ToJson(r, true));
+            Debug.Log("ENGLISH_ROUTE_PROBE " + r.result);
+            if (Array.IndexOf(Environment.GetCommandLineArgs(), "-flyConversationProbeQuit") >= 0) Application.Quit();
+        }
         [Serializable] sealed class TitleConnectionReport
         {
             public string result = "incomplete", error, backend, status;

@@ -16,6 +16,10 @@ public sealed class HayeringualBuildWindow : EditorWindow
     [MenuItem("Flylingual/Build Channels/Configure Windows Build")]
     public static void Open() => GetWindow<HayeringualBuildWindow>("Hayeringual Build");
 
+    // Batch entry point uses the same settings as the submitted Windows edition.
+    public static void BuildSubmission() => Build(HayeringualBuildChannel.Judge,
+        HayeringualLlmProvider.Cloud, "https://hayeringual-api.vercel.app/api/fly/translate");
+
     private void OnGUI()
     {
         var selected = (HayeringualBuildChannel)EditorGUILayout.EnumPopup("Channel", channel);

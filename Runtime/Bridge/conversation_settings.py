@@ -10,7 +10,7 @@ from .persona_presets import PRESET_PERSONAS
 
 MAX_PERSONA_TEXT_LENGTH = 800
 DEFAULT_SETTINGS = {
-    "language": "ja",
+    "language": "en",
     "voice": "marin",
     "persona": "friendly",
     "personaText": "",

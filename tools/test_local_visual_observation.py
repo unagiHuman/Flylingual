@@ -23,6 +23,26 @@ def event(sequence=1, age=0):
 
 
 class LocalVisualObservationTests(unittest.TestCase):
+    def test_english_non_bridge_descriptions_and_announcements(self):
+        for kind in ('discovery', 'memory', 'hazard'):
+            observation = LocalVisualObservation()
+            sample = event()
+            sample['facts']['revisited'] = kind == 'memory'
+            sample['facts']['directions'][0].update(surface='book', distance=.5,
+                edge='near' if kind == 'hazard' else 'clear', edgeDistance=.3,
+                trend='closer', alignment='left', slope='up')
+            observation.accept(sample, now=100)
+            description = observation.describe('front', 'en', now=100)
+            self.assertIn('book', description)
+            self.assertIn('uphill', description)
+            self.assertTrue(description.isascii())
+            announcement = observation.announcement(now=100, language='en')
+            self.assertEqual(announcement['kind'], kind)
+            self.assertTrue(announcement['facts']['text'].isascii())
+            self.assertNotIn("I'm steady", announcement['facts']['text'])
+            self.assertTrue(observation.describe('all', 'en', now=100).isascii())
+            self.assertTrue(observation.describe('back', 'en', now=100).isascii())
+
     def test_accept_and_expiry(self):
         observation = LocalVisualObservation()
         observation.accept(event(), now=100)
@@ -197,8 +217,8 @@ class BridgeAnnouncementPriorityTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(bridge.local_visual.sequence, 2)
         bridge.conversation.append.assert_awaited_once()
         self.assertEqual(bridge.conversation.append.await_args.args[0], 'commentary')
-        self.assertIn('橋', bridge.conversation.append.await_args.args[1])
-        self.assertIn('少し右', bridge.conversation.append.await_args.args[1])
+        self.assertIn('bridge (ruler)', bridge.conversation.append.await_args.args[1])
+        self.assertIn('slightly right', bridge.conversation.append.await_args.args[1])
         sample['sequence'] = 3
         await bridge.accept_local_visual_observation(sample)
         bridge.conversation.append.assert_awaited_once()

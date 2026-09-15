@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Private Windows supervisor launched by a Unity conversation Player.
 
-The helper only owns the Bridge process it creates (and the Brain child created by
-``dev.py --launch-brain``).  It deliberately refuses occupied ports so it never
-attaches to, or kills, a pre-existing local stack.
+The helper owns only its Bridge process, its Brain child created by
+``dev.py --launch-brain``, and when configured, its pinned local llama.cpp child.
+It deliberately refuses occupied ports so it never attaches to, or kills, a
+pre-existing local stack.
 """
 from __future__ import annotations
 
@@ -23,6 +24,11 @@ try:
     from tools.windows_native_job import JobError, KillOnCloseJob
 except ModuleNotFoundError:
     from windows_native_job import JobError, KillOnCloseJob
+
+try:
+    from tools.native_local_intent import LocalIntentAborted, LocalIntentError, specification as local_intent_specification
+except ModuleNotFoundError:
+    from native_local_intent import LocalIntentAborted, LocalIntentError, specification as local_intent_specification
 
 try:
     import psutil
@@ -253,6 +259,12 @@ def launch(stack: dict[str, Any], status: Path, stop: Path, heartbeat: Path, own
         raise NativeError("conversation.mode=live requires an existing keyFile")
     ports = [config["brain"]["port"], config["bridge"]["tcpPort"], config["bridge"]["controlPort"]]
     assert_ports_free(ports)
+    try:
+        local_intent = local_intent_specification(config)
+        if local_intent is not None:
+            local_intent.assert_startable()
+    except LocalIntentError as exc:
+        raise NativeError(str(exc)) from exc
     status.parent.mkdir(parents=True, exist_ok=True)
     stop.unlink(missing_ok=True)
     heartbeat.touch()
@@ -265,7 +277,22 @@ def launch(stack: dict[str, Any], status: Path, stop: Path, heartbeat: Path, own
     job = KillOnCloseJob()
     job.assign_current_process()
     process: subprocess.Popen[str] | None = None
+    def launch_still_owned() -> bool:
+        if stop.exists() or not owner_alive(owner_pid, owner_created):
+            return False
+        try:
+            return time.time() - heartbeat.stat().st_mtime <= stack["heartbeatSeconds"]
+        except OSError:
+            return False
     try:
+        if local_intent is not None:
+            try:
+                local_intent.start(stack["bridgePython"], status.parent / "local-intent.log", stack["startupSeconds"],
+                                   launch_still_owned, scrubbed_environment())
+            except LocalIntentAborted:
+                return 0
+            except LocalIntentError as exc:
+                raise NativeError(str(exc)) from exc
         with log.open("w", encoding="utf-8", newline="\n") as output:
             process = subprocess.Popen(command, cwd=ROOT, env=scrubbed_environment(), stdin=subprocess.DEVNULL,
                                        stdout=output, stderr=subprocess.STDOUT, text=True,
@@ -307,6 +334,8 @@ def launch(stack: dict[str, Any], status: Path, stop: Path, heartbeat: Path, own
     finally:
         if process is not None:
             graceful_stop(process, stop, status)
+        if local_intent is not None:
+            local_intent.stop()
         # Do not close ``job`` here.  This process belongs to KILL_ON_CLOSE; its
         # final handle closes on interpreter exit after the status handoff, which
         # forcibly removes any Bridge/Brain survivor without touching other jobs.

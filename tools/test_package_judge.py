@@ -41,6 +41,20 @@ class PackageConfigurationTests(unittest.TestCase):
                     if (ROOT / local).is_file():
                         self.assertIn(local, packaged, f'{path} imports missing local module {local}')
 
+    def test_packaged_launcher_import_closure(self):
+        packaged = self.packaged_sources()
+        for path in packaged:
+            if path.parent != Path('tools') or path.suffix != '.py':
+                continue
+            tree = ast.parse((ROOT / path).read_text(encoding='utf-8'))
+            for node in ast.walk(tree):
+                modules = ([item.name for item in node.names] if isinstance(node, ast.Import)
+                           else [node.module] if isinstance(node, ast.ImportFrom) and node.module else [])
+                for module in modules:
+                    local = Path('tools') / (module.removeprefix('tools.').split('.')[0] + '.py')
+                    if (ROOT / local).is_file():
+                        self.assertIn(local, packaged, f'{path} imports missing local module {local}')
+
     def test_relative_public_config(self):
         bridge, native = configurations('https://judge.example/api/fly/translate')
         self.assertEqual(bridge['conversation']['mode'], 'text')

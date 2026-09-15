@@ -20,6 +20,7 @@ namespace Flylingual.Conversation
             public string id, file, sha256, expectedAction, utterance, expectedKind, expectedPlan;
             public double durationSeconds;
             [NonSerialized] public VoiceFixtureClip clip;
+            [NonSerialized] public AudioClip monitorClip;
         }
         [Serializable] sealed class Control
         {
@@ -85,6 +86,7 @@ namespace Flylingual.Conversation
             public string interpretRoute;
             public double acceptedExecutionDurationMs, submittedToExpiryMs;
             public bool applied, bodyStarted, settled, expired, continuedListening, voiceStopBeforeExpiry, executionUpdated;
+            public bool replyStarted, replyCompleted;
             public bool recognizedMatchesFixture;
             public int recognizedCharacterCount;
             public string diagnosticTranscript;
@@ -121,6 +123,7 @@ namespace Flylingual.Conversation
             public long sentFixtureAudioChunks, sentPcmSamples;
             public double startedAt, endedAt, requestedSeconds, minSendIntervalMs, maxSendIntervalMs;
             public double persistentObservationSeconds;
+            public bool monitorFixtures;
             public string timing = "Unity realtime clock; Bridge monotonic clock recorded separately";
             public string limitation = "Synthetic PCM is not a physical microphone test. Process cleanup belongs to the runner.";
             public List<Case> cases = new List<Case>();
@@ -169,9 +172,13 @@ namespace Flylingual.Conversation
         int chunkIndex, audioEpoch, audioGeneration;
         long sampleCursor;
         double nextAudioAt, audioNotBefore, previousAudioAt = -1, nextObservationAt, deadline;
-        bool running, quit, observationEnabled, textDiagnosticsEnabled;
+        bool running, quit, observationEnabled, textDiagnosticsEnabled, monitorFixtures;
         bool scriptProducerConflict;
+        string recordingGatePath;
+        double recordingStartedAt = -1;
         ActiveExecution activeExecution;
+        GameObject monitorObject;
+        AudioSource monitorSource;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         static void Bootstrap()
@@ -195,14 +202,32 @@ namespace Flylingual.Conversation
             }
             if (controller == null || !controller.Ready || body == null || demo == null || demo.body == null)
             { yield return FinishRun("startup_unavailable"); yield break; }
+            if (!string.IsNullOrEmpty(recordingGatePath))
+            {
+                File.WriteAllText(Path.Combine(outputDirectory, "recording-ready.txt"), "ready\n", new UTF8Encoding(false));
+                Log("recording_gate_ready", null);
+                double gateDeadline = Now + 300;
+                while (!File.Exists(recordingGatePath) && Now < gateDeadline) yield return null;
+                if (!File.Exists(recordingGatePath)) { yield return FinishRun("recording_gate_timeout"); yield break; }
+                recordingStartedAt = Now;
+                deadline = Now + report.requestedSeconds;
+                startupDeadline = Now + 80;
+                Log("recording_gate_opened", null);
+            }
+            if (report.suite == "english-demo" || report.suite == "english-chat-demo")
+            {
+                bool titleStarted = false;
+                yield return EnterEnglishDemoGameplay(value => titleStarted = value);
+                if (!titleStarted) { yield return FinishRunAfterRecording("title_screen_blocked"); yield break; }
+            }
             controller.ControlEventReceived += OnControl;
             observationEnabled = controller.EnableVoiceTestObservation();
             if (!controller.FixtureInputEnabled || !observationEnabled)
-            { yield return FinishRun("fixture_observation_unavailable"); yield break; }
+            { yield return FinishRunAfterRecording("fixture_observation_unavailable"); yield break; }
             running = true;
             nextAudioAt = Now;
             while (Now < startupDeadline && !CanObserve()) yield return null;
-            if (!CanObserve()) { yield return FinishRun("fresh_live_control_unavailable"); yield break; }
+            if (!CanObserve()) { yield return FinishRunAfterRecording("fresh_live_control_unavailable"); yield break; }
             report.backend = controller.Backend;
             report.brainReady = controller.BrainReady;
             report.brainSessionId = controller.BrainSessionId;
@@ -210,7 +235,7 @@ namespace Flylingual.Conversation
             bool initialStop = false;
             yield return WaitStopped(20, value => initialStop = value);
             report.startupFreshStop = initialStop;
-            if (!initialStop) { yield return FinishRun("startup_stop_not_observed"); yield break; }
+            if (!initialStop) { yield return FinishRunAfterRecording("startup_stop_not_observed"); yield break; }
             CaptureBaseline();
 
             if (report.suite == "script_interrupt") yield return RunScriptInterrupt();
@@ -218,6 +243,8 @@ namespace Flylingual.Conversation
             else if (report.suite == "duration") yield return RunDuration();
             else if (report.suite == "persistent") yield return RunPersistent();
             else if (report.suite == "handoff") yield return RunPersistent(3);
+            else if (report.suite == "english-demo") yield return RunEnglishDemo();
+            else if (report.suite == "english-chat-demo") yield return RunEnglishChatDemo();
             else
             {
                 yield return RunSmoke();
@@ -237,7 +264,7 @@ namespace Flylingual.Conversation
                     }
                 }
             }
-            yield return FinishRun(report.error);
+            yield return FinishRunAfterRecording(report.error);
         }
 
         IEnumerator FinishRun(string error)
@@ -258,10 +285,18 @@ namespace Flylingual.Conversation
             if (quit) Application.Quit();
         }
 
+        IEnumerator FinishRunAfterRecording(string error)
+        {
+            yield return HoldRecordingMinimum();
+            yield return FinishRun(error);
+        }
+
         bool Initialize()
         {
             quit = Array.IndexOf(Environment.GetCommandLineArgs(), "-flyVoiceFixtureQuit") >= 0;
             textDiagnosticsEnabled = Array.IndexOf(Environment.GetCommandLineArgs(), "-flyVoiceFixtureTextDiagnostics") >= 0;
+            monitorFixtures = Array.IndexOf(Environment.GetCommandLineArgs(), "-flyVoiceFixtureMonitor") >= 0;
+            recordingGatePath = Argument("-flyVoiceRecordingGate");
             try
             {
                 string path = Path.GetFullPath(Argument("-flyVoiceFixtures"));
@@ -271,14 +306,18 @@ namespace Flylingual.Conversation
                 Directory.CreateDirectory(outputDirectory);
                 if (File.Exists(Path.Combine(outputDirectory, "report.json"))) throw new ArgumentException("output_already_contains_report");
                 string suite = Argument("-flyVoiceFixtureSuite") ?? "smoke";
-                if (suite != "smoke" && suite != "full" && suite != "soak" && suite != "plans" && suite != "duration" && suite != "persistent" && suite != "handoff" && suite != "script_interrupt") throw new ArgumentException("invalid_suite");
-                double seconds = suite == "full" ? 900 : suite == "soak" ? 300 : suite == "duration" ? 180 : suite == "persistent" ? 180 : (suite == "handoff" || suite == "script_interrupt") ? 120 : 240;
+                if (suite != "smoke" && suite != "full" && suite != "soak" && suite != "plans" && suite != "duration" && suite != "persistent" && suite != "handoff" && suite != "script_interrupt" && suite != "english-demo" && suite != "english-chat-demo") throw new ArgumentException("invalid_suite");
+                if (!string.IsNullOrEmpty(recordingGatePath) && suite != "english-demo" && suite != "english-chat-demo") throw new ArgumentException("recording_gate_requires_english_suite");
+                if (!string.IsNullOrEmpty(recordingGatePath)) recordingGatePath = Path.GetFullPath(recordingGatePath);
+                double seconds = suite == "full" ? 900 : suite == "soak" ? 300 : suite == "duration" ? 180 : suite == "persistent" ? 180 : (suite == "handoff" || suite == "script_interrupt" || suite == "english-demo" || suite == "english-chat-demo") ? 120 : 240;
                 string duration = Argument("-flyVoiceFixtureSeconds");
                 if (duration != null && (!double.TryParse(duration, NumberStyles.Float, CultureInfo.InvariantCulture, out seconds)
                     || double.IsNaN(seconds) || double.IsInfinity(seconds) || seconds < 1 || seconds > 3600)) throw new ArgumentException("invalid_duration");
                 if (suite == "persistent" && seconds < 120) throw new ArgumentException("persistent_duration_too_short");
-                report = new Report { suite = suite, manifest = path, startedAt = Now, requestedSeconds = seconds };
+                report = new Report { suite = suite, manifest = path, startedAt = Now, requestedSeconds = seconds, monitorFixtures = monitorFixtures };
                 if (suite == "handoff") report.limitation += " Short audio handoff diagnostic with a 3-second initial hold; not evidence for the 60-second persistent gate.";
+                if (suite == "english-demo") report.limitation += " English demo verifies four bounded action/STOP fixtures; the optional nudge plan remains outside this initial action smoke.";
+                if (suite == "english-chat-demo") report.limitation += " Question cases prove transcript candidate timing and reply playback, not a provider response ID or semantic answer quality.";
                 using (var sha = SHA256.Create()) report.manifestSha256 = BitConverter.ToString(sha.ComputeHash(File.ReadAllBytes(path))).Replace("-", "").ToLowerInvariant();
                 deadline = Now + seconds;
                 events = Writer("events.jsonl"); observations = Writer("observations.jsonl");
@@ -296,7 +335,7 @@ namespace Flylingual.Conversation
                     fixture.clip = VoiceFixtureClip.Load(resolved, fixture.sha256);
                     if (fixture.clip.Chunks == null || fixture.clip.Chunks.Length == 0) throw new ArgumentException("empty_fixture");
                     if (fixture.expectedKind == null) fixture.expectedKind = "action";
-                    if (fixture.expectedKind != "action" && fixture.expectedKind != "plan" && fixture.expectedKind != "update") throw new ArgumentException("invalid_expected_kind");
+                    if (fixture.expectedKind != "action" && fixture.expectedKind != "plan" && fixture.expectedKind != "update" && fixture.expectedKind != "question") throw new ArgumentException("invalid_expected_kind");
                     if (fixture.expectedKind == "action" && !IsAction(fixture.expectedAction)) throw new ArgumentException("invalid_expected_action");
                     if (fixture.expectedKind == "plan" && !IsPlan(fixture.expectedPlan)) throw new ArgumentException("invalid_expected_plan");
                     if (fixture.expectedKind == "update" && !IsAction(fixture.expectedAction)) throw new ArgumentException("invalid_expected_action");
@@ -304,7 +343,9 @@ namespace Flylingual.Conversation
                 }
                 string[] required = suite == "script_interrupt" ? new[] { "stop" } : suite == "plans" ? Array.Empty<string>() : (suite == "persistent" || suite == "handoff")
                     ? new[] { "persistent_forward", "persistent_continue", "persistent_conditions", "stop", "forward8" } : suite == "duration"
-                    ? new[] { "forward_default", "right_default", "left_default" } : suite == "full"
+                    ? new[] { "forward_default", "right_default", "left_default" } : suite == "english-chat-demo"
+                    ? new[] { "02_continue", "10_mood", "11_hungry", "07_stop", "12_fly_life", "05_resume" } : suite == "english-demo"
+                    ? new[] { "02_continue", "07_stop", "05_resume" } : suite == "full"
                     ? new[] { "stop", "forward8", "right8", "ambiguous_forward", "ambiguous_right", "left8", "forward_right8", "forward_left8" }
                     : new[] { "stop", "forward8", "right8", "ambiguous_forward", "ambiguous_right" };
                 foreach (string id in required) if (!fixtures.ContainsKey(id)) throw new ArgumentException("required_fixture_missing");
@@ -331,6 +372,29 @@ namespace Flylingual.Conversation
                 narrator.enabled = false;
                 if (report != null) report.scriptNarratorsDisabled++;
             }
+        }
+
+        IEnumerator EnterEnglishDemoGameplay(Action<bool> done)
+        {
+            int presses = 0;
+            double until = Math.Min(deadline, Now + 20);
+            while (Flylingual.PlayScreen.TitleScreen.BlocksGameplay && Now < until)
+            {
+                if (presses < 2)
+                {
+                    var title = FindAnyObjectByType<Flylingual.PlayScreen.TitleScreen>();
+                    if (title != null && title.CanStart) { title.StartGame(); presses++; }
+                }
+                yield return null;
+            }
+            done(!Flylingual.PlayScreen.TitleScreen.BlocksGameplay);
+        }
+
+        IEnumerator HoldRecordingMinimum()
+        {
+            if (recordingStartedAt < 0) yield break;
+            double recordingUntil = recordingStartedAt + 60;
+            while (Now < recordingUntil) yield return null;
         }
 
         IEnumerator RunScriptInterrupt()
@@ -427,6 +491,168 @@ namespace Flylingual.Conversation
                 Save();
             }
         }
+
+        // English demo is intentionally a short functional sequence, not a transcript or microphone test.
+        // Each step still uses the same fixture-to-control, real Brain-frame, movement, and STOP gates as smoke.
+        IEnumerator RunEnglishDemo()
+        {
+            Case continueCase = Begin("02_continue");
+            if (continueCase == null) yield break;
+            yield return AwaitApplied(continueCase, 20);
+            if (!continueCase.applied) { SetRunError(continueCase); yield break; }
+            double startedDeadline = Math.Min(deadline, Now + 8);
+            while (Now < startedDeadline && !continueCase.bodyStarted && Healthy(continueCase)) yield return null;
+            if (!continueCase.bodyStarted) { Fail(continueCase, "body_not_started_before_stop"); SetRunError(continueCase); yield break; }
+            EndCase(continueCase, true);
+            if (recordingStartedAt >= 0)
+            {
+                double holdUntil = Math.Min(deadline, Now + 15);
+                while (Now < holdUntil && Healthy(continueCase)) yield return null;
+                if (Now < holdUntil) { Fail(continueCase, "recording_forward_hold_unhealthy"); SetRunError(continueCase); yield break; }
+            }
+
+            Case firstStop = Begin("07_stop");
+            if (firstStop == null) yield break;
+            yield return AwaitApplied(firstStop, 20);
+            bool firstStopSettled = false;
+            if (firstStop.applied) yield return WaitStopped(20, value => firstStopSettled = value, firstStop.appliedSequence, firstStop.requestId);
+            firstStop.settled = firstStopSettled;
+            firstStop.voiceStopBeforeExpiry = firstStop.applied && NoSafetyStopBetween(continueCase.appliedAt, firstStop.appliedAt);
+            if (!firstStop.voiceStopBeforeExpiry) Fail(firstStop, "voice_stop_causality_not_confirmed");
+            if (!firstStop.settled) Fail(firstStop, "voice_stop_not_settled");
+            EndCase(firstStop, firstStop.settled && firstStop.voiceStopBeforeExpiry);
+            if (firstStop.status != "pass") { SetRunError(firstStop); yield break; }
+
+            Case resume = Begin("05_resume");
+            if (resume == null) yield break;
+            yield return AwaitApplied(resume, 20);
+            if (!resume.applied) { SetRunError(resume); yield break; }
+            double resumeDeadline = Math.Min(deadline, Now + 8);
+            while (Now < resumeDeadline && !resume.bodyStarted && Healthy(resume)) yield return null;
+            if (!resume.bodyStarted) { Fail(resume, "body_not_started_before_stop"); SetRunError(resume); yield break; }
+            EndCase(resume, true);
+
+            Case finalStop = Begin("07_stop");
+            if (finalStop == null) yield break;
+            yield return AwaitApplied(finalStop, 20);
+            bool finalStopSettled = false;
+            if (finalStop.applied) yield return WaitStopped(20, value => finalStopSettled = value, finalStop.appliedSequence, finalStop.requestId);
+            finalStop.settled = finalStopSettled;
+            finalStop.voiceStopBeforeExpiry = finalStop.applied && NoSafetyStopBetween(resume.appliedAt, finalStop.appliedAt);
+            if (!finalStop.voiceStopBeforeExpiry) Fail(finalStop, "voice_stop_causality_not_confirmed");
+            if (!finalStop.settled) Fail(finalStop, "voice_stop_not_settled");
+            EndCase(finalStop, finalStop.settled && finalStop.voiceStopBeforeExpiry);
+            if (finalStop.status != "pass") SetRunError(finalStop);
+        }
+
+        IEnumerator RunEnglishChatDemo()
+        {
+            Case forward = Begin("02_continue");
+            if (forward == null) yield break;
+            yield return AwaitApplied(forward, 20);
+            if (!forward.applied) { SetRunError(forward); yield break; }
+            double forwardDeadline = Math.Min(deadline, Now + 8);
+            while (Now < forwardDeadline && !forward.bodyStarted && Healthy(forward)) yield return null;
+            if (!forward.bodyStarted) { Fail(forward, "body_not_started_before_question"); SetRunError(forward); yield break; }
+            EndCase(forward, true);
+
+            yield return RunEnglishQuestion("10_mood");
+            if (!CanContinueChatAfterQuestion()) yield break;
+            yield return RunEnglishQuestion("11_hungry");
+            if (!CanContinueChatAfterQuestion()) yield break;
+
+            Case stop = Begin("07_stop");
+            if (stop == null) yield break;
+            yield return AwaitApplied(stop, 20);
+            bool stopped = false;
+            if (stop.applied) yield return WaitStopped(20, value => stopped = value, stop.appliedSequence, stop.requestId);
+            stop.settled = stopped;
+            stop.voiceStopBeforeExpiry = stop.applied && NoSafetyStopBetween(forward.appliedAt, stop.appliedAt);
+            if (!stop.voiceStopBeforeExpiry) Fail(stop, "voice_stop_causality_not_confirmed");
+            if (!stop.settled) Fail(stop, "voice_stop_not_settled");
+            EndCase(stop, stop.settled && stop.voiceStopBeforeExpiry);
+            if (stop.status != "pass")
+            {
+                SetRunError(stop);
+                if (!stop.applied || !stop.settled || stop.error != "voice_stop_causality_not_confirmed") yield break;
+            }
+
+            yield return RunEnglishQuestion("12_fly_life");
+            if (!CanContinueChatAfterQuestion()) yield break;
+
+            Case resume = Begin("05_resume");
+            if (resume == null) yield break;
+            yield return AwaitApplied(resume, 20);
+            if (!resume.applied) { SetRunError(resume); yield break; }
+            double resumeDeadline = Math.Min(deadline, Now + 8);
+            while (Now < resumeDeadline && !resume.bodyStarted && Healthy(resume)) yield return null;
+            if (!resume.bodyStarted) { Fail(resume, "body_not_started_before_stop"); SetRunError(resume); yield break; }
+            EndCase(resume, true);
+
+            Case finalStop = Begin("07_stop");
+            if (finalStop == null) yield break;
+            yield return AwaitApplied(finalStop, 20);
+            bool finalStopped = false;
+            if (finalStop.applied) yield return WaitStopped(20, value => finalStopped = value, finalStop.appliedSequence, finalStop.requestId);
+            finalStop.settled = finalStopped;
+            finalStop.voiceStopBeforeExpiry = finalStop.applied && NoSafetyStopBetween(resume.appliedAt, finalStop.appliedAt);
+            if (!finalStop.voiceStopBeforeExpiry) Fail(finalStop, "voice_stop_causality_not_confirmed");
+            if (!finalStop.settled) Fail(finalStop, "voice_stop_not_settled");
+            EndCase(finalStop, finalStop.settled && finalStop.voiceStopBeforeExpiry);
+            if (finalStop.status != "pass") SetRunError(finalStop);
+        }
+
+        IEnumerator RunEnglishQuestion(string id)
+        {
+            double quietDeadline = Math.Min(deadline, Now + 12);
+            while (controller.ReplyPlaying && Now < quietDeadline && CanObserve()) yield return null;
+            if (controller.ReplyPlaying) { report.error = "question_prior_reply_not_quiet"; yield break; }
+            Case item = Begin(id);
+            if (item == null) yield break;
+            double classificationDeadline = -1;
+            double replyDeadline = -1;
+            double quietSince = -1;
+            while (Now < deadline && Healthy(item))
+            {
+                if (playing == null && classificationDeadline < 0)
+                {
+                    // A long PCM fixture must not consume the response allowance. Both
+                    // limits begin only after its final chunk has been sent.
+                    classificationDeadline = Math.Min(deadline, Now + 12);
+                    replyDeadline = Math.Min(deadline, Now + 18);
+                }
+                if (!string.IsNullOrEmpty(item.actualKind) && item.actualKind != "question" && item.actualKind != "clarify")
+                { Fail(item, "question_classified_as_actionable_intent"); break; }
+                if (UnexpectedQuestionAction(item)) { Fail(item, "question_submitted_action"); break; }
+                if ((item.actualKind == "question" || item.actualKind == "clarify") && item.correlation == "fixture_audio_overlap")
+                {
+                    if (!item.replyStarted && controller.ReplyPlaying && controller.PlayedNonzeroSamples > item.replySamplesAtStart)
+                        item.replyStarted = true;
+                    if (item.replyStarted && !controller.ReplyPlaying && playing == null)
+                    {
+                        if (quietSince < 0) quietSince = Now;
+                        else if (Now - quietSince >= .3) { item.replyCompleted = true; break; }
+                    }
+                    else quietSince = -1;
+                }
+                if (classificationDeadline >= 0 && string.IsNullOrEmpty(item.actualKind) && Now >= classificationDeadline)
+                { Fail(item, "question_classification_not_observed"); break; }
+                if (replyDeadline >= 0 && Now >= replyDeadline) break;
+                yield return null;
+            }
+            if (!item.replyStarted && string.IsNullOrEmpty(item.error)) Fail(item, "question_reply_not_started");
+            if (item.replyStarted && !item.replyCompleted && string.IsNullOrEmpty(item.error)) Fail(item, "question_reply_not_completed");
+            if (UnexpectedQuestionAction(item)) Fail(item, "question_submitted_action");
+            EndCase(item, (item.actualKind == "question" || item.actualKind == "clarify") && item.correlation == "fixture_audio_overlap"
+                && item.replyStarted && item.replyCompleted && string.IsNullOrEmpty(item.error));
+            if (item.status != "pass") SetRunError(item);
+        }
+
+        bool UnexpectedQuestionAction(Case item) => controls.Exists(control => control.localTime >= item.startedAt
+            && control.@event == "command_submitted" && control.source != "safety" && !string.IsNullOrEmpty(control.action));
+
+        bool CanContinueChatAfterQuestion() => current != null && (current.status == "pass"
+            || current.error == "question_reply_not_completed");
 
         IEnumerator RunExpiryCase(string id, bool overlap)
         {
@@ -832,6 +1058,9 @@ namespace Flylingual.Conversation
                 if (playing != null && current != null) Fail(current, "fixture_chunk_not_sent");
                 playing = null; nextAudioAt = Now + .1; audioNotBefore = Now + .09; return;
             }
+            // This opt-in local speaker monitor uses the exact converted PCM sent above.
+            // It remains separate from fixture input, so the microphone stays disabled.
+            if (monitorFixtures && playing != null && chunkIndex == 0) PlayFixtureMonitor(playing);
             if (previousAudioAt >= 0)
             {
                 double intervalMs = (sendStarted - previousAudioAt) * 1000;
@@ -854,6 +1083,47 @@ namespace Flylingual.Conversation
                 }
             }
             sampleCursor += pcm.Length / 2;
+        }
+
+        void PlayFixtureMonitor(Fixture fixture)
+        {
+            if (fixture == null || fixture.clip == null) return;
+            if (monitorSource == null)
+            {
+                monitorObject = new GameObject("Native fixture audio monitor");
+                monitorObject.transform.SetParent(transform, false);
+                monitorSource = monitorObject.AddComponent<AudioSource>();
+                monitorSource.playOnAwake = false;
+                monitorSource.loop = false;
+                monitorSource.spatialBlend = 0f;
+            }
+            if (fixture.monitorClip == null) fixture.monitorClip = CreateMonitorClip(fixture);
+            if (fixture.monitorClip == null) return;
+            monitorSource.Stop();
+            monitorSource.clip = fixture.monitorClip;
+            monitorSource.time = 0f;
+            monitorSource.Play();
+        }
+
+        static AudioClip CreateMonitorClip(Fixture fixture)
+        {
+            const int sampleRate = PcmStreamConverter.TargetSampleRate;
+            int samples = 0;
+            for (int i = 0; i < fixture.clip.Chunks.Length; i++)
+                samples += fixture.clip.Chunks[i] == null ? 0 : fixture.clip.Chunks[i].Length / sizeof(short);
+            if (samples <= 0) return null;
+            var data = new float[samples];
+            int sample = 0;
+            for (int i = 0; i < fixture.clip.Chunks.Length; i++)
+            {
+                byte[] chunk = fixture.clip.Chunks[i];
+                if (chunk == null) continue;
+                for (int offset = 0; offset + 1 < chunk.Length; offset += sizeof(short))
+                    data[sample++] = (short)(chunk[offset] | (chunk[offset + 1] << 8)) / 32768f;
+            }
+            AudioClip result = AudioClip.Create("Fixture monitor " + fixture.id, samples, 1, sampleRate, false);
+            result.SetData(data, 0);
+            return result;
         }
 
         void OnControl(string json)
@@ -919,6 +1189,17 @@ namespace Flylingual.Conversation
                 if (current.bridgeAudioStartMs < 0) current.bridgeAudioStartMs = item.audioStartMs;
                 current.bridgeAudioEndMs = Math.Max(current.bridgeAudioEndMs, item.audioEndMs);
             }
+            if (current.expectedKind == "question" && item.@event == "transcript_candidate_observed"
+                && item.utteranceFinalized && !string.IsNullOrEmpty(item.inputId)
+                && current.bridgeAudioStartMs >= 0 && current.bridgeAudioEndMs > current.bridgeAudioStartMs
+                && item.startMs < current.bridgeAudioEndMs && item.endMs > current.bridgeAudioStartMs)
+            {
+                if (string.IsNullOrEmpty(current.inputId)) current.inputId = item.inputId;
+                else if (current.inputId != item.inputId) Fail(current, "multiple_question_candidates_for_fixture");
+            }
+            if (current.expectedKind == "question" && item.@event == "transcript_candidate_result"
+                && item.inputId == current.inputId)
+            { current.actualKind = item.kind; current.actualAction = item.action; current.actualPlan = item.plan; }
             if (item.@event == "voice_intent_dispatch" && item.outcome == "started")
             {
                 if (current.firstAudioAt < 0) return;
@@ -997,28 +1278,38 @@ namespace Flylingual.Conversation
 
         void Correlate(Case item)
         {
-            if (string.IsNullOrEmpty(item.commandId)) return;
+            if (string.IsNullOrEmpty(item.commandId) && item.expectedKind != "question") return;
             Control evidence;
             string source;
             bool hasDelegation = !string.IsNullOrEmpty(item.delegationId);
             bool hasCandidate = !string.IsNullOrEmpty(item.inputId);
-            if (hasDelegation == hasCandidate) return; // Neither an input nor ambiguous provenance can pass.
-            if (hasDelegation)
+            if (hasDelegation && hasCandidate)
+            {
+                // Live dispatch may retain a provider delegation ID alongside the finalized
+                // transcript input ID. It is one utterance only when the committed command
+                // explicitly uses that input ID; never infer this relationship otherwise.
+                if (!string.Equals(item.commandId, item.inputId, StringComparison.Ordinal)
+                    || !transcriptCandidates.TryGetValue(item.inputId, out evidence)
+                    || !evidence.utteranceFinalized) return;
+                source = "unified_utterance";
+            }
+            else if (hasDelegation)
             {
                 if (!delegations.TryGetValue(item.delegationId, out evidence)) return;
                 source = "client_delegation";
             }
-            else
+            else if (hasCandidate)
             {
-                if (!transcriptCandidates.TryGetValue(item.inputId, out evidence)) return;
+                if (!transcriptCandidates.TryGetValue(item.inputId, out evidence) || !evidence.utteranceFinalized) return;
                 source = "transcript_semantic";
             }
+            else return;
             if (evidence.epoch != item.epoch || evidence.observedGeneration != item.generation
                 || evidence.observedSessionId != item.brainSessionId || evidence.observedInstanceId != item.brainInstanceId
                 || evidence.localTime < item.firstAudioAt) return;
             item.intentSource = source;
             item.inputStartMs = evidence.startMs; item.inputEndMs = evidence.endMs; item.inputOffsetMs = evidence.offsetMs;
-            if (hasDelegation)
+            if (source == "client_delegation")
             { item.delegationStartMs = evidence.startMs; item.delegationEndMs = evidence.endMs; item.delegationOffsetMs = evidence.offsetMs; }
             if (item.bridgeAudioStartMs >= 0 && item.bridgeAudioEndMs > item.bridgeAudioStartMs
                 && evidence.startMs >= 0 && evidence.endMs > evidence.startMs
@@ -1137,7 +1428,8 @@ namespace Flylingual.Conversation
 
         void EndCase(Case item, bool passed)
         {
-            if (item.status == "pending") item.status = passed && string.IsNullOrEmpty(item.error) && (item.applied || item.executionUpdated)
+            bool accepted = item.expectedKind == "question" ? item.replyStarted && item.replyCompleted : item.applied || item.executionUpdated;
+            if (item.status == "pending") item.status = passed && string.IsNullOrEmpty(item.error) && accepted
                 && item.correlation == "fixture_audio_overlap" && item.sameEpoch && item.sameSession && item.sourceMaintained && item.freshMaintained ? "pass" : "incomplete";
             item.endedAt = Now; Save();
         }
@@ -1163,13 +1455,16 @@ namespace Flylingual.Conversation
                 && report.scriptOverlapAtFirstChunk && report.scriptStopMaintained && report.startupFreshStop
                 && report.cases.Count == 1 && report.cases[0].applied && report.cases[0].settled
                 && report.scriptDiscardReceivedAt >= report.cases[0].firstAudioAt;
-            bool standardPass = report.suite != "duration" && report.suite != "persistent" && report.suite != "handoff" && report.suite != "script_interrupt"
+            bool englishDemoPass = report.suite == "english-demo" && report.cases.Count == 4;
+            bool englishChatPass = report.suite == "english-chat-demo" && report.cases.Count == 7;
+            bool standardPass = report.suite != "duration" && report.suite != "persistent" && report.suite != "handoff" && report.suite != "script_interrupt" && report.suite != "english-demo" && report.suite != "english-chat-demo"
                 && report.ttlReacceptChecks >= 3 && report.overlapVerified;
             report.pass = string.IsNullOrEmpty(error) && report.cases.Count > 0 && report.cases.TrueForAll(x => x.status == "pass")
-                && (durationPass || persistentPass || handoffPass || scriptPass || standardPass);
-            if (report.suite != "duration" && report.suite != "persistent" && report.suite != "handoff" && string.IsNullOrEmpty(report.error) && !report.overlapVerified) report.error = "reply_overlap_not_observed";
+                && (durationPass || persistentPass || handoffPass || scriptPass || englishDemoPass || englishChatPass || standardPass);
+            if (report.suite != "duration" && report.suite != "persistent" && report.suite != "handoff" && report.suite != "english-demo" && report.suite != "english-chat-demo" && string.IsNullOrEmpty(report.error) && !report.overlapVerified) report.error = "reply_overlap_not_observed";
             report.status = report.pass ? "pass" : report.cases.Exists(x => x.status == "blocked") ? "blocked" : "incomplete";
             report.result = report.pass ? "native_voice_fixture_pass" : report.status;
+            if (monitorSource != null) monitorSource.Stop();
             Save();
         }
 
@@ -1245,6 +1540,14 @@ namespace Flylingual.Conversation
             File.WriteAllText(Path.Combine(outputDirectory, "report.json"), JsonUtility.ToJson(report, true), new UTF8Encoding(false));
         }
         void Close() { events?.Dispose(); observations?.Dispose(); events = observations = null; }
-        void OnDestroy() { if (controller != null) controller.ControlEventReceived -= OnControl; Close(); }
+        void OnDestroy()
+        {
+            if (controller != null) controller.ControlEventReceived -= OnControl;
+            if (monitorSource != null) monitorSource.Stop();
+            foreach (Fixture fixture in fixtures.Values)
+                if (fixture.monitorClip != null) Destroy(fixture.monitorClip);
+            if (monitorObject != null) Destroy(monitorObject);
+            Close();
+        }
     }
 }

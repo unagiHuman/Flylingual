@@ -103,6 +103,7 @@ namespace Flylingual.Conversation
         public long ReceivedAudioBytes { get; private set; }
         public long ReceivedNonzeroAudioBytes { get; private set; }
         public long ReceivedTranscriptDeltas { get; private set; }
+        public long ReceivedAssistantTranscriptDeltas { get; private set; }
         public long SentAudioChunks { get; private set; }
         public long SentAudioChunksDuringReply { get; private set; }
         /// <summary>True when this process was explicitly launched for synthetic fixture input.</summary>
@@ -424,7 +425,7 @@ namespace Flylingual.Conversation
             Send(new ConfigureConversation {
                 type = "configure_conversation", requestId = expectedSettingsRequestId,
                 controlEpoch = ControlEpoch, expectedRevision = SettingsRevision,
-                settings = new ConversationSettings { language = language, voice = voice, persona = persona, personaText = personaText }
+                settings = new ConversationSettings { language = GameLanguage.Code, voice = voice, persona = persona, personaText = personaText }
             });
         }
 
@@ -595,6 +596,7 @@ namespace Flylingual.Conversation
             Caption += incoming;
             if (Caption.Length > 4000) Caption = Caption.Substring(Caption.Length - 4000);
             ReceivedTranscriptDeltas++;
+            if (captionRole == "assistant" && !string.IsNullOrEmpty(incoming)) ReceivedAssistantTranscriptDeltas++;
         }
 
         void HandleAudio(AudioMessage audio)
@@ -626,7 +628,6 @@ namespace Flylingual.Conversation
             LastSettingsResult = "applied";
             expectedSettingsRequestId = null;
             startupLanguageAcknowledged = true;
-            GameLanguage.SetLanguage(Settings.language);
         }
 
         void HandleError(ErrorMessage error)
@@ -774,6 +775,31 @@ namespace Flylingual.Conversation
             return true;
         }
 
+        // Route advice is an observation; the Bridge remains responsible for validating and issuing Actions.
+        public bool TrySendGoalRouteHint(long sequence, string action, float ageMs)
+        {
+            if (TitleScreen.BlocksGameplay || !Ready || !BodyControlActive || !HasFreshBrain
+                || !ConversationActive || ConversationInteraction != "control" || conversationStopping
+                || transport == null || !transport.IsConnected || transport.QueueDepth >= 4
+                || ControlEpoch < 0 || ConversationGeneration < 0 || sequence < 0
+                || float.IsNaN(ageMs) || float.IsInfinity(ageMs) || ageMs < 0 || ageMs > 750) return false;
+            if (action != null && action != "STOP" && action != "FORWARD" && action != "TURN_R"
+                && action != "TURN_L" && action != "FORWARD_R" && action != "FORWARD_L") return false;
+            var envelope = new GoalRouteHintEnvelope { controlEpoch = ControlEpoch,
+                conversationGeneration = ConversationGeneration, sequence = sequence };
+            string json = JsonUtility.ToJson(envelope);
+            // Explicit JSON null distinguishes an unavailable route from a STOP recommendation.
+            json = json.Substring(0, json.Length - 1) + ",\"action\":"
+                + (action == null ? "null" : "\"" + action + "\"") + ",\"ageMs\":__OBSERVATION_AGE__}";
+            try { transport.EnqueueFresh(json, ageMs); return true; }
+            catch (ConversationTransportException) { return false; }
+        }
+        [Serializable] sealed class GoalRouteHintEnvelope
+        {
+            public string type = "goal_route_hint";
+            public int controlEpoch, conversationGeneration;
+            public long sequence;
+        }
         // Stage observations only: does not acquire control or submit an Action.
         public bool TrySendEnvironmentEvent(string runId, int attempt, long sequence, string kind, string sourceId, float ageMs)
         {
@@ -952,7 +978,7 @@ namespace Flylingual.Conversation
             foreach (var value in values) if (value == expected) return true;
             return false;
         }
-        [Serializable] public sealed class ConversationSettings { public string language = "ja"; public string voice = "marin"; public string persona = "friendly"; public string personaText = ""; }
+        [Serializable] public sealed class ConversationSettings { public string language = "en"; public string voice = "marin"; public string persona = "friendly"; public string personaText = ""; }
         [Serializable] sealed class MessageHeader { public string type; }
         [Serializable] sealed class BridgeState { public int epoch; public string owner; public bool outputInhibited; public ExecutionObservation activeExecution; public string[] capabilities; public string conversationInteraction; public int conversationGeneration = -1; public ConversationSettings conversationSettings; public int conversationSettingsRevision; public string backend; public bool brainReady; public float frameAgeMs; public string sessionId, instanceId, conversationState; public bool brainConnected, resumeReady, voiceControlAvailable, conversationStopping, switching, releaseUnknown; public MotorEndpoint motorEndpoint; }
         [Serializable] sealed class MotorEndpoint { public string host; public int port; }

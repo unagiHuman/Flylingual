@@ -26,12 +26,14 @@ namespace Flylingual.PlayScreen
         ConversationSessionController controller;
         ConversationNativeBootstrap bootstrap;
         Image gameImage, neuralImage;
+        BrainContextHalo contextHalo;
+        Label contextLabel;
+        Flylingual.BlindSugarRun.BlindSugarRunSession contextStage;
         Label blindMessage;
-        Label statusLabel, controlModeLabel, actionFeedbackLabel, captionLabel, portraitSource, portraitObservation, neuralStatus, diagnostics, transcriptLabel;
-        FlyPortraitElement portrait;
+        Label statusLabel, controlModeLabel, actionFeedbackLabel, captionLabel, neuralStatus, diagnostics, transcriptLabel;
         TextField textInput, personaText;
         Slider volume, gain;
-        DropdownField deviceField, languageField, voiceField, personaField;
+        DropdownField deviceField, voiceField, personaField;
         Button startButton, stopButton, muteButton, voiceButton, applyButton, sendButton, settingsButton;
         VisualElement gameFrame, settingsDrawer;
         bool pointerOverControls, built, settingsOpen;
@@ -39,7 +41,7 @@ namespace Flylingual.PlayScreen
         int displayedSettingsRevision = -1;
         readonly List<Action> localizedText = new List<Action>();
         string displayedLanguage;
-        string language = "ja", voice = "marin", persona = "friendly";
+        string voice = "marin", persona = "friendly";
 
         public bool IsBuilt => built;
         public bool SettingsOpen => settingsOpen;
@@ -114,7 +116,7 @@ namespace Flylingual.PlayScreen
             gameFrame.RegisterCallback<GeometryChangedEvent>(_ => UpdateGameImageRect());
 
             var side = new VisualElement(); side.style.flexGrow = 3; side.style.flexBasis = 0; side.style.minWidth = 260; side.style.flexDirection = FlexDirection.Column; main.Add(side);
-            var neuralCard = Card(); neuralCard.style.flexGrow = 2; neuralCard.style.flexBasis = 0; neuralCard.style.marginBottom = 12; side.Add(neuralCard);
+            var neuralCard = Card(); neuralCard.name = "neural-card"; neuralCard.style.flexGrow = 1; neuralCard.style.flexBasis = 0; side.Add(neuralCard);
             var neuralTitle = LocalizedLabel("脳・神経活動", "Brain activity", 13, mint, FontStyle.Bold);
             BindText(value => neuralTitle.tooltip = value, "橙色は実測発火と短い残光。シアン・紫は起動時の基準からの平均膜電位変化で、発火とは別です。膜電位は受信した細胞だけを表示します。灰色は細胞の位置です。", "Orange shows observed spikes with a short afterglow. Cyan and purple show mean membrane potential changes from the startup baseline, separately from spikes. Voltage is shown only for received cells. Gray marks cell positions.");
             neuralCard.Add(neuralTitle);
@@ -123,18 +125,27 @@ namespace Flylingual.PlayScreen
             neuralLegend.Add(LocalizedLabel("● 電位上昇  ", "● Voltage rise  ", 12, new Color(.1f, .85f, 1f)));
             neuralLegend.Add(LocalizedLabel("● 電位低下", "● Voltage fall", 12, new Color(.76f, .38f, 1f)));
             localizedText.Add(() => neuralLegend.tooltip = neuralTitle.tooltip); neuralLegend.tooltip = neuralTitle.tooltip; neuralCard.Add(neuralLegend);
-            neuralImage = new Image { scaleMode = ScaleMode.ScaleToFit }; neuralImage.style.flexGrow = 1; neuralImage.style.minHeight = 90; neuralImage.style.marginTop = 7; neuralCard.Add(neuralImage);
+            var neuralViewport = new VisualElement { name = "neural-viewport" };
+            neuralViewport.style.flexGrow = 1; neuralViewport.style.flexBasis = 0; neuralViewport.style.minHeight = 90;
+            neuralViewport.style.marginTop = 7; neuralCard.Add(neuralViewport);
+            neuralImage = new Image { name = "neural-image", scaleMode = ScaleMode.ScaleToFit };
+            neuralImage.style.position = Position.Absolute;
+            neuralImage.style.left = neuralImage.style.right = neuralImage.style.top = neuralImage.style.bottom = 0;
+            neuralViewport.Add(neuralImage);
+            contextHalo = new BrainContextHalo(); contextHalo.style.position = Position.Absolute;
+            contextHalo.style.left = contextHalo.style.right = contextHalo.style.top = contextHalo.style.bottom = 0;
+            neuralViewport.Add(contextHalo);
+            contextLabel = Label(string.Empty, 12, mint); contextLabel.name = "brain-context-label";
+            contextLabel.style.whiteSpace = WhiteSpace.Normal;
+            contextLabel.style.position = Position.Absolute; contextLabel.style.left = contextLabel.style.bottom = 0;
+            contextLabel.style.backgroundColor = panel; contextLabel.pickingMode = PickingMode.Ignore;
+            neuralViewport.Add(contextLabel);
+            BindText(value => neuralViewport.tooltip = value, "周囲の光はゲーム状況の演出です。感情や快・不快を脳から実測したものではありません。", "Surrounding light represents game context, not measured emotion or pleasure from the brain.");
             neuralStatus = LocalizedLabel("可視化データを待機中", "Waiting for visualization data", 12, cream); neuralStatus.style.opacity = .8f; neuralStatus.style.whiteSpace = WhiteSpace.Normal; neuralCard.Add(neuralStatus);
             RegisterControlSurface(neuralCard);
             neuralResponse = new NeuralResponsePanel(); neuralCard.Add(neuralResponse);
             neuralImage.RegisterCallback<PointerMoveEvent>(evt => { if (evt.pressedButtons != 0 && neural != null) neural.Rotate(evt.deltaPosition); });
             neuralImage.RegisterCallback<WheelEvent>(evt => { if (neural != null) { neural.Zoom(evt.delta.y); evt.StopPropagation(); } });
-
-            var portraitCard = Card(); portraitCard.style.flexGrow = 1; portraitCard.style.flexBasis = 0; side.Add(portraitCard);
-            portraitCard.Add(LocalizedLabel("ハエリンガル / FLYLINGUAL", "FLYLINGUAL", 13, amber, FontStyle.Bold));
-            portrait = new FlyPortraitElement(); portrait.style.flexGrow = 1; portrait.style.minHeight = 96; portraitCard.Add(portrait);
-            portraitSource = LocalizedLabel("表現の根拠: 接続状態", "Expression source: connection state", 12, mint); portraitCard.Add(portraitSource);
-            portraitObservation = LocalizedLabel("気持ちはまだわかりません", "Feelings are not yet known", 12, cream); portraitObservation.style.whiteSpace = WhiteSpace.Normal; portraitCard.Add(portraitObservation);
 
             var controls = Card(); controls.style.flexShrink = 0; controls.style.paddingTop = 9; controls.style.paddingBottom = 9; root.Add(controls); RegisterControlSurface(controls);
             var actions = Row("actions"); actions.style.alignItems = Align.Center; actions.style.flexWrap = Wrap.Wrap; controls.Add(actions);
@@ -166,7 +177,6 @@ namespace Flylingual.PlayScreen
             scroll.Add(LocalizedLabel("マイク入力と出力", "Microphone and audio", 12, mint, FontStyle.Bold));
             deviceField = new DropdownField(GameLanguage.Text("マイク", "Microphone")); deviceField.RegisterValueChangedCallback(e => controller?.SetMicrophoneDevice(e.newValue)); scroll.Add(deviceField);
             volume = new Slider(GameLanguage.Text("音量", "Volume"), 0, 1); volume.RegisterValueChangedCallback(e => controller?.SetVolume(e.newValue)); scroll.Add(volume);
-            languageField = new DropdownField(GameLanguage.Text("言語", "Language")); languageField.RegisterValueChangedCallback(e => language = e.newValue); scroll.Add(languageField);
             voiceField = new DropdownField(GameLanguage.Text("音声", "Voice")); voiceField.RegisterValueChangedCallback(e => voice = e.newValue); scroll.Add(voiceField);
             personaField = new DropdownField(GameLanguage.Text("人格", "Personality")); personaField.RegisterValueChangedCallback(e => persona = e.newValue); scroll.Add(personaField);
             personaText = new TextField(GameLanguage.Text("カスタム人格", "Custom personality")) { multiline = true }; personaText.style.minHeight = 44; scroll.Add(personaText);
@@ -177,7 +187,6 @@ namespace Flylingual.PlayScreen
             scroll.Add(LocalizedLabel("診断", "Diagnostics", 12, mint, FontStyle.Bold));
             BindText(value => deviceField.label = value, "マイク", "Microphone");
             BindText(value => volume.label = value, "音量", "Volume");
-            BindText(value => languageField.label = value, "言語", "Language");
             BindText(value => voiceField.label = value, "音声", "Voice");
             BindText(value => personaField.label = value, "人格", "Personality");
             BindText(value => personaText.label = value, "カスタム人格", "Custom personality");
@@ -209,6 +218,7 @@ namespace Flylingual.PlayScreen
 
         void Refresh()
         {
+            RefreshBrainContext();
             neuralResponse?.Refresh(controller);
             if (neural != null)
             {
@@ -238,7 +248,7 @@ namespace Flylingual.PlayScreen
             if (displayedSettingsRevision != controller.SettingsRevision && controller.Settings != null)
             {
                 displayedSettingsRevision = controller.SettingsRevision;
-                language = controller.Settings.language; voice = controller.Settings.voice; persona = controller.Settings.persona;
+                voice = controller.Settings.voice; persona = controller.Settings.persona;
                 personaText.SetValueWithoutNotify(controller.Settings.personaText ?? string.Empty);
             }
             statusLabel.text = !string.IsNullOrEmpty(error) ? GameLanguage.Text("エラー: ", "Error: ") + error : GameLanguage.Text("接続: ", "Connection: ") + controller.Status + GameLanguage.Text("  会話準備: ", "  Conversation ready: ") + controller.Ready + "  Brain ready: " + controller.BrainReady;
@@ -267,23 +277,42 @@ namespace Flylingual.PlayScreen
             voiceField?.SetEnabled(!controller.TextConversation);
             volume?.SetValueWithoutNotify(controller.Volume);
             UpdateChoices(deviceField, controller.Devices, deviceField == null ? null : deviceField.value);
-            UpdateChoices(languageField, controller.Options.languages, language);
             UpdateChoices(voiceField, controller.Options.voices, voice);
             UpdateChoices(personaField, controller.Options.personas, persona);
             applyButton?.SetEnabled(!controller.ConversationActive && controller.OutputInhibited);
             sendButton?.SetEnabled(controller.BodyControlActive);
-            string factual = controller.TextConversation ? GameLanguage.Text("テキスト指示を入力して送信", "Type and send a command") : controller.MicrophoneMuted ? GameLanguage.Text("マイクはミュート中", "Microphone muted") : controller.ReplyPlaying ? GameLanguage.Text("音声を再生中", "Playing speech") : controller.MicrophoneTransmitting ? GameLanguage.Text("音声を送信中", "Sending audio") : controller.ConversationActive ? GameLanguage.Text("会話セッションは接続中", "Conversation connected") : GameLanguage.Text("会話の接続待ち", "Waiting for conversation");
-            string expression = controller.ReplyPlaying ? GameLanguage.Text("発話中", "Speaking") : controller.MicrophoneTransmitting ? GameLanguage.Text("聞いています", "Listening") : controller.MicrophoneMuted ? GameLanguage.Text("ミュート", "Muted") : GameLanguage.Text("待機", "Waiting");
-            portraitSource.text = GameLanguage.Text("表現の根拠: 会話状態（擬人化した表示）", "Expression source: conversation state (personified display)");
-            portraitObservation.text = GameLanguage.Text("気持ちはまだわかりません。事実: ", "Feelings are not yet known. Observed: ") + factual;
-            portrait?.SetPresentation(expression, controller.InputRms > .01f ? .7f : .2f, Time.unscaledTime);
             DiagnosticsSummary = "status=" + controller.Status + "; ready=" + controller.Ready + "; brainReady=" + controller.BrainReady + "; backend=" + controller.Backend + "; sequence=" + controller.Sequence;
             diagnostics.text = DiagnosticsSummary;
             var detail = document.rootVisualElement.Q<Label>("diagnostic-detail");
             if (detail != null) detail.text = "Brain backend: " + controller.Backend + " / ready: " + controller.BrainReady + "\nframe age: " + controller.FrameAgeMs.ToString("0") + " ms / sequence: " + controller.Sequence + "\n" + (string.IsNullOrEmpty(controller.SchemaError) ? string.Empty : "schema: " + controller.SchemaError);
         }
 
-        void ApplySettings() => controller?.ApplySettings(language, voice, persona, personaText == null ? string.Empty : personaText.value);
+        void RefreshBrainContext()
+        {
+            if (contextStage == null) contextStage = FindAnyObjectByType<Flylingual.BlindSugarRun.BlindSugarRunSession>();
+            var state = BrainContextHalo.Context.Waiting;
+            string text = GameLanguage.Text("待機中", "Waiting");
+            if (contextStage != null && !TitleScreen.BlocksGameplay)
+            {
+                var stageState = contextStage.State;
+                if (stageState == Flylingual.BlindSugarRun.BlindSugarRunSession.StageState.Goal || stageState == Flylingual.BlindSugarRun.BlindSugarRunSession.StageState.Reveal)
+                { state = BrainContextHalo.Context.Goal; text = GameLanguage.Text("ゴール到達", "Goal reached"); }
+                else if (stageState == Flylingual.BlindSugarRun.BlindSugarRunSession.StageState.GameOver)
+                { state = BrainContextHalo.Context.Ended; text = GameLanguage.Text("挑戦終了", "Attempt ended"); }
+                else if (stageState == Flylingual.BlindSugarRun.BlindSugarRunSession.StageState.Playing && Time.timeScale > 0 && controller != null && controller.HasFreshBrain && controller.BodyControlActive)
+                {
+                    var swatter = contextStage.GetComponent<Flylingual.BlindSugarRun.BlindSugarRunIdleSwatter>();
+                    bool danger = swatter != null && swatter.WarningActive;
+                    state = danger ? BrainContextHalo.Context.Danger : BrainContextHalo.Context.Calm;
+                    text = danger ? GameLanguage.Text("危険：ハエたたき接近", "Danger: fly swatter approaching") : GameLanguage.Text("探索中", "Exploring");
+                }
+            }
+            contextHalo.SetContext(state, Time.unscaledTime);
+            contextLabel.text = GameLanguage.Text("ゲーム演出：", "Game context: ") + text;
+            contextLabel.style.color = state == BrainContextHalo.Context.Danger ? new Color(1f, .38f, .3f) : state == BrainContextHalo.Context.Goal ? amber : mint;
+        }
+
+        void ApplySettings() => controller?.ApplySettings(GameLanguage.Code, voice, persona, personaText == null ? string.Empty : personaText.value);
         void ToggleSettingsDrawer()
         {
             if (settingsDrawer == null) return;
