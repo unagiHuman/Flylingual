@@ -4,6 +4,8 @@
 
 Flylingual is an AI-native Unity action game where the player guides a fruit fly with natural-language instructions while trying to avoid falling, getting stuck, and being hit by a fly swatter. Player intent is converted into a small, bounded set of neural stimulation commands, processed by a project-specific experimental leaky integrate-and-fire (LIF) simulation built on the public MaleCNS connectome, decoded into motor output, and used to drive a six-legged physical fly in Unity. Environmental events can also feed back into the neural simulation, and measured neural responses can be returned to the conversational layer so the fly can comment on what was actually observed.
 
+![Flylingual gameplay showing the physical fly, exploration map, and live brain activity](Docs/images/flylingual-gameplay.jpg)
+
 ## Challenge track
 
 **Track 1: AI-Native Game Prototype**
